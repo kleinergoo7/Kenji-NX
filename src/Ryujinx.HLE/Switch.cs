@@ -55,11 +55,10 @@ namespace Ryujinx.HLE
         public IHostUIHandler UIHandler { get; }
         public Debugger.Debugger Debugger { get; }
 
-        public int CpuCoresCount = 4; // Switch has a quad-core Tegra X1 SoC
+        public int CpuCoresCount = 8; // Switch 2 (Tegra T239) SoC has 8 CPU cores
 
         /// <summary>
-        /// Overrides the emulated CPU core count (CLI: --cpu-cores). Switch 2 titles ask for
-        /// six cores regardless of the DRAM size they are told about.
+        /// Overrides the emulated CPU core count (CLI: --cpu-cores).
         /// </summary>
         public static int? CpuCoresOverride { get; set; }
 
@@ -90,7 +89,7 @@ namespace Ryujinx.HLE
             DirtyHacks        = new DirtyHacks(Configuration.Hacks);
             AudioDeviceDriver = new CompatLayerHardwareDeviceDriver(Configuration.AudioDeviceDriver);
             Memory            = new MemoryBlock(Configuration.MemoryConfiguration.DramSize, memoryAllocationFlags);
-            CpuCoresCount     = CpuCoresOverride ?? (Configuration.MemoryConfiguration == MemoryConfiguration.MemoryConfiguration12GiB ? 6 : 4);
+            CpuCoresCount     = CpuCoresOverride ?? 8; // T239 has 8 cores; e.g. Mario Kart World requests cores 0-5 in its NPDM kernel caps
             Gpu               = new GpuContext(Configuration.GpuRenderer, DirtyHacks);
             Debugger          = Configuration.EnableGdbStub ? new Debugger.Debugger(this, Configuration.GdbStubPort) : null;
             System            = new HOS.Horizon(this);
