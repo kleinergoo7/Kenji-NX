@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 namespace Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService
 {
     class IGraphicsScaleController : IpcService

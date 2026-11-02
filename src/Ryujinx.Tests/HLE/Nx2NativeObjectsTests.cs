@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 using NUnit.Framework;
 using Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy;
 using System;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 namespace ARMeilleure.Decoders
 {
     class OpCodeAtomic : OpCodeMem

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 namespace Ryujinx.Graphics.Shader.Decoders.Ampere
 {
     /// <summary>

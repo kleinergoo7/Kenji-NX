@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 using Ryujinx.Graphics.Shader.CodeGen;
 using System;
 using System.Collections.Generic;

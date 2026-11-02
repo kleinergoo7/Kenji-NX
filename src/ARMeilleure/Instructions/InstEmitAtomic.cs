@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 using ARMeilleure.Decoders;
 using ARMeilleure.IntermediateRepresentation;
 using ARMeilleure.Translation;

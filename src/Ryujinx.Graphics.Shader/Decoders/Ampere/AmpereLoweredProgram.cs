@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 using System.Collections.Generic;
 
 namespace Ryujinx.Graphics.Shader.Decoders.Ampere

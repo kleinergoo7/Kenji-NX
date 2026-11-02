@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Behavior ported from Eglantine (Eden fork) Switch 2 support; see NX2_NOTES.md there.
 using System;
 using System.Collections.Generic;
