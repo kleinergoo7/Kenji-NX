@@ -383,7 +383,16 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
             if (IsContiguous(va, data.Length))
             {
-                writeCallback(Translate(va), data);
+                ulong pa = Translate(va);
+
+                if (pa == PteUnmapped)
+                {
+                    LogDroppedWrite(va);
+
+                    return;
+                }
+
+                writeCallback(pa, data);
             }
             else
             {
@@ -395,20 +404,59 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
                     size = Math.Min(data.Length, (int)PageSize - (int)(va & PageMask));
 
-                    writeCallback(pa, data[..size]);
+                    if (pa != PteUnmapped)
+                    {
+                        writeCallback(pa, data[..size]);
+                    }
+                    else
+                    {
+                        LogDroppedWrite(va);
+                    }
 
                     offset += size;
                 }
 
                 for (; offset < data.Length; offset += size)
                 {
-                    ulong pa = Translate(va + (ulong)offset);
+                    ulong pageVa = va + (ulong)offset;
+                    ulong pa = Translate(pageVa);
 
                     size = Math.Min(data.Length - offset, (int)PageSize);
+
+                    if (pa == PteUnmapped)
+                    {
+                        LogDroppedWrite(pageVa);
+
+                        continue;
+                    }
 
                     writeCallback(pa, data.Slice(offset, size));
                 }
             }
+        }
+
+        private static readonly HashSet<ulong> _droppedWritePages = [];
+
+        /// <summary>
+        /// Records a write to a GPU address that the guest never mapped. Switch 2 titles stream
+        /// semaphores and resources through their own address space, so some releases land on
+        /// addresses that have no backing here.
+        /// </summary>
+        /// <param name="va">GPU virtual address of the dropped write</param>
+        private static void LogDroppedWrite(ulong va)
+        {
+            ulong page = va & ~PageMask;
+
+            lock (_droppedWritePages)
+            {
+                if (_droppedWritePages.Count >= 16 || !_droppedWritePages.Add(page))
+                {
+                    return;
+                }
+            }
+
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
+                $"Switch 2 write to unbacked GPU address 0x{va:X} dropped");
         }
 
         /// <summary>
@@ -698,7 +746,47 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 return mapped + (va & PageMask);
             }
 
+            // Identity fallback only holds while the guest really has this page mapped. Switch 2
+            // titles stream GPU memory through their own address space, so an address that was
+            // never mapped must stay unmapped instead of becoming a bogus host address.
+            if (!Physical.IsMapped(va))
+            {
+                return PteUnmapped;
+            }
+
             return va;
+        }
+
+        /// <summary>
+        /// Checks whether a GPU virtual address resolves to memory the guest actually has mapped.
+        /// Switch 2 streams address GPU memory with their own address space, so an unmapped address
+        /// must not be written through the identity fallback of <see cref="Translate"/>.
+        /// </summary>
+        /// <param name="va">GPU virtual address to check</param>
+        /// <returns>True if the address has backing memory</returns>
+        public bool IsGpuAddressBacked(ulong va)
+        {
+            if (!ValidateAddress(va))
+            {
+                return false;
+            }
+
+            if (GetPte(va) != PteUnmapped)
+            {
+                return true;
+            }
+
+            if (!Nx2IdentityMapping || Nx2GpuMemory.IsSparse(va))
+            {
+                return false;
+            }
+
+            if (Nx2GpuMemory.TryResolveMapping(va, out ulong mapped))
+            {
+                return Physical.IsMapped(mapped);
+            }
+
+            return Physical.IsMapped(va);
         }
 
         /// <summary>

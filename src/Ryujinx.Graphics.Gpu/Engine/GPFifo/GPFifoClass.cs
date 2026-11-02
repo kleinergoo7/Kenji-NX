@@ -1,5 +1,6 @@
 using Ryujinx.Graphics.Device;
 using Ryujinx.Graphics.Gpu.Engine.MME;
+using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.Graphics.Gpu.Synchronization;
 using System;
 using System.Collections.Generic;
@@ -107,6 +108,72 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="data">Data to be written</param>
         public void Write(int offset, int data) => _state.Write(offset, data);
 
+        private static readonly System.Collections.Generic.HashSet<ulong> _unbackedSemaphorePages = [];
+
+        /// <summary>
+        /// Returns false when nothing backs <paramref name="address"/> in the guest address space.
+        /// </summary>
+        private bool IsSemaphoreAddressBacked(ulong address)
+        {
+            return _parent.MemoryManager.IsGpuAddressBacked(address);
+        }
+
+        private static readonly System.Collections.Generic.HashSet<ulong> _adoptedSemaphorePages = [];
+
+        /// <summary>
+        /// Backs the page holding <paramref name="address"/> with host memory so a semaphore
+        /// release targeted at a GPU address the guest never mapped still lands somewhere the
+        /// guest's waits can observe.
+        /// </summary>
+        /// <param name="address">GPU address of the release</param>
+        /// <returns>True if the page is backed afterwards</returns>
+        private static bool AdoptSemaphorePage(ulong address)
+        {
+            ulong page = address & ~(MemoryManager.PageSize - 1);
+
+            lock (_adoptedSemaphorePages)
+            {
+                if (_adoptedSemaphorePages.Contains(page))
+                {
+                    return true;
+                }
+            }
+
+            if (!Nx2GpuMemory.CreateRegion(page, MemoryManager.PageSize, eager: false))
+            {
+                return false;
+            }
+
+            lock (_adoptedSemaphorePages)
+            {
+                _adoptedSemaphorePages.Add(page);
+
+                if (_adoptedSemaphorePages.Count <= 8)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
+                        $"Switch 2 semaphore release to unbacked GPU address 0x{address:X}: page given host backing");
+                }
+            }
+
+            return true;
+        }
+
+        private static void LogUnbackedSemaphore(ulong address)
+        {
+            ulong page = address & ~0xFFFUL;
+
+            lock (_unbackedSemaphorePages)
+            {
+                if (_unbackedSemaphorePages.Count >= 16 || !_unbackedSemaphorePages.Add(page))
+                {
+                    return;
+                }
+            }
+
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
+                $"Switch 2 semaphore release to unbacked GPU address 0x{address:X} dropped");
+        }
+
         /// <summary>
         /// Writes a GPU counter to guest memory.
         /// </summary>
@@ -119,6 +186,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             int value = _state.State.SemaphorecPayload;
 
             SemaphoredOperation operation = _state.State.SemaphoredOperation;
+
+            // Switch 2 pushes releases into a GPU address space that is not the guest one, so a
+            // queue's semaphore page can land on an address the guest never mapped. The console
+            // writes into that page; here it has no backing, so the release is dropped.
+            if (!IsSemaphoreAddressBacked(address))
+            {
+                // The guest waits on these release values, so give the page host backing instead
+                // of dropping the write: reads then see the same value the console would.
+                if (!AdoptSemaphorePage(address))
+                {
+                    LogUnbackedSemaphore(address);
+
+                    return;
+                }
+            }
 
             if (_state.State.SemaphoredReleaseSize == SemaphoredReleaseSize.SixteenBytes)
             {

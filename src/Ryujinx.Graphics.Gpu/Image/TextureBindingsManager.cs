@@ -189,7 +189,9 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             Sampler sampler = samplerPool?.Get(samplerId);
 
-            return (texturePool.Get(textureId, sampler?.IsSrgb ?? true), sampler);
+            // A texture pool address that the guest never mapped yields no pool: the binding is
+            // simply unbound instead of failing the emulation.
+            return (texturePool?.Get(textureId, sampler?.IsSrgb ?? true), sampler);
         }
 
         /// <summary>
