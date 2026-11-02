@@ -472,23 +472,6 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
             Ryujinx.HLE.HOS.Kernel.Threading.KThread caller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
             ulong callerPc = caller?.Context.Pc ?? 0;
-            string callerTrace = caller?.GetGuestStackTrace() ?? string.Empty;
-
-            Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 submit from thread {caller?.ThreadUid} pc=0x{callerPc:X}:\n{callerTrace}");
-
-            // The sender thread is blocked in SendSyncRequest right now; find it by its stack.
-            foreach (System.Collections.Generic.KeyValuePair<ulong, Ryujinx.HLE.HOS.Kernel.Process.KProcess> procEntry in _device.System.KernelContext.Processes)
-            {
-                foreach (Ryujinx.HLE.HOS.Kernel.Threading.KThread thread in procEntry.Value.DebugThreads)
-                {
-                    string trace = thread.GetGuestStackTrace();
-
-                    if (!string.IsNullOrWhiteSpace(trace) && trace.Contains("5C") && trace.Length < 4000)
-                    {
-                        Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 submitter pid={procEntry.Key} tid={thread.ThreadUid} pc=0x{thread.Context.Pc:X}:\n{trace}");
-                    }
-                }
-            }
 
             if (System.Threading.Interlocked.Increment(ref ProcLogCount) == 1)
             {
