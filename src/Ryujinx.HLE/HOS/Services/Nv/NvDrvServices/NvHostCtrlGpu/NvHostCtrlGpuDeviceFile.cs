@@ -84,15 +84,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrlGpu
                 switch (command.Number)
                 {
                     case 0x05:
-                        result = CallIoctlMethod<GetCharacteristicsArguments, GpuCharacteristics>(GetCharacteristics, arguments, inlineOutBuffer);
-
-                        if (_nx2Caller && inlineOutBuffer.Length >= 0xb8)
-                        {
-                            // NvRm sizes each TSG's subcontext (VEID) allocator from the u32 at +0xb4
-                            // when flags bits 8 and 22 are set; otherwise a second queue's
-                            // NvRmGpuTSGSubcontextCreate fails (0x11) and its NVN command buffer stays unallocated.
-                            BinaryPrimitives.WriteUInt32LittleEndian(inlineOutBuffer[0xb4..], 64);
-                        }
+                        result = GetCharacteristicsVariableSize(arguments, inlineOutBuffer);
 
                         break;
                     case 0x06:
@@ -195,6 +187,48 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrlGpu
         private NvInternalResult GetCharacteristics(ref GetCharacteristicsArguments arguments)
         {
             return GetCharacteristics(ref arguments, ref arguments.Characteristics);
+        }
+
+        // Switch 2 passes larger buffers (0xE0 arguments / 0xD0 characteristics) than the
+        // Switch 1 layout below (0xB0 / 0xA0). Fill the known prefix from GetCharacteristics
+        // and zero the undocumented tail.
+        // WORKAROUND: characteristics past 0xA0 are undocumented on Switch 2; zero-filled
+        // and logged on every call until the real layout is known.
+        private NvInternalResult GetCharacteristicsVariableSize(Span<byte> arguments, Span<byte> inlineOutBuffer)
+        {
+            int argsSize = Unsafe.SizeOf<GetCharacteristicsArguments>();
+            int charsSize = Unsafe.SizeOf<GpuCharacteristics>();
+
+            if (arguments.Length < argsSize || inlineOutBuffer.Length < charsSize)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"GetCharacteristics rejected: argument size 0x{arguments.Length:X}, inline size 0x{inlineOutBuffer.Length:X} (need 0x{argsSize:X}/0x{charsSize:X}).");
+
+                return NvInternalResult.InvalidInput;
+            }
+
+            if (arguments.Length > argsSize || inlineOutBuffer.Length > charsSize)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"GetCharacteristics Switch 2 sizes: argument size 0x{arguments.Length:X}, inline size 0x{inlineOutBuffer.Length:X}; zero-filling characteristics past 0x{charsSize:X}.");
+            }
+
+            NvInternalResult result = CallIoctlMethod<GetCharacteristicsArguments, GpuCharacteristics>(GetCharacteristics, arguments[..argsSize], inlineOutBuffer[..charsSize]);
+
+            if (result != NvInternalResult.Success)
+            {
+                return result;
+            }
+
+            inlineOutBuffer[charsSize..].Clear();
+
+            if (_nx2Caller && inlineOutBuffer.Length >= 0xb8)
+            {
+                // NvRm sizes each TSG's subcontext (VEID) allocator from the u32 at +0xb4
+                // when flags bits 8 and 22 are set; otherwise a second queue's
+                // NvRmGpuTSGSubcontextCreate fails (0x11) and its NVN command buffer stays unallocated.
+                BinaryPrimitives.WriteUInt32LittleEndian(inlineOutBuffer[0xb4..], 64);
+            }
+
+            return result;
         }
 
         private NvInternalResult GetCharacteristics(ref GetCharacteristicsArguments arguments, ref GpuCharacteristics characteristics)
