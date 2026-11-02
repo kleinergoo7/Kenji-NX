@@ -16,6 +16,8 @@ namespace Ryujinx.HLE.HOS.Services
         // Diagnostic: per-service-command call counts, printed with the NX2 progress line.
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> CallCounts = [];
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> TipcSeen = new();
+
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> UnimplementedLogged = [];
 
         public IReadOnlyDictionary<int, MethodInfo> CmifCommands { get; }
@@ -231,6 +233,22 @@ namespace Ryujinx.HLE.HOS.Services
             int commandId = (int)context.Request.Type - 0x10;
 
             CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+            {
+                var tipcCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+
+                if (tipcCaller != null && tipcCaller.Owner.Pid == 109)
+                {
+                    string tipcKey = $"{GetType().Name}:{commandId}";
+
+                    if (TipcSeen.TryAdd(tipcKey, 0))
+                    {
+                        Logger.Warning?.Print(LogClass.KernelIpc,
+                            $"NX2 tipc {tipcKey} tid={tipcCaller.ThreadUid}({tipcCaller.GetThreadName()})");
+                    }
+                }
+            }
 
             if (System.Environment.GetEnvironmentVariable("NX2_GSV_LOG") == "1" &&
                 GetType().Name == "INx2GraphicsSystemSession")
