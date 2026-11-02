@@ -259,11 +259,22 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 SampleGuestPcs(context.Device);
             }
 
-            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1" &&
-                System.Threading.Interlocked.Increment(ref _presentWho) <= 12)
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
             {
-                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                    $"NX2 present pid={context.Process.Pid} image={imageId}");
+                // The calling guest thread, not the serving process: HLE services run on the
+                // client's thread, and context.Process is the server.
+                var caller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+
+                if (caller != null)
+                {
+                    string key = $"{caller.Owner.Pid}:{imageId}";
+
+                    if (PresentSeen.TryAdd(key, 0) && PresentSeen.Count <= 12)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                            $"NX2 present caller={caller.Owner.Pid} tid={caller.ThreadUid} image={imageId}");
+                    }
+                }
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" &&
@@ -607,6 +618,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static int _fenceTimeouts;
 
         private static int _presentWho;
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> PresentSeen = new();
 
         private static int _threadDumps;
         private static int _compositeLogs;

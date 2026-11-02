@@ -798,7 +798,19 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             bool indexed)
         {
             _drawManager.Draw(this, topology, count, instanceCount, firstIndex, firstVertex, firstInstance, indexed);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                int n = System.Threading.Interlocked.Increment(ref DrawCount);
+
+                if (n == 1 || n % 100 == 0)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu, $"NX2 draw n={n} topo={topology} count={count}");
+                }
+            }
         }
+
+        public static int DrawCount;
 
         /// <summary>
         /// Performs a indirect draw, with parameters from a GPU buffer.
