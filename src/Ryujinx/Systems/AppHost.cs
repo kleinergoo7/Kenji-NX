@@ -811,6 +811,7 @@ namespace Ryujinx.Ava.Systems
                 if (Directory.Exists(Path.Combine(ApplicationPath, "exefs")))
                 {
                     exeFsPath = Path.Combine(ApplicationPath, "exefs");
+                    romFsDirectory = Path.Combine(ApplicationPath, "romfs");
                 }
 
                 string[] romFsFiles = Directory.GetFiles(exeFsPath, "*.istorage");
