@@ -14,6 +14,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     {
         private readonly Dictionary<uint, KEvent> _events = [];
         private readonly List<KEvent> _tickEvents = [];
+        private readonly Dictionary<int, KEvent> _tickSlots = [];
         private System.Threading.Timer _tickTimer;
 
         public INx2Vi2Session() : base(registerTipc: true) { }
@@ -135,11 +136,19 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(32)]
         public ResultCode GetVsyncEvent(ServiceCtx context)
         {
-            // Fresh event per call (oracle creates one per call); signalled on each Present.
-            KEvent evt = new(context.Device.System.KernelContext);
-            Nx2EventNames.Register(evt.ReadableEvent, "vi2vsync");
+            // One event per vsync slot, reused: the game asks for it every frame, and a fresh
+            // event per call left every earlier one in the tick list for good, so each 16 ms tick
+            // signalled thousands of stale events and the frame loop crawled.
+            int slot = (int)context.Request.Type - 0x10;
 
-            TrackTickEvent(evt);
+            if (!_tickSlots.TryGetValue(slot, out KEvent evt))
+            {
+                evt = new KEvent(context.Device.System.KernelContext);
+                _tickSlots[slot] = evt;
+                Nx2EventNames.Register(evt.ReadableEvent, "vi2vsync");
+
+                TrackTickEvent(evt);
+            }
 
             if (context.Process.HandleTable.GenerateHandle(evt.ReadableEvent, out int handle) != Ryujinx.Horizon.Common.Result.Success)
             {
@@ -242,6 +251,33 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             uint imageId = context.RequestData.ReadUInt32();
 
             System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" &&
+                System.Threading.Interlocked.Increment(ref _threadDumps) == 1200)
+            {
+                foreach (System.Collections.Generic.KeyValuePair<ulong, Ryujinx.HLE.HOS.Kernel.Process.KProcess> proc in context.Device.System.KernelContext.Processes)
+                {
+                    if (proc.Key != 109)
+                    {
+                        continue;
+                    }
+
+                    foreach (Ryujinx.HLE.HOS.Kernel.Threading.KThread thread in proc.Value.DebugThreads)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                            $"NX2 td uid={thread.ThreadUid} name={thread.GetThreadName()}");
+
+                        try
+                        {
+                            thread.PrintGuestStackTrace();
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 td failed {ex.GetType().Name}");
+                        }
+                    }
+                }
+            }
 
             if (System.Threading.Interlocked.Increment(ref _presentLogs) <= 8)
             {
@@ -516,6 +552,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static byte[] _sourceBuffer;
         private static byte[] _linearBuffer;
         private static int _presentCount;
+
+        private static int _threadDumps;
         private static int _compositeLogs;
         private static int _fenceLogs;
         private static int _presentLogs;
