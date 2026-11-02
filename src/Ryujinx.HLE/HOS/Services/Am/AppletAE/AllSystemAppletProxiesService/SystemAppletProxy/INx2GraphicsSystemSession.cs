@@ -76,6 +76,55 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             ulong address = context.RequestData.ReadUInt64();
             ulong size = context.RequestData.ReadUInt64();
 
+            BindNativeMemory(id, address, size);
+
+            return ResultCode.Success;
+        }
+
+        // 114(u32 id, u64 address, u64 size, u64 flags, u64 offset): backs native memory
+        // with process memory (Eglantine BindNativeMemory; flags/offset are informational here).
+        [CommandTipc(114)]
+        public ResultCode BindNativeProcessMemory(ServiceCtx context)
+        {
+            uint id = context.RequestData.ReadUInt32();
+            ulong address = context.RequestData.ReadUInt64();
+            ulong size = context.RequestData.ReadUInt64();
+
+            BindNativeMemory(id, address, size);
+
+            return ResultCode.Success;
+        }
+
+        // 112(u32 id): frees a native memory object (Eglantine DestroyNativeMemory).
+        [CommandTipc(112)]
+        public ResultCode DestroyNativeMemory(ServiceCtx context)
+        {
+            uint id = context.RequestData.ReadUInt32();
+
+            lock (Nx2NativeObjects.Lock)
+            {
+                Nx2NativeObjects.Memories.Remove(id);
+            }
+
+            return ResultCode.Success;
+        }
+
+        // 430(u32 id): frees a native image object (Eglantine DestroyNativeImage).
+        [CommandTipc(430)]
+        public ResultCode DestroyNativeImage(ServiceCtx context)
+        {
+            uint id = context.RequestData.ReadUInt32();
+
+            lock (Nx2NativeObjects.Lock)
+            {
+                Nx2NativeObjects.Images.Remove(id);
+            }
+
+            return ResultCode.Success;
+        }
+
+        private static void BindNativeMemory(uint id, ulong address, ulong size)
+        {
             lock (Nx2NativeObjects.Lock)
             {
                 if (!Nx2NativeObjects.Memories.TryGetValue(id, out Nx2NativeObjects.Memory memory))
@@ -91,8 +140,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     memory.Size = size;
                 }
             }
-
-            return ResultCode.Success;
         }
 
         [CommandTipc(435)]
