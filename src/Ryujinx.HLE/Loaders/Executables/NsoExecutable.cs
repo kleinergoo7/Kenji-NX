@@ -41,9 +41,9 @@ namespace Ryujinx.HLE.Loaders.Executables
             DataOffset = reader.Header.Segments[2].MemoryOffset;
             BssSize = reader.Header.BssSize;
 
-            reader.GetSegmentSize(NsoReader.SegmentType.Data, out uint uncompressedSize).ThrowIfFailure();
-
-            Program = new byte[DataOffset + uncompressedSize];
+            // Take the sizes from the header: newer SDKs report a segment's compressed size
+            // through GetSegmentSize, which would under-size the buffers below.
+            Program = new byte[DataOffset + reader.Header.DataSize];
 
             TextSize = DecompressSection(reader, NsoReader.SegmentType.Text, TextOffset);
             RoSize = DecompressSection(reader, NsoReader.SegmentType.Ro, RoOffset);
@@ -57,7 +57,12 @@ namespace Ryujinx.HLE.Loaders.Executables
 
         private uint DecompressSection(NsoReader reader, NsoReader.SegmentType segmentType, uint offset)
         {
-            reader.GetSegmentSize(segmentType, out uint uncompressedSize).ThrowIfFailure();
+            uint uncompressedSize = segmentType switch
+            {
+                NsoReader.SegmentType.Text => reader.Header.TextSize,
+                NsoReader.SegmentType.Ro => reader.Header.RoSize,
+                _ => reader.Header.DataSize,
+            };
 
             Span<byte> span = Program.AsSpan((int)offset, (int)uncompressedSize);
 
