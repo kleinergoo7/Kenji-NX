@@ -21,6 +21,7 @@ namespace Ryujinx.Audio.Backends.SoundIo
         private readonly ManualResetEvent _updateRequiredEvent;
         private float _volume;
         private int _disposeState;
+        private bool _started;
 
         public SoundIoHardwareDeviceSession(SoundIoHardwareDeviceDriver driver, IVirtualMemoryManager memoryManager, SampleFormat requestedSampleFormat, uint requestedSampleRate, uint requestedChannelCount) : base(memoryManager, requestedSampleFormat, requestedSampleRate, requestedChannelCount)
         {
@@ -81,11 +82,20 @@ namespace Ryujinx.Audio.Backends.SoundIo
             _outputStream.Start();
             _outputStream.Pause(false);
 
+            _started = true;
+
             _driver.FlushContextEvents();
         }
 
         public override void Stop()
         {
+            if (!_started)
+            {
+                return;
+            }
+
+            _started = false;
+
             _outputStream.Pause(true);
 
             _driver.FlushContextEvents();
