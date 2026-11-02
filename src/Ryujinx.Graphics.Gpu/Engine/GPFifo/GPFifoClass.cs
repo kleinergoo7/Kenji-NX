@@ -420,10 +420,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="index">Index of the macro</param>
         /// <param name="state">Current GPU state</param>
         private static int _nx2SkipLogs;
+        private static int _callProbe;
 
         public void CallMme(int index, IDeviceState state)
         {
-            if (_context.IsNx2Ampere)
+            if (_context.IsNx2Ampere && System.Environment.GetEnvironmentVariable("NX2_RUN_MME") != "1")
             {
                 // Switch 2 drivers upload Turing+ (MME64) macros, which this interpreter does not
                 // describe: it faults on them (uninitialised registers, unknown output selectors)
@@ -436,6 +437,17 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 }
 
                 return;
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1")
+            {
+                int logged = System.Threading.Interlocked.Increment(ref _callProbe);
+
+                if (logged <= 20)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                        $"NX2 mme call idx={index} pos={_macros[index].Position} codeGen={_mmeCodeGeneration} writeOff={_mmeCodeWriteOffset}");
+                }
             }
 
             _macros[index].Execute(_macroCode, state);

@@ -98,6 +98,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             {
                 _executionPending = false;
 
+                if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1" && _turing)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                        $"NX2 mme exec pos={Position}");
+                }
+
                 if (_turing)
                 {
                     // Turing positions are instruction indices; the code array stores three

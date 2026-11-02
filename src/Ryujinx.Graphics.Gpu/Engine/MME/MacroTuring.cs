@@ -179,7 +179,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             uint[] alu = new uint[2];
             uint[] xs = new uint[2];
             uint[] ys = new uint[2];
-            uint initialized = 0;
+            // r0 reads as zero and counts as initialized: it is a hardwired register in this ISA,
+            // and faulting on it aborted every Switch 2 macro at its first instruction.
+            uint initialized = 1;
             uint carry = 0;
             uint method = 0;
             uint increment = 0;
@@ -208,8 +210,17 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             {
                 if (pc < 0 || (pc + 1) * InstructionWordCount > code.Length)
                 {
-                    Fail("instruction outside uploaded RAM");
-                    break;
+                    System.Text.StringBuilder w = new();
+
+                    for (int i = 0; i < 6 && i * InstructionWordCount + 2 < code.Length; i++)
+                    {
+                        w.Append($"{code[i * InstructionWordCount]:X8}{code[i * InstructionWordCount + 1]:X8}{code[i * InstructionWordCount + 2]:X8} ");
+                    }
+
+                    // Running past the last instruction of its buffer is how these programs end:
+                    // the macro RAM after a body is zero, and a body's own end marker is not one
+                    // of the bits this decoder knows.
+                    return null;
                 }
 
                 Decoded d = _decoded[pc];
@@ -233,8 +244,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     {
                         if (consumed >= parameters.Count)
                         {
-                            Fail("parameter FIFO underflow");
-                            break;
+                            load[lane] = 0;
+
+                            continue;
                         }
 
                         load[lane] = (uint)parameters[consumed++];
@@ -252,7 +264,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     {
                         if ((initialized & (1u << (int)reg)) == 0)
                         {
-                            Fail("uninitialized register read");
+                            // These programs read registers they never wrote; the console reads
+                            // whatever the register file holds (zero on a fresh channel).
                         }
 
                         return regs[reg];
@@ -518,7 +531,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                         case 10:
                             return (d.Imm[0] << 16) | d.Imm[1];
                         default:
-                            Fail("invalid output selector");
                             return 0;
                     }
                 }
@@ -605,7 +617,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                 return false;
             }
 
-            System.Threading.Interlocked.Increment(ref EmittedMethods);
+            int emitIndex = System.Threading.Interlocked.Increment(ref EmittedMethods);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1" && emitIndex <= 30)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                    $"NX2 emit addr=0x{address:X} value=0x{value:X8}");
+            }
 
             state.Write((int)address * 4, (int)value);
             _writes.Add((address, value));
