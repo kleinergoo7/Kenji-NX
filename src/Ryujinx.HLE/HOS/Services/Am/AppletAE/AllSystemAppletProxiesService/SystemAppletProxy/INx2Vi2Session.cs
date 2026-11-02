@@ -253,6 +253,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
 
+            if (System.Environment.GetEnvironmentVariable("NX2_PC_SAMPLE") == "1" &&
+                System.Threading.Interlocked.Increment(ref _pcSamples) % 120 == 0)
+            {
+                SampleGuestPcs(context.Device);
+            }
+
             if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1" &&
                 System.Threading.Interlocked.Increment(ref _presentWho) <= 12)
             {
@@ -569,6 +575,34 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static byte[] _sourceBuffer;
         private static byte[] _linearBuffer;
         private static int _presentCount;
+
+        private static int _pcSamples;
+
+        // Samples every guest thread's PC of the application process. The GDB stub reports one
+        // shared trampoline for all paused threads, so this is the only usable per-thread view.
+        private static void SampleGuestPcs(Ryujinx.HLE.Switch device)
+        {
+            ulong pid = device.Processes.ActiveApplication?.ProcessId ?? 0;
+
+            if (pid == 0 || !device.System.KernelContext.Processes.TryGetValue(pid, out Ryujinx.HLE.HOS.Kernel.Process.KProcess process))
+            {
+                return;
+            }
+
+            System.Text.StringBuilder sb = new();
+
+            foreach (Ryujinx.HLE.HOS.Kernel.Threading.KThread thread in process.DebugThreads)
+            {
+                if (thread.Context == null)
+                {
+                    continue;
+                }
+
+                sb.Append($"{thread.ThreadUid}:{thread.GetThreadName()}=0x{thread.Context.Pc:X} ");
+            }
+
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 pcs {sb}");
+        }
 
         private static int _fenceTimeouts;
 
