@@ -101,6 +101,15 @@ namespace ARMeilleure.Instructions
             // Do nothing.
         }
 
+        public static void Pacga(ArmEmitterContext context)
+        {
+            // PACGA needs the QARMA engine, which this CPU does not emulate. Callers use the
+            // result as a key or tag, so return a deterministic constant instead of a crash.
+            OpCodeSystem op = (OpCodeSystem)context.CurrOp;
+
+            SetIntOrZR(context, op.Rt, Const(0L));
+        }
+
         public static void Sys(ArmEmitterContext context)
         {
             // This instruction is used to do some operations on the CPU like cache invalidation,

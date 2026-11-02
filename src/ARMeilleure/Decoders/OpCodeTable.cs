@@ -161,6 +161,8 @@ namespace ARMeilleure.Decoders
             SetA64("11010110010111110000111111111111", InstName.Ret,             InstEmit.Ret,             OpCodeBReg.CreateRetAuth); // retab
             SetA64("1101011001011111000000xxxxx00000", InstName.Ret,             InstEmit.Ret,             OpCodeBReg.Create);
             SetA64("110110101100000101000011111xxxxx", InstName.Nop,             InstEmit.Nop,             OpCodeSystem.Create); // xpaci (pointer auth is identity)
+            SetA64("110110101100000100xxxxxxxxxxxxxx", InstName.Nop,             InstEmit.Nop,             OpCodeSystem.Create); // pacia/pacib/pacda/pacdb/autia/autib/autda/autdb/paciza/autiza... (pointer auth is identity)
+            SetA64("10011010110xxxxx001100xxxxxxxxxx", InstName.Pacga,           InstEmit.Pacga,           OpCodeSystem.Create); // pacga (no QARMA engine: deterministic zero)
 
             for (int size = 0; size < 4; size++)
             {

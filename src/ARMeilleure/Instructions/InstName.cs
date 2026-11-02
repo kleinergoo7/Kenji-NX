@@ -74,6 +74,7 @@ namespace ARMeilleure.Instructions
         Nop,
         Orn,
         Orr,
+        Pacga,
         Prfm,
         Rbit,
         Ret,
