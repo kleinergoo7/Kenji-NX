@@ -22,7 +22,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         private const int LoadInlineDataMethodOffset = 0x6d;
         private const int UniformBufferUpdateDataMethodOffset = 0x8e4;
 
-        private const int SubChannelCount = 5;
+        // The GPFIFO has 8 subchannels; Switch 2 titles use the last ones too, and a bound
+        // subchannel outside this range would drop every method sent to it.
+        private const int SubChannelCount = 8;
 
         private readonly GpuContext _context;
         private readonly GpuChannel _channel;
@@ -37,6 +39,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         private const int EngineFifo = 5;
 
         private readonly int[] _subChannelEngine = new int[SubChannelCount];
+
+        // Object classes the nx2 binder has not seen before, logged once each.
+        private readonly System.Collections.Generic.HashSet<int> _unknownClasses = [];
 
         /// <summary>
         /// Channel memory manager.
@@ -366,14 +371,24 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 return;
             }
 
+            // The engine id travels in the upper bits of the class argument, in the same order as
+            // the engines above, so an unknown class still reaches the right one.
+            int engineField = (argument >> 16) & 0x1f;
+
             _subChannelEngine[subChannel] = classId switch
             {
                 0xc797 => Engine3D,        // AMPERE_B
                 0xc7c0 => EngineCompute,   // AMPERE_COMPUTE_B
                 0xc7b5 => EngineDma,       // AMPERE_DMA_COPY_B
                 0xc56f => EngineFifo,      // AMPERE_CHANNEL_GPFIFO_A
-                _ => subChannel,           // unknown class: keep the legacy mapping
+                _ => engineField <= EngineFifo ? engineField : -1,
             };
+
+            if (classId is not (0xc797 or 0xc7c0 or 0xc7b5 or 0xc56f) && _unknownClasses.Add(classId))
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
+                    $"Switch 2 unknown object class 0x{classId:X4} (engine {engineField}) on subchannel {subChannel}");
+            }
         }
 
         /// <summary>
