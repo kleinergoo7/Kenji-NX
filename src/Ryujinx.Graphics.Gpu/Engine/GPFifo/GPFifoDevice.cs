@@ -205,10 +205,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             // Use this opportunity to also dispose any pending channels that were closed.
             _context.RunDeferredActions();
 
-            // A semaphore release may have landed since the last dispatch (or on another
-            // channel just now): resume suspended buffers before consuming new ones.
-            GPFifoProcessor.TryResumeAll();
-
             // Process command buffers.
             while (_ibEnable && !_interrupt && _commandBufferQueue.TryDequeue(out CommandBuffer entry))
             {
@@ -230,26 +226,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     entry.Processor.ForceAllDirty();
                 }
 
-                if (entry.Processor.HasUnmetStall)
-                {
-                    // Suspended on a semaphore acquire: leave the buffer queued behind the
-                    // stall; the release write (or the next dispatch) resumes it in order.
-                    // Beyond a large backlog fall back to inline processing (the old
-                    // behavior) rather than growing memory without bound.
-                    if (!entry.Processor.QueueStalled(entry.EntryAddress, words.Length))
-                    {
-                        entry.Processor.Process(entry.EntryAddress, words);
-
-                        continue;
-                    }
-
-                    continue;
-                }
-
                 entry.Processor.Process(entry.EntryAddress, words);
             }
-
-            GPFifoProcessor.TryResumeAll();
 
             _interrupt = false;
         }
