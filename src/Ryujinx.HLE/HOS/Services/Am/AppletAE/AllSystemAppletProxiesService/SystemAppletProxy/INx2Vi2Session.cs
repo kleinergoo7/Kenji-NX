@@ -253,6 +253,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
 
+            if (System.Environment.GetEnvironmentVariable("NX2_METHOD_LOG") == "1" &&
+                System.Threading.Interlocked.Increment(ref _methodSamples) % 300 == 0)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws}");
+            }
+
             if (System.Environment.GetEnvironmentVariable("NX2_PC_SAMPLE") == "1" &&
                 System.Threading.Interlocked.Increment(ref _pcSamples) % 120 == 0)
             {
@@ -588,6 +595,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static int _presentCount;
 
         private static int _pcSamples;
+
+        private static int _methodSamples;
 
         // Samples every guest thread's PC of the application process. The GDB stub reports one
         // shared trampoline for all paused threads, so this is the only usable per-thread view.

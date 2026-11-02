@@ -23,6 +23,33 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             GPFifoProcessor.TryResumeAll();
         }
+
+        public static int MacrosRun => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacrosRun;
+        public static int EmittedMethods => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedMethods;
+        public static int Draws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.DrawCount;
+
+        /// <summary>Total 3D methods dispatched and the most frequent method offsets.</summary>
+        public static string Describe3DMethods()
+        {
+            System.Text.StringBuilder sb = new();
+            sb.Append($"total={GPFifoProcessor.Method3DTotal} top=");
+
+            System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<int, int>> list;
+
+            lock (GPFifoProcessor.MethodHistogram)
+            {
+                list = [.. GPFifoProcessor.MethodHistogram];
+            }
+
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            for (int i = 0; i < list.Count && i < 14; i++)
+            {
+                sb.Append($"0x{list[i].Key:X}={list[i].Value} ");
+            }
+
+            return sb.ToString();
+        }
     }
 
     class GPFifoProcessor : IDisposable
@@ -50,6 +77,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         private const int EngineFifo = 5;
 
         private readonly int[] _subChannelEngine = new int[SubChannelCount];
+
+        internal static int Method3DTotal => _method3DTotal;
+        internal static readonly System.Collections.Generic.Dictionary<int, int> MethodHistogram = [];
+
+        private static int _method3DTotal;
 
         private sealed class StallException : System.Exception;
 
@@ -457,6 +489,16 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             else
             {
                 int engine = SubChannelEngine(subChannel);
+
+                if (engine == Engine3D)
+                {
+                    System.Threading.Interlocked.Increment(ref _method3DTotal);
+                    lock (MethodHistogram)
+                    {
+                        MethodHistogram.TryGetValue(offset, out int seen);
+                        MethodHistogram[offset] = seen + 1;
+                    }
+                }
 
                 IDeviceState state = engine switch
                 {

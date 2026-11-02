@@ -331,7 +331,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="argument">Method call argument</param>
         public void LoadMmeInstructionRam(int argument)
         {
-            if (_context.IsNx2Ampere)
+            if (_context.IsNx2Ampere && System.Environment.GetEnvironmentVariable("NX2_RUN_MME") != "1")
             {
                 // Turing+ instructions are 96 bits (three words). The SDK addresses code by
                 // instruction index, so a sequence of three writes stores one instruction.

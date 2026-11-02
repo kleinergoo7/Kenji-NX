@@ -66,6 +66,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
         private Decoded[] _decoded = Array.Empty<Decoded>();
 
+        public static int EmittedMethods;
+        public static int MacrosRun;
+
         private bool _readRegisters;
         private bool _rereadDataRam;
         private bool _readMemory;
@@ -120,6 +123,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         /// <param name="arg0">First argument passed to the program</param>
         public void Execute(ReadOnlySpan<int> code, IDeviceState state, int arg0)
         {
+            System.Threading.Interlocked.Increment(ref MacrosRun);
+
             List<int> parameters = new(Fifo.Count + 1) { arg0 };
 
             foreach (FifoWord word in Fifo)
@@ -599,6 +604,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             {
                 return false;
             }
+
+            System.Threading.Interlocked.Increment(ref EmittedMethods);
 
             state.Write((int)address * 4, (int)value);
             _writes.Add((address, value));
