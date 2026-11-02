@@ -8,7 +8,7 @@ namespace Ryujinx.Common.Configuration.Hid.Controller
         Unbound,
         Left,
         Right,
-        
+
         Count,
     }
 }

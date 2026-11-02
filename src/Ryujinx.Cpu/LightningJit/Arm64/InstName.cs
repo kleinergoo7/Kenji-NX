@@ -1052,7 +1052,7 @@ namespace Ryujinx.Cpu.LightningJit.Arm64
                 or InstName.UdfPermUndef;
 
             public bool IsException => name is InstName.Brk or InstName.Svc or InstName.UdfPermUndef;
-            
+
             public bool IsSystem => name switch
             {
                 InstName.Mrs or InstName.MsrImm or InstName.MsrReg => true,
@@ -1073,7 +1073,7 @@ namespace Ryujinx.Cpu.LightningJit.Arm64
                 or InstName.Ld3AdvsimdSnglAsNoPostIndex or InstName.Ld3AdvsimdSnglAsPostIndex
                 or InstName.Ld4AdvsimdSnglAsNoPostIndex or InstName.Ld4AdvsimdSnglAsPostIndex;
 
-            public bool IsPrefetchMemory => name is 
+            public bool IsPrefetchMemory => name is
                 InstName.PrfmImm or InstName.PrfmLit or InstName.PrfmReg or InstName.Prfum;
         }
     }

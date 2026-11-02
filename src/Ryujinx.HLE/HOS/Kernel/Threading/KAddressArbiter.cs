@@ -147,9 +147,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 if (threads.Count > 0)
                 {
                     i = threads.BinarySearch(currentThread, _byDynamicPriority);
-                    if (i < 0) i = ~i;
+                    if (i < 0)
+                        i = ~i;
                 }
-                
+
                 threads.Insert(i, currentThread);
             }
             else
@@ -220,7 +221,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             {
                 validThreads = WakeThreads(threads, count, TryAcquireMutex);
             }
-            
+
             if (validThreads == 0)
             {
                 KernelTransfer.KernelToUser(address, 0);
@@ -329,7 +330,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
                 currentThread.MutexAddress = address;
                 currentThread.WaitingInArbitration = true;
-                
+
                 if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
                 {
                     int i = 0;
@@ -337,16 +338,17 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                     if (threads.Count > 0)
                     {
                         i = threads.BinarySearch(currentThread, _byDynamicPriority);
-                        if (i < 0) i = ~i;
+                        if (i < 0)
+                            i = ~i;
                     }
-                
+
                     threads.Insert(i, currentThread);
                 }
                 else
                 {
                     _arbiterThreads.Add(address, [currentThread]);
                 }
-                
+
                 currentThread.Reschedule(ThreadSchedState.Paused);
 
                 if (timeout > 0)
@@ -421,7 +423,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
                 currentThread.MutexAddress = address;
                 currentThread.WaitingInArbitration = true;
-                
+
                 if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
                 {
                     int i = 0;
@@ -429,16 +431,17 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                     if (threads.Count > 0)
                     {
                         i = threads.BinarySearch(currentThread, _byDynamicPriority);
-                        if (i < 0) i = ~i;
+                        if (i < 0)
+                            i = ~i;
                     }
-                
+
                     threads.Insert(i, currentThread);
                 }
                 else
                 {
                     _arbiterThreads.Add(address, [currentThread]);
                 }
-                
+
                 currentThread.Reschedule(ThreadSchedState.Paused);
 
                 if (timeout > 0)
@@ -530,12 +533,12 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             // or equal to the Count of threads to be signaled, or Count is zero
             // or negative. It is incremented if there are no threads waiting.
             int waitingCount = 0;
-            
+
             if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
             {
                 waitingCount = threads.Count;
             }
-            
+
 
             if (waitingCount > 0)
             {
@@ -622,12 +625,12 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 KThread thread = threads[i];
                 removeCallback(thread);
             }
-            
+
             threads.RemoveRange(0, validCount);
 
             return validCount;
         }
-        
+
         private class ByDynamicPriority : IComparer<KThread>
         {
             public int Compare(KThread x, KThread y)

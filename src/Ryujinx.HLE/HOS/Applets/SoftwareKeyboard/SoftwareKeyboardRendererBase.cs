@@ -343,7 +343,7 @@ namespace Ryujinx.HLE.HOS.Applets.SoftwareKeyboard
             using SKFont textFont = new();
             textFont.Edging = SKFontEdging.Alias;
             textFont.Typeface = SKTypeface.Default;
-            
+
             using SKPaint textPaint = new();
             textPaint.IsAntialias = true;
             textPaint.Color = _textNormalColor;

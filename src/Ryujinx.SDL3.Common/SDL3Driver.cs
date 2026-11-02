@@ -1,12 +1,12 @@
 using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
+using SDL;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
-using SDL;
 using static SDL.SDL3;
 
 namespace Ryujinx.SDL3.Common
@@ -46,7 +46,7 @@ namespace Ryujinx.SDL3.Common
 
         private static readonly HttpClient _httpClient = new();
         private const string GamepadDbUrl = "https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/refs/heads/master/gamecontrollerdb.txt";
-        
+
         public void Initialize()
         {
             lock (_lock)
@@ -59,7 +59,7 @@ namespace Ryujinx.SDL3.Common
                 }
 
                 SDL_SetHint(SDL_HINT_APP_NAME, "Ryujinx");
-                SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS , "1");
+                SDL_SetHint(SDL_HINT_JOYSTICK_ENHANCED_REPORTS, "1");
                 SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
                 SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH_HOME_LED, "0");
                 SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
@@ -103,7 +103,7 @@ namespace Ryujinx.SDL3.Common
                 string gamepadDbPath = Path.Combine(AppDataManager.BaseDirPath, "gamecontrollerdb.txt");
 
                 UpdateGamepadDb(gamepadDbPath);
-                
+
                 if (File.Exists(gamepadDbPath))
                 {
                     SDL_AddGamepadMappingsFromFile(gamepadDbPath);
@@ -146,7 +146,7 @@ namespace Ryujinx.SDL3.Common
                 Logger.Warning?.Print(LogClass.Application, $"Failed to check/download gamepad database, using existing local copy if present: {ex.Message}");
             }
         }
-        
+
         public bool RegisterWindow(SDL_WindowID windowId, Action<SDL_Event> windowEventHandler)
         {
             return _registeredWindowHandlers.TryAdd(windowId, windowEventHandler);

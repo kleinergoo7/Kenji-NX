@@ -701,7 +701,7 @@ namespace Ryujinx.Input.HLE
 
             VibrationValue leftVibrationValue = dualVibrationValue.Item1;
             VibrationValue rightVibrationValue = dualVibrationValue.Item2;
-            
+
             float low = Math.Min(1f, (float)((rightVibrationValue.AmplitudeLow * 0.85 + rightVibrationValue.AmplitudeHigh * 0.15) * controllerConfig.Rumble.StrongRumble));
             float high = Math.Min(1f, (float)((leftVibrationValue.AmplitudeLow * 0.15 + leftVibrationValue.AmplitudeHigh * 0.85) * controllerConfig.Rumble.WeakRumble));
 
@@ -791,7 +791,8 @@ namespace Ryujinx.Input.HLE
                     {
                         yield return new AssignedInputDevice
                         {
-                            Type = AssignedInputDeviceType.Controller, Id = gamepadId,
+                            Type = AssignedInputDeviceType.Controller,
+                            Id = gamepadId,
                         };
                         yield break;
                     }

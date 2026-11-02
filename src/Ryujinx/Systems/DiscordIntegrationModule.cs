@@ -137,19 +137,19 @@ namespace Ryujinx.Ava.Systems
 
             if (!formattedValue.Handled)
                 return;
-            
 
-            
+
+
             try // New format that attempts to deserialize json, and if it fails (using old method)...
             {
                 Dictionary<string, string> outDictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(formattedValue.FormattedString);
-                
+
                 _discordPresencePlaying.Details = TruncateToByteLength(
                     outDictionary["Details"].IsNullOrEmpty()
                         ? $"Playing {_currentApp.Title}"
                         : outDictionary["Details"]
                 );
-            
+
                 _discordPresencePlaying.State = TruncateToByteLength(
                     outDictionary["State"].IsNullOrEmpty()
                         ? $"Total play time: {ValueFormatUtils.FormatTimeSpan(_currentApp.TimePlayed)}"
@@ -175,7 +175,7 @@ namespace Ryujinx.Ava.Systems
 
         public static string PrepareMultilineRpcString(string line1 = "", string line2 = "")
         {
-            Dictionary<string, string> rpcdict = new() { { "Details", line1 }, {"State", line2} };
+            Dictionary<string, string> rpcdict = new() { { "Details", line1 }, { "State", line2 } };
             return JsonSerializer.Serialize(rpcdict);
         }
 

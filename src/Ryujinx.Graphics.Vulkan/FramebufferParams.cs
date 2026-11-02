@@ -178,11 +178,11 @@ namespace Ryujinx.Graphics.Vulkan
             AttachmentsCount = count;
             _totalCount = colors.Length;
         }
-        
+
         public FramebufferParams Update(ReadOnlySpan<ITexture> colors, ITexture depthStencil)
         {
             int colorsCount = 0;
-            
+
             foreach (ITexture color in colors)
             {
                 if (IsValidTextureView(color))
@@ -192,7 +192,7 @@ namespace Ryujinx.Graphics.Vulkan
             }
 
             int count = colorsCount + (IsValidTextureView(depthStencil) ? 1 : 0);
-            
+
             Array.Clear(_attachments);
             Array.Clear(_colors);
 
@@ -225,7 +225,7 @@ namespace Ryujinx.Graphics.Vulkan
             Array.Clear(AttachmentSamples);
             Array.Clear(AttachmentFormats);
             Array.Clear(AttachmentIndices);
-            
+
             if (AttachmentSamples.Length < count)
             {
                 uint[] attachmentSamples = AttachmentSamples;
@@ -244,7 +244,7 @@ namespace Ryujinx.Graphics.Vulkan
                 Array.Resize(ref attachmentIndices, colorsCount);
                 AttachmentIndices = attachmentIndices;
             }
-            
+
             uint width = uint.MaxValue;
             uint height = uint.MaxValue;
             uint layers = uint.MaxValue;
@@ -443,7 +443,7 @@ namespace Ryujinx.Graphics.Vulkan
             if (_colors != null)
             {
                 int count = ColorAttachmentsCount;
-                
+
                 for (int i = 0; i < count; i++)
                 {
                     TextureView color = _colors[i];
@@ -462,7 +462,7 @@ namespace Ryujinx.Graphics.Vulkan
             if (_colors != null)
             {
                 int count = ColorAttachmentsCount;
-                
+
                 for (int i = 0; i < count; i++)
                 {
                     TextureView color = _colors[i];

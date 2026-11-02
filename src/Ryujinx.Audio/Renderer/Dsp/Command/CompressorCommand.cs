@@ -45,7 +45,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             ResultState = resultState;
 
             IsEffectEnabled = isEnabled;
-            
+
             Span<byte> inputSpan = _parameter.Input.AsSpan();
             Span<byte> outputSpan = _parameter.Output.AsSpan();
 
@@ -179,7 +179,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
                         statistics.MinimumGain = MathF.Min(statistics.MinimumGain, compressionGain * state.OutputGain);
                         statistics.MaximumMean = MathF.Max(statistics.MaximumMean, mean);
-                        
+
                         Span<float> lastSamplesSpan = statistics.LastSamples.AsSpan();
 
                         for (int channelIndex = 0; channelIndex < _parameter.ChannelCount; channelIndex++)

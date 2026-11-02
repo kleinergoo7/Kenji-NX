@@ -582,7 +582,7 @@ namespace Ryujinx.Ava.Systems
             _isActive = false;
             _viewModel.IsPaused = false;
             _playTimer.Stop();
-            
+
             GCSettings.LatencyMode = GCLatencyMode.Interactive;
             if (ConfigurationState.Instance.System.GCLowLatency)
             {
@@ -625,7 +625,7 @@ namespace Ryujinx.Ava.Systems
             NpadManager.Dispose();
             TouchScreenManager.Dispose();
             Device.Dispose();
-            
+
             // NOTE: The render loop is allowed to stay alive until the renderer itself is disposed, as it may handle resource dispose.
             // We only need to wait for all commands submitted during the main gpu loop to be processed.
             // If the GPU has no work and is cancelled, we need to handle that as well.
@@ -637,10 +637,10 @@ namespace Ryujinx.Ava.Systems
                 // Waiting for work to be finished before we dispose.
                 Device.Gpu.WaitUntilGpuReady();
             }
-            
+
             _gpuDoneEvent.Dispose();
             _gpuCancellationTokenSource.Dispose();
-            
+
             DisposeGpu();
             AppExit?.Invoke(this, EventArgs.Empty);
         }
@@ -650,10 +650,10 @@ namespace Ryujinx.Ava.Systems
         {
             if (Device.Processes != null)
             {
-                MainWindowViewModel.UpdateGameMetadata(Device.Processes.ActiveApplication?.ProgramIdText, 
+                MainWindowViewModel.UpdateGameMetadata(Device.Processes.ActiveApplication?.ProgramIdText,
                     _playTimer.Elapsed);
             }
-            
+
             ConfigurationState.Instance.System.IgnoreMissingServices.Event -= UpdateIgnoreMissingServicesState;
             ConfigurationState.Instance.Graphics.AspectRatio.Event -= UpdateAspectRatioState;
             ConfigurationState.Instance.System.EnableDockedMode.Event -= UpdateDockedModeState;
@@ -671,7 +671,7 @@ namespace Ryujinx.Ava.Systems
 
             _chrono.Stop();
             _playTimer.Stop();
-            
+
             GCSettings.LatencyMode = GCLatencyMode.Interactive;
             if (ConfigurationState.Instance.System.GCLowLatency)
             {
@@ -704,7 +704,7 @@ namespace Ryujinx.Ava.Systems
                 {
                     Device.Gpu.WaitUntilGpuReady();
                 }
-                
+
                 Device.DisposeGpu();
             }
         }
@@ -941,7 +941,7 @@ namespace Ryujinx.Ava.Systems
             ApplicationLibrary.LoadAndSaveMetaData(Device.Processes.ActiveApplication.ProgramIdText,
                 appMetadata => appMetadata.UpdatePreGame()
             );
-            
+
             _playTimer.Start();
 
             if (ConfigurationState.Instance.System.GCLowLatency)
@@ -959,7 +959,7 @@ namespace Ryujinx.Ava.Systems
             _playTimer.Start();
             _viewModel.Title = TitleHelper.ActiveApplicationTitle(Device?.Processes.ActiveApplication, Program.Version, !ConfigurationState.Instance.ShowOldUI);
             Logger.Info?.Print(LogClass.Emulation, "Emulation was resumed.");
-            
+
             if (ConfigurationState.Instance.System.GCLowLatency)
             {
                 GCSettings.LatencyMode = GCLatencyMode.LowLatency;
@@ -975,7 +975,7 @@ namespace Ryujinx.Ava.Systems
             _playTimer.Stop();
             _viewModel.Title = TitleHelper.ActiveApplicationTitle(Device?.Processes.ActiveApplication, Program.Version, !ConfigurationState.Instance.ShowOldUI, LocaleManager.Instance[LocaleKeys.Paused]);
             Logger.Info?.Print(LogClass.Emulation, "Emulation was paused.");
-            
+
             GCSettings.LatencyMode = GCLatencyMode.Interactive;
             if (ConfigurationState.Instance.System.GCLowLatency)
             {

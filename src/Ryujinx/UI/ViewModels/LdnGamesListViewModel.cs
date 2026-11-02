@@ -1,11 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Gommon;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Ryujinx.Ava.Systems.AppLibrary;
 using Ryujinx.Ava.UI.Models;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -39,10 +39,10 @@ namespace Ryujinx.Ava.UI.ViewModels
 
             if (OnlyShowForOwnedGames)
                 filtered = filtered.Where(x => _ownedGameTitleIds.ContainsIgnoreCase(x.Title.Id));
-            
+
             if (OnlyShowPublicGames)
                 filtered = filtered.Where(x => x.IsPublic);
-            
+
             if (OnlyShowJoinableGames)
                 filtered = filtered.Where(x => x.IsJoinable);
 
@@ -56,7 +56,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 Mwvm = RyujinxApp.MainWindow.ViewModel;
             }
         }
-        
+
         private void AppCountUpdated(object _, ApplicationCountUpdatedEventArgs __)
             => _ownedGameTitleIds = Mwvm.ApplicationLibrary.Applications.Keys.Select(x => x.ToString("X16")).ToArray();
 
@@ -72,7 +72,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 Mwvm.PropertyChanged += Mwvm_OnPropertyChanged;
             }
         }
-        
+
         void IDisposable.Dispose()
         {
             if (Program.PreviewerDetached)

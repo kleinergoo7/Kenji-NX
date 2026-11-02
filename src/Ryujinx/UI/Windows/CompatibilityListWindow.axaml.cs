@@ -1,6 +1,6 @@
 using Avalonia.Controls;
-using Ryujinx.Ava.Common.Locale;
 using Avalonia.Interactivity;
+using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.Systems.Configuration;
 using Ryujinx.Ava.UI.ViewModels;
 using System.Threading.Tasks;

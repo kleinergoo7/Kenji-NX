@@ -68,7 +68,7 @@ namespace Ryujinx.Audio.Renderer.Server.Effect
                     MemoryMarshal.Cast<byte, BiquadFilterEffectParameter1>(parameter.SpecificData)[0];
                 Parameter = BiquadFilterHelper.ToBiquadFilterEffectParameter2(oldParameter);
             }
-            
+
             IsEnabled = parameter.IsEnabled;
 
             updateErrorInfo = new BehaviourParameter.ErrorInfo();

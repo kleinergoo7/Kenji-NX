@@ -47,7 +47,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         private SortField _sortField = SortField.Name;
         private int _processingCurrent;
         private int _processingTotal;
-        
+
 
         public XciTrimmerViewModel(MainWindowViewModel mainWindowViewModel)
         {
@@ -147,7 +147,7 @@ namespace Ryujinx.Ava.UI.ViewModels
             else
                 SelectAll();
         }
-                
+
         public string SelectToggleText =>
             AnySelected
                 ? LocaleManager.Instance[LocaleKeys.XCITrimmer_ClearSelectionButton]
@@ -318,10 +318,10 @@ namespace Ryujinx.Ava.UI.ViewModels
                     case SortField.Savings:
                         result = x.PotentialSavingsB.CompareTo(y.PotentialSavingsB);
                         break;
-                            case SortField.Status:
+                    case SortField.Status:
 
-                    result = x.CurrentSavingsB.CompareTo(y.CurrentSavingsB);
-                    break;
+                        result = x.CurrentSavingsB.CompareTo(y.CurrentSavingsB);
+                        break;
                 }
 
                 if (!_viewModel.SortingAscending)
@@ -577,7 +577,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         {
             get
             {
-                return string.Format(LocaleManager.Instance[LocaleKeys.XCITrimmer_MBLabel], AllXCIFiles.Sum(xci => xci.PotentialSavingsB / BytesPerMb));            
+                return string.Format(LocaleManager.Instance[LocaleKeys.XCITrimmer_MBLabel], AllXCIFiles.Sum(xci => xci.PotentialSavingsB / BytesPerMb));
             }
         }
 
@@ -585,7 +585,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         {
             get
             {
-                return string.Format(LocaleManager.Instance[LocaleKeys.XCITrimmer_MBLabel], AllXCIFiles.Sum(xci => xci.CurrentSavingsB / BytesPerMb));            
+                return string.Format(LocaleManager.Instance[LocaleKeys.XCITrimmer_MBLabel], AllXCIFiles.Sum(xci => xci.CurrentSavingsB / BytesPerMb));
             }
         }
 
@@ -597,7 +597,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 long actualSavings = AllXCIFiles.Sum(xci => xci.CurrentSavingsB);
                 long differenceMb = (potentialSavings - actualSavings) / BytesPerMb;
 
-                 return string.Format(LocaleManager.Instance[LocaleKeys.XCITrimmer_MBLabel], differenceMb);
+                return string.Format(LocaleManager.Instance[LocaleKeys.XCITrimmer_MBLabel], differenceMb);
             }
         }
 

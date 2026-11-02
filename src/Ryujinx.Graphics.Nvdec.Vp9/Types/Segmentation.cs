@@ -107,7 +107,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             {
                 Span<byte> segTreeProbSpan = fc.SegTreeProb.AsSpan();
                 Span<byte> segPredProbSpan = fc.SegPredProb.AsSpan();
-                
+
                 for (int i = 0; i < SegTreeProbs; i++)
                 {
                     segTreeProbSpan[i] = rb.ReadBit() != 0

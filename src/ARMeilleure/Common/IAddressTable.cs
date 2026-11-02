@@ -8,7 +8,7 @@ namespace ARMeilleure.Common
         /// Gets the <see cref="AddressTableType"/> of the <see cref="IAddressTable{TEntry}"/> instance.
         /// </summary>
         AddressTableType TableType { get; }
-        
+
         /// <summary>
         /// Gets the bits used by the <see cref="Levels"/> of the <see cref="IAddressTable{TEntry}"/> instance.
         /// </summary>

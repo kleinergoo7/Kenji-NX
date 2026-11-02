@@ -107,7 +107,7 @@ namespace Ryujinx.HLE.Loaders.Processes.Extensions
                 if (updatePatchNca != null)
                 {
                     patchNca = updatePatchNca;
-                    if (updatePath != null) 
+                    if (updatePath != null)
                         Logger.Notice.PrintMsg(LogClass.Application, $"Loading update NCA from '{updatePath}'.");
                 }
 

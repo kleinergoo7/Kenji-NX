@@ -17,7 +17,7 @@ namespace Ryujinx.Tests.Unicorn
             public uint Opc2;
             public uint Val;
         }
-        
+
         internal readonly UnicornEngine.Unicorn Uc;
         private bool _isDisposed;
 
@@ -98,7 +98,7 @@ namespace Ryujinx.Tests.Unicorn
         public UnicornAArch32()
         {
             Uc = new UnicornEngine.Unicorn(Common.UC_ARCH_ARM, Common.UC_MODE_LITTLE_ENDIAN);
-            
+
             UcArmCpReg reg = new()
             {
                 Cp = 15,
@@ -109,11 +109,11 @@ namespace Ryujinx.Tests.Unicorn
                 CRm = 0,
                 Opc2 = 2
             };
-            
+
             GetRegister(Arm.UC_ARM_REG_CP_REG, ref reg);
             reg.Val |= 0xf00000;
             SetRegister(Arm.UC_ARM_REG_CP_REG, reg);
-            
+
             SetRegister(Arm.UC_ARM_REG_FPEXC, 0x40000000);
         }
 
@@ -236,12 +236,12 @@ namespace Ryujinx.Tests.Unicorn
             Span<T> span = new(ref obj);
             Span<byte> dataSpan = MemoryMarshal.Cast<T, byte>(span);
             byte[] data = dataSpan.ToArray();
-            
+
             Uc.RegRead(register, data);
-            
+
             data.AsSpan().CopyTo(dataSpan);
         }
-        
+
         public uint GetRegister(int register)
         {
             byte[] data = new byte[4];
@@ -257,7 +257,7 @@ namespace Ryujinx.Tests.Unicorn
 
             Uc.RegWrite(register, data);
         }
-        
+
         public void SetRegister(int register, uint value)
         {
             byte[] data = BitConverter.GetBytes(value);

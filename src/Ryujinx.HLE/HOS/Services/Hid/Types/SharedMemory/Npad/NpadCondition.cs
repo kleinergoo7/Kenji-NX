@@ -1,4 +1,4 @@
-﻿namespace Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Npad
+namespace Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Npad
 {
     struct NpadCondition
     {
@@ -8,7 +8,7 @@
         private NpadJoyHoldType _holdType;
         private uint _0C;
 #pragma warning restore CS0414 // Field is assigned but its value is never used
-        
+
         public static NpadCondition Create()
         {
             return new NpadCondition()

@@ -19,7 +19,7 @@ namespace Ryujinx.Horizon.Sdk.OsTypes.Impl
         private int _waitingThreadHandle;
 
         private MultiWaitHolderBase _signaledHolder;
-        
+
         ObjectPool<int[]> _objectHandlePool = new(() => new int[64]);
         ObjectPool<MultiWaitHolderBase[]> _objectPool = new(() => new MultiWaitHolderBase[64]);
 
@@ -125,7 +125,7 @@ namespace Ryujinx.Horizon.Sdk.OsTypes.Impl
 
                                     _objectHandlePool.Release(objectHandles);
                                     _objectPool.Release(objects);
-                                    
+
                                     return _signaledHolder;
                                 }
                             }
@@ -134,7 +134,7 @@ namespace Ryujinx.Horizon.Sdk.OsTypes.Impl
                         {
                             _objectHandlePool.Release(objectHandles);
                             _objectPool.Release(objects);
-                            
+
                             return null;
                         }
 
@@ -146,7 +146,7 @@ namespace Ryujinx.Horizon.Sdk.OsTypes.Impl
                             {
                                 _objectHandlePool.Release(objectHandles);
                                 _objectPool.Release(objects);
-                                
+
                                 return _signaledHolder;
                             }
                         }
@@ -159,7 +159,7 @@ namespace Ryujinx.Horizon.Sdk.OsTypes.Impl
 
                             _objectHandlePool.Release(objectHandles);
                             _objectPool.Release(objects);
-                            
+
                             return _signaledHolder;
                         }
                 }

@@ -111,7 +111,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     sbyte vrfl = lSg ? xd.LeftMi.Value.RefFrame[0] : xd.LeftMi.Value.RefFrame[varRefIdx];
 
                     Span<sbyte> compVarRefSpan = cm.CompVarRef.AsSpan();
-                    
+
                     if (vrfa == vrfl && compVarRefSpan[1] == vrfa)
                     {
                         predContext = 0;
@@ -288,7 +288,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     else
                     {
                         Span<sbyte> refFrameSpan = edgeMi.RefFrame.AsSpan();
-                        
+
                         predContext = 1 + (refFrameSpan[0] == Constants.LastFrame ||
                                            refFrameSpan[1] == Constants.LastFrame
                             ? 1

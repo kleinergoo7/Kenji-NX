@@ -117,7 +117,7 @@ namespace Ryujinx.Audio.Renderer.Server
         /// </summary>
         /// <remarks>This was added in system update 18.0.0</remarks>
         public const int Revision13 = 13 << 24;
-        
+
         /// <summary>
         /// REV14:
         /// Fixes the Depop Bug.
@@ -125,7 +125,7 @@ namespace Ryujinx.Audio.Renderer.Server
         /// </summary>
         /// <remarks>This was added in system update 19.0.0 </remarks>
         public const int Revision14 = 14 << 24;
-        
+
         /// <summary>
         /// REV15:
         /// Support for float coefficients in biquad filters
@@ -150,12 +150,12 @@ namespace Ryujinx.Audio.Renderer.Server
         /// Target revision magic supported by the implementation.
         /// </summary>
         public const int ProcessRevision = BaseRevisionMagic + LastRevision;
-        
+
         /// <summary>
         /// Current active revision.
         /// </summary>
         public int UserRevision { get; private set; }
-        
+
         /// <summary>
         /// Current flags of the <see cref="BehaviourInfo"/>.
         /// </summary>
@@ -418,7 +418,7 @@ namespace Ryujinx.Audio.Renderer.Server
         {
             return CheckFeatureSupported(UserRevision, BaseRevisionMagic + Revision13);
         }
-        
+
         /// <summary>
         /// Check if the audio renderer should support the depop bug fix.
         /// </summary>
@@ -427,7 +427,7 @@ namespace Ryujinx.Audio.Renderer.Server
         {
             return CheckFeatureSupported(UserRevision, BaseRevisionMagic + Revision14);
         }
-        
+
         /// <summary>
         /// Check if the audio renderer should support biquad filter with float coefficients.
         /// </summary>
@@ -493,7 +493,7 @@ namespace Ryujinx.Audio.Renderer.Server
             }
 
             errorCount = Math.Min(_errorIndex, Constants.MaxErrorInfos);
-            
+
             _errorInfos.AsSpan().CopyTo(errorInfos);
         }
 

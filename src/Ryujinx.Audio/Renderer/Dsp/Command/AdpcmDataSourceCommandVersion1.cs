@@ -1,8 +1,8 @@
 using Ryujinx.Audio.Common;
 using Ryujinx.Audio.Renderer.Common;
+using Ryujinx.Audio.Renderer.Parameter;
 using Ryujinx.Audio.Renderer.Server.Voice;
 using System;
-using Ryujinx.Audio.Renderer.Parameter;
 using WaveBuffer = Ryujinx.Audio.Renderer.Common.WaveBuffer;
 
 namespace Ryujinx.Audio.Renderer.Dsp.Command
@@ -44,7 +44,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             OutputBufferIndex = outputBufferIndex;
             SampleRate = serverInfo.SampleRate;
             Pitch = serverInfo.Pitch;
-            
+
             Span<Server.Voice.WaveBuffer> waveBufferSpan = serverInfo.WaveBuffers.AsSpan();
 
             for (int i = 0; i < WaveBuffers.Length; i++)

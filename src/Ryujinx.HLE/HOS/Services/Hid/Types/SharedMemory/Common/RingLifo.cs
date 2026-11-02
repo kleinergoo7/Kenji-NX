@@ -49,7 +49,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Common
             }
 
             ulong index = ReadCurrentIndex();
-            
+
             Span<AtomicStorage<T>> storageSpan = _storage.AsSpan();
 
             while (true)
@@ -93,7 +93,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Common
             ulong index = ReadCurrentIndex();
 
             AtomicStorage<T>[] result = new AtomicStorage<T>[countAvailable];
-            
+
             Span<AtomicStorage<T>> storageSpan = _storage.AsSpan();
 
             for (ulong i = 0; i < countAvailable; i++)

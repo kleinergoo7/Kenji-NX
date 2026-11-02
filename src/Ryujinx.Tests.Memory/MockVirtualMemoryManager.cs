@@ -42,7 +42,7 @@ namespace Ryujinx.Tests.Memory
         {
             throw new NotImplementedException();
         }
-        
+
         public bool TryReadUnsafe(ulong va, int lenfth, out Span<byte> data)
         {
             throw new NotImplementedException();

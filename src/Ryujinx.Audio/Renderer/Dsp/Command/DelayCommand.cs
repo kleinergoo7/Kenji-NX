@@ -45,7 +45,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             WorkBuffer = workBuffer;
 
             IsEffectEnabled = isEnabled;
-            
+
             Span<byte> inputSpan = Parameter.Input.AsSpan();
             Span<byte> outputSpan = Parameter.Output.AsSpan();
 

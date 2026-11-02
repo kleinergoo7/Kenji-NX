@@ -3,11 +3,11 @@ using Ryujinx.Common.Configuration.Hid.Controller;
 using Ryujinx.Common.Logging;
 using Ryujinx.Common.Utilities;
 using Ryujinx.HLE.HOS.Services.Hid;
+using SDL;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading;
-using SDL;
 using static SDL.SDL3;
 
 namespace Ryujinx.Input.SDL3
@@ -94,15 +94,18 @@ namespace Ryujinx.Input.SDL3
 
             // Face button mapping
             SDL_GamepadButton[] faceButtons = _buttonsDriverMapping[1..5];
-            foreach (SDL_GamepadButton btn in faceButtons) {
-                int mapId = SDL_GetGamepadButtonLabel(_gamepadHandle, btn) switch {
+            foreach (SDL_GamepadButton btn in faceButtons)
+            {
+                int mapId = SDL_GetGamepadButtonLabel(_gamepadHandle, btn) switch
+                {
                     SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_A or SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_CROSS => 1,
                     SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_B or SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_CIRCLE => 2,
                     SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_X or SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_SQUARE => 3,
                     SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_Y or SDL_GamepadButtonLabel.SDL_GAMEPAD_BUTTON_LABEL_TRIANGLE => 4,
                     _ => -1
                 };
-                if (mapId == -1) { continue; }
+                if (mapId == -1)
+                { continue; }
                 _buttonsDriverMapping[mapId] = btn;
             }
 
@@ -222,7 +225,7 @@ namespace Ryujinx.Input.SDL3
                 if (!SDL_RumbleGamepad(_gamepadHandle, lowFrequencyRaw, highFrequencyRaw, durationMs))
                     Logger.Error?.Print(LogClass.Hid, "Rumble is not supported on this game controller.");
             }
-            
+
             if (!String.IsNullOrEmpty(SDL_GetError()))
             {
                 Logger.Error?.PrintMsg(LogClass.Hid, SDL_GetError());
@@ -249,7 +252,8 @@ namespace Ryujinx.Input.SDL3
 
             float[] values = new float[3];
 
-            fixed (float* pValues = &values[0]) {
+            fixed (float* pValues = &values[0])
+            {
 
                 if (!SDL_GetGamepadSensorData(_gamepadHandle, sensorType, pValues, ElementCount))
                     return Vector3.Zero;

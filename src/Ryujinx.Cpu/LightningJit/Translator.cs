@@ -45,7 +45,7 @@ namespace Ryujinx.Cpu.LightningJit
 
             Functions = new TranslatorCache<TranslatedFunction>();
             FunctionTable = functionTable;
-            
+
             Stubs = new TranslatorStubs(_jitCache, FunctionTable, _noWxCache);
 
             FunctionTable.Fill = (ulong)Stubs.SlowDispatchStub;

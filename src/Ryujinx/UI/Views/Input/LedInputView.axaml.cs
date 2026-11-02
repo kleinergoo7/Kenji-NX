@@ -14,9 +14,9 @@ namespace Ryujinx.UI.Views.Input
         //Fix compiler warning
         public LedInputView()
         {
-            
+
         }
-        
+
         public LedInputView(ControllerInputViewModel viewModel)
         {
             ViewModel = new LedInputViewModel

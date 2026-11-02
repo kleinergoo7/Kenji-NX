@@ -9,7 +9,7 @@ namespace Ryujinx.Audio.Renderer.Server.Performance
     public class PerformanceEntryAddresses
     {
         public static readonly ObjectPool<PerformanceEntryAddresses> PerformanceEntryAddressesPool = new(() => new PerformanceEntryAddresses());
-        
+
         /// <summary>
         /// The memory storing the performance entry.
         /// </summary>
@@ -58,7 +58,7 @@ namespace Ryujinx.Audio.Renderer.Server.Performance
 
         public void Clear()
         {
-            
+
         }
     }
 }

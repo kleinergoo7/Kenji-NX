@@ -271,7 +271,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
         {
             ITexture[] colorsCopy = SetRenderTargetsCommand.ArrayPool.Rent(colors.Length);
             colors.CopyTo(colorsCopy.AsSpan());
-            
+
             _renderer.New<SetRenderTargetsCommand>()->Set(colors.Length, Ref(colorsCopy), Ref(depthStencil));
             _renderer.QueueCommand();
         }

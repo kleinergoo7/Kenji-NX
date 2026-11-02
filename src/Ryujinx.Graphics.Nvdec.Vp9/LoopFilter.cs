@@ -379,7 +379,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             int index = shiftY;
 
             Span<byte> lflYSpan = lfm.LflY.AsSpan();
-            
+
             for (int i = 0; i < bh; i++)
             {
                 MemoryMarshal.CreateSpan(ref lflYSpan[index], 64 - index)[..bw].Fill((byte)filterLevel);
@@ -446,7 +446,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             const ulong AboveBorder = 0x000000ff000000ffUL;
             const ushort LeftBorderUv = 0x1111;
             const ushort AboveBorderUv = 0x000f;
-            
+
             Span<ulong> leftYSpan = lfm.LeftY.AsSpan();
             Span<ulong> aboveYSpan = lfm.AboveY.AsSpan();
             Span<ushort> leftUvSpan = lfm.LeftUv.AsSpan();
@@ -660,13 +660,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     int refr, mode;
                     int intraLvl = lvlSeg + (intraFrameRefDelta * scale);
                     lvlSpan[segId][Constants.IntraFrame][0] = (byte)Math.Clamp(intraLvl, 0, MaxLoopFilter);
-                    
+
                     Span<Array2<byte>> lvlSpan2 = lvlSpan[segId].AsSpan();
 
                     for (refr = Constants.LastFrame; refr < Constants.MaxRefFrames; ++refr)
                     {
                         Span<byte> lvlSpan3 = lvlSpan2[refr].AsSpan();
-                        
+
                         for (mode = 0; mode < MaxModeLfDeltas; ++mode)
                         {
                             int interLvl = lvlSeg + (refDeltasSpan[refr] * scale) + (modeDeltasSpan[mode] * scale);
@@ -1134,7 +1134,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 if ((mask & 1) != 0)
                 {
                     LoopFilterThresh lfi = lfthr[lfl[0]];
-                    
+
                     Span<byte> mblimSpan = lfi.Mblim.AsSpan();
                     Span<byte> limSpan = lfi.Lim.AsSpan();
                     Span<byte> hevThrSpan = lfi.HevThr.AsSpan();
@@ -1159,7 +1159,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                         {
                             // Next block's thresholds.
                             LoopFilterThresh lfin = lfthr[lfl[1]];
-                            
+
                             Span<byte> nMblimSpan = lfin.Mblim.AsSpan();
                             Span<byte> nLimSpan = lfin.Lim.AsSpan();
                             Span<byte> nHevThrSpan = lfin.HevThr.AsSpan();
@@ -1219,7 +1219,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                         {
                             // Next block's thresholds.
                             LoopFilterThresh lfin = lfthr[lfl[1]];
-                            
+
                             Span<byte> nMblimSpan = lfin.Mblim.AsSpan();
                             Span<byte> nLimSpan = lfin.Lim.AsSpan();
                             Span<byte> nHevThrSpan = lfin.HevThr.AsSpan();
@@ -1351,7 +1351,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             for (uint mask = mask16X16 | mask8X8 | mask4X4 | mask4X4Int; mask != 0; mask >>= 1)
             {
                 LoopFilterThresh lfi = lfthr[lfl[0]];
-                
+
                 Span<byte> mblimSpan = lfi.Mblim.AsSpan();
                 Span<byte> limSpan = lfi.Lim.AsSpan();
                 Span<byte> hevThrSpan = lfi.HevThr.AsSpan();

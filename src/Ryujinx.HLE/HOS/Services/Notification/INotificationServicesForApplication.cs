@@ -6,9 +6,9 @@ namespace Ryujinx.HLE.HOS.Services.Notification
     class INotificationServicesForApplication : IpcService
     {
         public INotificationServicesForApplication(ServiceCtx context) { }
-        
+
         // Leaving this here since I can never find it: https://switchbrew.org/wiki/Glue_services
-        
+
         [CommandCmif(520)] // 9.0.0+
         // ListAlarmSettings(nn::arp::ApplicationCertificate) -> s32 AlarmSettingsCount
         public ResultCode ListAlarmSettings(ServiceCtx context)
@@ -25,7 +25,7 @@ namespace Ryujinx.HLE.HOS.Services.Notification
         {
             ulong pid = context.Request.HandleDesc.PId;
             context.RequestData.ReadUInt64(); // pid placeholder, zero
-            
+
             Logger.Stub?.PrintStub(LogClass.ServiceNotification, new { pid });
             return ResultCode.Success;
         }

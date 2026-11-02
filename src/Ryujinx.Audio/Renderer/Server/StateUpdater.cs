@@ -125,7 +125,7 @@ namespace Ryujinx.Audio.Renderer.Server
 
             return ResultCode.Success;
         }
-        
+
         public ResultCode UpdateVoices2(VoiceContext context, PoolMapper mapper)
         {
             if (context.GetCount() * Unsafe.SizeOf<VoiceInParameter2>() != _inputHeader.VoicesSize)
@@ -330,7 +330,7 @@ namespace Ryujinx.Audio.Renderer.Server
 
             return UpdateEffectsVersion1(context, isAudioRendererActive, mapper);
         }
-        
+
         public ResultCode UpdateEffectsVersion2(EffectContext context, bool isAudioRendererActive, PoolMapper mapper)
         {
             if (context.GetCount() * Unsafe.SizeOf<EffectInParameterVersion2>() != _inputHeader.EffectsSize)

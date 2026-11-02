@@ -162,10 +162,10 @@ namespace Ryujinx.Memory
             if (IsContiguousAndMapped(va, data.Length))
             {
                 nuint pa = TranslateVirtualAddressChecked(va);
-            
+
                 GetPhysicalAddressSpan(pa, data.Length).CopyTo(data);
             }
-            
+
             int offset = 0, size;
 
             if ((va & PageMask) != 0)
@@ -196,17 +196,17 @@ namespace Ryujinx.Memory
                 data = default;
                 return false;
             }
-            
+
             if (length == 0)
             {
                 data = Span<byte>.Empty;
                 return true;
             }
-        
+
             AssertValidAddressAndSize(va, length);
-        
+
             nuint pa = TranslateVirtualAddressChecked(va);
-        
+
             data = GetPhysicalAddressSpan(pa, length);
             return true;
         }

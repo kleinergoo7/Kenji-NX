@@ -75,7 +75,7 @@ namespace Ryujinx.Audio.Renderer.Server
                         if (mixId < _mixContext.GetCount() && mixId != Constants.UnusedSplitterIdInt)
                         {
                             ref MixInfo mix = ref _mixContext.GetState(mixId);
-                            
+
                             // _commandBuffer.GenerateFillBuffer();
 
                             _commandBuffer.GenerateDepopPrepare(
@@ -315,7 +315,7 @@ namespace Ryujinx.Audio.Renderer.Server
         {
             int nodeId = voiceInfo.NodeId;
             uint channelsCount = voiceInfo.ChannelsCount;
-            
+
             Span<int> channelResourceIdsSpan = voiceInfo.ChannelResourceIds.AsSpan();
             Span<BiquadFilterParameter2> biquadFiltersSpan = voiceInfo.BiquadFilters.AsSpan();
 
@@ -536,7 +536,7 @@ namespace Ryujinx.Audio.Renderer.Server
                 Span<float> volumesSpan = effect.Parameter.Volumes.AsSpan();
                 Span<byte> inputSpan = effect.Parameter.Input.AsSpan();
                 Span<byte> outputSpan = effect.Parameter.Output.AsSpan();
-                
+
                 for (int i = 0; i < effect.Parameter.MixesCount; i++)
                 {
                     if (volumesSpan[i] != 0.0f)
@@ -565,10 +565,10 @@ namespace Ryujinx.Audio.Renderer.Server
             {
                 int i = 0;
                 uint writeOffset = 0;
-                
+
                 Span<byte> inputSpan = effect.Parameter.Input.AsSpan();
                 Span<byte> outputSpan = effect.Parameter.Output.AsSpan();
-                
+
                 for (uint channelIndex = effect.Parameter.ChannelCount; channelIndex != 0; channelIndex--)
                 {
                     uint newUpdateCount = writeOffset + _commandBuffer.CommandList.SampleCount;
@@ -634,7 +634,7 @@ namespace Ryujinx.Audio.Renderer.Server
         private void GenerateBiquadFilterEffect(uint bufferOffset, BiquadFilterEffect effect, int nodeId)
         {
             Debug.Assert(effect.Type == EffectType.BiquadFilter);
-            
+
             Span<byte> inputSpan = effect.Parameter.Input.AsSpan();
             Span<byte> outputSpan = effect.Parameter.Output.AsSpan();
 
@@ -719,7 +719,7 @@ namespace Ryujinx.Audio.Renderer.Server
             {
                 int i = 0;
                 uint writeOffset = 0;
-                
+
                 Span<byte> inputSpan = effect.Parameter.Input.AsSpan();
 
                 for (uint channelIndex = effect.Parameter.ChannelCount; channelIndex != 0; channelIndex--)

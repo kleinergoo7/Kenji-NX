@@ -55,7 +55,7 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
                 }
                 catch (HorizonResultException hre) when (hre.IsOfResultType(ResultFs.NonRealDataVerificationFailed))
                 {
-                    Logger.Error?.Print(LogClass.ServiceFs, 
+                    Logger.Error?.Print(LogClass.ServiceFs,
                         $"Encountered corrupted data in filesystem storage @ offset 0x{offset:X8}, size 0x{size:X8}. " +
                         "Please redump the current game and/or update from your console.");
                     result = ResultFs.NonRealDataVerificationFailed;

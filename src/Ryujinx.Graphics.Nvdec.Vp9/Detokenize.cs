@@ -56,7 +56,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             ulong value = r.Value;
             uint range = r.Range;
             int count = r.Count;
-            
+
             ReadOnlySpan<Array6<Array4<uint>>> coefSpan = counts.Coef[(int)txSize][(int)type][refr].AsSpan();
             ReadOnlySpan<Array6<uint>> eobBranchSpan = counts.EobBranch[(int)txSize][(int)type][refr].AsSpan();
 

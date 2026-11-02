@@ -37,14 +37,16 @@ namespace Ryujinx.HLE.Debugger.Gdb
         {
             if (success)
                 ReplyOK();
-            else ReplyError();
+            else
+                ReplyError();
         }
 
         public void Reply(bool success, string cmd)
         {
             if (success)
                 Reply(cmd);
-            else ReplyError();
+            else
+                ReplyError();
         }
 
         private string _previousThreadListXml = string.Empty;
@@ -389,7 +391,7 @@ namespace Ryujinx.HLE.Debugger.Gdb
                         }
                     }
                 default:
-                    unknownCommand:
+                unknownCommand:
                     Logger.Notice.Print(LogClass.GdbStub, $"Unknown command: {cmd}");
                     Reply(string.Empty);
                     break;

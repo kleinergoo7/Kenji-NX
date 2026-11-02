@@ -68,7 +68,7 @@ namespace Ryujinx.HLE.UI
         /// Displays the player select dialog and returns the selected profile.
         /// </summary>
         UserProfile ShowPlayerSelectDialog();
-        
+
         /// <summary>
         /// Takes a screenshot from the current renderer and saves it in the screenshots folder.
         /// </summary>

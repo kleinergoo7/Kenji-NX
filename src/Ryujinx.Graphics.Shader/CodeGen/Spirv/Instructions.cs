@@ -1250,7 +1250,8 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 if (pCount > 1)
                 {
                     SpvInstruction[] nfElems = new SpvInstruction[pCount];
-                    for (int nfI = 0; nfI < pCount; nfI++) { nfElems[nfI] = nfZero; }
+                    for (int nfI = 0; nfI < pCount; nfI++)
+                    { nfElems[nfI] = nfZero; }
                     nfZero = context.ConstantComposite(nfType, nfElems);
                 }
 

@@ -32,14 +32,14 @@ namespace Ryujinx.Ava.Systems
         private static readonly string _homeDir = AppDomain.CurrentDomain.BaseDirectory;
         private static readonly string _updateDir = Path.Combine(Path.GetTempPath(), "Ryujinx", "update");
         private static readonly string _updatePublishDir = Path.Combine(_updateDir, "publish");
-        
+
         private static int _connectionCount = 1;
         private static long _buildSize;
         private static bool _updateSuccessful;
         private static bool _running;
 
         private static readonly string[] _windowsDependencyDirs = [];
-        
+
         public static async Task BeginUpdateAsync(bool showVersionUpToDate = false)
         {
             if (_running)
@@ -62,7 +62,7 @@ namespace Ryujinx.Ava.Systems
                 {
                     await ContentDialogHelper.CreateUpdaterUpToDateInfoDialog(
                         LocaleManager.Instance[LocaleKeys.DialogUpdaterAlreadyOnLatestVersionMessage],
-                        string.Empty, 
+                        string.Empty,
                         changelogUrl: _versionResponse.ReleaseUrlFormat.Format(currentVersion));
                 }
 
@@ -125,11 +125,11 @@ namespace Ryujinx.Ava.Systems
             // If we get a .zip url switch it to the preferred .7z file instead
             // The update server still returns the .zip url by default for legacy support
             downloadUrl = downloadUrl.Replace(".zip", ".7z");
-            
+
             // If we get a .tar.gz url switch it to the preferred .tar.xz file instead
             // The update server still returns the .tar.gz url by default for legacy support
             downloadUrl = downloadUrl.Replace(".tar.gz", ".tar.xz");
-            
+
             string updateFile = Path.Combine(_updateDir, "update.bin");
 
             FATaskDialog taskDialog = new()
@@ -140,13 +140,13 @@ namespace Ryujinx.Ava.Systems
                 ShowProgressBar = true,
                 XamlRoot = RyujinxApp.MainWindow,
             };
-            
+
             // Fetch build size information to learn chunk sizes.
             using HttpClient buildSizeClient = ConstructHttpClient();
             try
             {
                 buildSizeClient.DefaultRequestHeaders.Add("Range", "bytes=0-0");
-                
+
                 // Forgejo instance is located in Ukraine. Connection times will vary across the world.
                 buildSizeClient.Timeout = TimeSpan.FromSeconds(10);
 
@@ -414,17 +414,17 @@ namespace Ryujinx.Ava.Systems
         {
             using FileStream inStream = File.OpenRead(archivePath);
             using GZipStream gzipStream = new(inStream, CompressionMode.Decompress);
-            
+
             TarFile.ExtractToDirectory(gzipStream, outputDirectoryPath, true);
         }
-        
+
         [SupportedOSPlatform("linux")]
         [SupportedOSPlatform("macos")]
         private static void ExtractTarXzipFile(string archivePath, string outputDirectoryPath)
         {
             using FileStream inStream = File.OpenRead(archivePath);
             using XZStream gzipStream = new(inStream);
-            
+
             TarFile.ExtractToDirectory(gzipStream, outputDirectoryPath, true);
         }
 
@@ -432,7 +432,7 @@ namespace Ryujinx.Ava.Systems
         {
             ZipFile.ExtractToDirectory(archivePath, outputDirectoryPath);
         }
-        
+
         private static void Extract7ZipFile(string archivePath, string outputDirectoryPath)
         {
             IArchive archive = ArchiveFactory.OpenArchive(archivePath);
@@ -457,7 +457,7 @@ namespace Ryujinx.Ava.Systems
             {
                 throw new NotSupportedException();
             }
-            
+
             // The new decompression implementations don't have a way to show progress
             // so the progressbar is just set to 100% after the decompression is done
             taskDialog.SetProgressBarState(100, FATaskDialogProgressState.Normal);

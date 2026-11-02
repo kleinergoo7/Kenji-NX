@@ -77,7 +77,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             _flushLock = new ReaderWriterLockSlim();
             _useMirrors = gd.IsTBDR;
-            
+
             _decrementReferenceCount = _buffer.DecrementReferenceCount;
         }
 
@@ -374,7 +374,7 @@ namespace Ryujinx.Graphics.Vulkan
             {
                 ulong handle = _bufferHandle;
                 return Unsafe.As<ulong, BufferHandle>(ref handle);
-            }  
+            }
         }
 
         public nint Map(int offset, int mappingSize)

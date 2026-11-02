@@ -32,9 +32,9 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public CaptureBufferCommand()
         {
-            
+
         }
-        
+
         public CaptureBufferCommand Initialize(uint bufferOffset, byte inputBufferOffset, ulong sendBufferInfo, bool isEnabled,
                                     uint countMax, CpuAddress outputBuffer, uint updateCount, uint writeOffset, int nodeId)
         {

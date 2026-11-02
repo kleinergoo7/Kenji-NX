@@ -1033,7 +1033,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
             EmitTextureSample(context, type, flags, imm, componentMask, dests, sources);
 
             return;
-            
+
             Operand Ra()
             {
                 if (srcA > RegisterConsts.RegisterZeroIndex)

@@ -113,7 +113,7 @@ namespace Ryujinx.Ava.Systems.Configuration
         /// Enables printing FS access log messages
         /// </summary>
         public bool LoggingEnableFsAccessLog { get; set; }
-        
+
         /// <summary>
         /// Enables printing network log messages
         /// </summary>
@@ -480,7 +480,7 @@ namespace Ryujinx.Ava.Systems.Configuration
         /// Uses Hypervisor over JIT if available
         /// </summary>
         public bool UseHypervisor { get; set; }
-        
+
         /// <summary>
         /// Enable or disable low-latency mode for garbage collection
         /// </summary>

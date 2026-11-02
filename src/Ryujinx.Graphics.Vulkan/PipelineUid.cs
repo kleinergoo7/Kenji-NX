@@ -86,7 +86,7 @@ namespace Ryujinx.Graphics.Vulkan
                            Id6 * 23 ^
                            Id7 * 23 ^
                            Id8 * 23;
-            
+
             ReadOnlySpan<VertexInputAttributeDescription> vertexAttributeDescriptionsSpan = VertexAttributeDescriptions.AsSpan();
 
             for (int i = 0; i < (int)VertexAttributeDescriptionsCount; i++)
@@ -96,7 +96,7 @@ namespace Ryujinx.Graphics.Vulkan
                 hash64 ^= vertexAttributeDescriptionsSpan[i].Location * 23;
                 hash64 ^= vertexAttributeDescriptionsSpan[i].Offset * 23;
             }
-            
+
             ReadOnlySpan<VertexInputBindingDescription> vertexBindingDescriptionsSpan = VertexBindingDescriptions.AsSpan();
 
             for (int i = 0; i < (int)VertexBindingDescriptionsCount; i++)
@@ -105,7 +105,7 @@ namespace Ryujinx.Graphics.Vulkan
                 hash64 ^= (uint)vertexBindingDescriptionsSpan[i].InputRate * 23;
                 hash64 ^= vertexBindingDescriptionsSpan[i].Stride * 23;
             }
-            
+
             ReadOnlySpan<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan = ColorBlendAttachmentState.AsSpan();
 
             for (int i = 0; i < (int)ColorBlendAttachmentStateCount; i++)
@@ -119,7 +119,7 @@ namespace Ryujinx.Graphics.Vulkan
                 hash64 ^= (uint)colorBlendAttachmentStateSpan[i].AlphaBlendOp * 23;
                 hash64 ^= (uint)colorBlendAttachmentStateSpan[i].ColorWriteMask * 23;
             }
-            
+
             ReadOnlySpan<Format> attachmentFormatsSpan = AttachmentFormats.AsSpan();
 
             for (int i = 0; i < (int)ColorBlendAttachmentStateCount; i++)

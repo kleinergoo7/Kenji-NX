@@ -40,7 +40,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public MultiTapBiquadFilterAndMixCommand()
         {
-            
+
         }
 
         public MultiTapBiquadFilterAndMixCommand Initialize(

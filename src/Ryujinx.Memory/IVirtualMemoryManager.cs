@@ -60,7 +60,7 @@ namespace Ryujinx.Memory
         /// <param name="data">Span to store the data being read into</param>
         /// <exception cref="InvalidMemoryRegionException">Throw for unhandled invalid or unmapped memory accesses</exception>
         void Read(ulong va, Span<byte> data);
-        
+
         /// <summary>
         /// Gets a span of CPU mapped memory.
         /// </summary>

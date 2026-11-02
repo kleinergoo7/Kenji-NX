@@ -185,7 +185,7 @@ namespace Ryujinx.Graphics.Vulkan
                         _forcedFences.RemoveAt(i--);
                         continue;
                     }
-                    
+
                     _forcedFences[i].Texture.QueueWriteToReadBarrier(cbs, AccessFlags.ShaderReadBit, _forcedFences[i].StageFlags);
                 }
             }

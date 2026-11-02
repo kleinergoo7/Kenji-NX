@@ -149,7 +149,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public void SetupBlockPlanes(int ssX, int ssY)
         {
             Span<MacroBlockDPlane> planeSpan = Plane.AsSpan();
-            
+
             for (int i = 0; i < Constants.MaxMbPlane; i++)
             {
                 planeSpan[i].SubsamplingX = i != 0 ? ssX : 0;
@@ -161,7 +161,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         {
             int aboveIdx = miCol * 2;
             int leftIdx = (miRow * 2) & 15;
-            
+
             Span<MacroBlockDPlane> planeSpan = Plane.AsSpan();
             Span<ArrayPtr<sbyte>> aboveContextSpan = AboveContext.AsSpan();
             Span<Array16<sbyte>> leftContextSpan = LeftContext.AsSpan();
@@ -190,7 +190,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public unsafe void DecResetSkipContext()
         {
             Span<MacroBlockDPlane> planeSpan = Plane.AsSpan();
-            
+
             for (int i = 0; i < Constants.MaxMbPlane; i++)
             {
                 ref MacroBlockDPlane pd = ref planeSpan[i];

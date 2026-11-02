@@ -3,7 +3,6 @@ using Avalonia.Collections;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Path = System.IO.Path;
 using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.Common.Models.Amiibo;
 using Ryujinx.Ava.Systems.Configuration;
@@ -24,6 +23,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Path = System.IO.Path;
 
 namespace Ryujinx.Ava.UI.ViewModels
 {
@@ -32,7 +32,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         public enum AmiiboSortField
         {
             Name,
-            
+
         }
 
         private int _amiiboSelectedIndex;
@@ -407,7 +407,7 @@ namespace Ryujinx.Ava.UI.ViewModels
             SeriesSelectedIndex = AmiiboSeries.IndexOf(scanned.AmiiboSeries);
             AmiiboSelectedIndex = AmiiboList.IndexOf(scanned);
         }
-        
+
         private void FilterAmiibo()
         {
             _amiibos.Clear();

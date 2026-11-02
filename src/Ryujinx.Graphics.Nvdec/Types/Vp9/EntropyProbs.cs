@@ -49,17 +49,17 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
         {
             Span<Array10<Array9<byte>>> kfYModeProbSpan1 = fc.KfYModeProb.AsSpan();
             Span<Array10<Array8<byte>>> kfYModeProbE0ToE7Span1 = KfYModeProbE0ToE7.AsSpan();
-            
+
             for (int i = 0; i < 10; i++)
             {
                 Span<Array9<byte>> kfYModeProbSpan2 = kfYModeProbSpan1[i].AsSpan();
                 Span<Array8<byte>> kfYModeProbE0ToE7Span2 = kfYModeProbE0ToE7Span1[i].AsSpan();
-                
+
                 for (int j = 0; j < 10; j++)
                 {
                     Span<byte> kfYModeProbSpan3 = kfYModeProbSpan2[j].AsSpan();
                     Span<byte> kfYModeProbE0ToE7Span3 = kfYModeProbE0ToE7Span2[j].AsSpan();
-                    
+
                     for (int k = 0; k < 9; k++)
                     {
                         kfYModeProbSpan3[k] = k < 8 ? kfYModeProbE0ToE7Span3[k] : KfYModeProbE8[i][j];
@@ -69,7 +69,7 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
 
             fc.SegTreeProb = SegTreeProbs;
             fc.SegPredProb = SegPredProbs;
-            
+
             Span<Array3<byte>> interModeProbSpan1 = fc.InterModeProb.AsSpan();
             Span<Array4<byte>> gInterModeProbSpan1 = InterModeProb.AsSpan();
 
@@ -77,7 +77,7 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
             {
                 Span<byte> interModeProbSpan2 = interModeProbSpan1[i].AsSpan();
                 Span<byte> gInterModeProbSpan2 = gInterModeProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < 3; j++)
                 {
                     interModeProbSpan2[j] = gInterModeProbSpan2[j];
@@ -90,14 +90,14 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
             Span<Array8<byte>> kfUvModeProbE0ToE7Span1 = KfUvModeProbE0ToE7.AsSpan();
             Span<Array9<byte>> uvModeProbSpan1 = fc.UvModeProb.AsSpan();
             Span<Array8<byte>> uvModeProbE0ToE7Span1 = UvModeProbE0ToE7.AsSpan();
-            
+
             for (int i = 0; i < 10; i++)
             {
                 Span<byte> kfUvModeProbSpan2 = kfUvModeProbSpan1[i].AsSpan();
                 Span<byte> kfUvModeProbE0ToE7Span2 = kfUvModeProbE0ToE7Span1[i].AsSpan();
                 Span<byte> uvModeProbSpan2 = uvModeProbSpan1[i].AsSpan();
                 Span<byte> uvModeProbE0ToE7Span2 = uvModeProbE0ToE7Span1[i].AsSpan();
-                
+
                 for (int j = 0; j < 9; j++)
                 {
                     kfUvModeProbSpan2[j] = j < 8 ? kfUvModeProbE0ToE7Span2[j] : KfUvModeProbE8[i];
@@ -108,7 +108,7 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
             fc.Tx8x8Prob = Tx8x8Prob;
             fc.Tx16x16Prob = Tx16x16Prob;
             fc.Tx32x32Prob = Tx32x32Prob;
-            
+
             Span<Array9<byte>> yModeProbSpan1 = fc.YModeProb.AsSpan();
             Span<Array8<byte>> yModeProbE0ToE7Span1 = YModeProbE0ToE7.AsSpan();
 
@@ -116,13 +116,13 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
             {
                 Span<byte> yModeProbSpan2 = yModeProbSpan1[i].AsSpan();
                 Span<byte> yModeProbE0ToE7Span2 = yModeProbE0ToE7Span1[i].AsSpan();
-                
+
                 for (int j = 0; j < 9; j++)
                 {
                     yModeProbSpan2[j] = j < 8 ? yModeProbE0ToE7Span2[j] : YModeProbE8[i];
                 }
             }
-            
+
             Span<Array3<byte>> kfPartitionProbSpan1 = fc.KfPartitionProb.AsSpan();
             Span<Array4<byte>> gKfPartitionProbSpan1 = KfPartitionProb.AsSpan();
             Span<Array3<byte>> partitionProbSpan1 = fc.PartitionProb.AsSpan();
@@ -134,7 +134,7 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
                 Span<byte> gKfPartitionProbSpan2 = gKfPartitionProbSpan1[i].AsSpan();
                 Span<byte> partitionProbSpan2 = partitionProbSpan1[i].AsSpan();
                 Span<byte> gPartitionProbSpan2 = gPartitionProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < 3; j++)
                 {
                     kfPartitionProbSpan2[j] = gKfPartitionProbSpan2[j];
@@ -158,7 +158,7 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
             fc.Bits = Bits;
             fc.SingleRefProb = SingleRefProb;
             fc.CompRefProb = CompRefProb;
-            
+
             Span<Array2<Array2<Array6<Array6<Array3<byte>>>>>> coefProbsSpan1 = fc.CoefProbs.AsSpan();
             Span<Array2<Array2<Array6<Array6<Array4<byte>>>>>> gCoefProbsSpan1 = CoefProbs.AsSpan();
 
@@ -166,27 +166,27 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
             {
                 Span<Array2<Array6<Array6<Array3<byte>>>>> coefProbsSpan2 = coefProbsSpan1[i].AsSpan();
                 Span<Array2<Array6<Array6<Array4<byte>>>>> gCoefProbsSpan2 = gCoefProbsSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < 2; j++)
                 {
                     Span<Array6<Array6<Array3<byte>>>> coefProbsSpan3 = coefProbsSpan2[j].AsSpan();
                     Span<Array6<Array6<Array4<byte>>>> gCoefProbsSpan3 = gCoefProbsSpan2[j].AsSpan();
-                    
+
                     for (int k = 0; k < 2; k++)
                     {
                         Span<Array6<Array3<byte>>> coefProbsSpan4 = coefProbsSpan3[k].AsSpan();
                         Span<Array6<Array4<byte>>> gCoefProbsSpan4 = gCoefProbsSpan3[k].AsSpan();
-                        
+
                         for (int l = 0; l < 6; l++)
                         {
                             Span<Array3<byte>> coefProbsSpan5 = coefProbsSpan4[l].AsSpan();
                             Span<Array4<byte>> gCoefProbsSpan5 = gCoefProbsSpan4[l].AsSpan();
-                            
+
                             for (int m = 0; m < 6; m++)
                             {
                                 Span<byte> coefProbsSpan6 = coefProbsSpan5[m].AsSpan();
                                 Span<byte> gCoefProbsSpan6 = gCoefProbsSpan5[m].AsSpan();
-                                
+
                                 for (int n = 0; n < 3; n++)
                                 {
                                     coefProbsSpan6[n] = gCoefProbsSpan6[n];

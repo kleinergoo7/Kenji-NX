@@ -48,7 +48,7 @@ namespace ARMeilleure.Translation.PTC
         private const CompressionLevel SaveCompressionLevel = CompressionLevel.Fastest;
 
         public PtcProfiler Profiler { get; }
-        
+
         private readonly JitCache _jitCache;
 
         // Carriers.

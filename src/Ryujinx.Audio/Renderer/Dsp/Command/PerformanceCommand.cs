@@ -25,7 +25,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public PerformanceCommand()
         {
-            
+
         }
 
         public PerformanceCommand Initialize(ref PerformanceEntryAddresses performanceEntryAddresses, Type performanceType, int nodeId)
@@ -34,7 +34,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             {
                 PerformanceEntryAddresses.PerformanceEntryAddressesPool.Release(PerformanceEntryAddresses);
             }
-            
+
             Enabled = true;
             PerformanceEntryAddresses = performanceEntryAddresses;
             PerformanceType = performanceType;

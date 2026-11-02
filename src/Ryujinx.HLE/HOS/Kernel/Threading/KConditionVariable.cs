@@ -26,9 +26,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 currentThread.Withholder = threadList;
 
                 currentThread.Reschedule(ThreadSchedState.Paused);
-                
+
                 threadList.AddLast(currentThread.WithholderNode);
-                
+
                 if (timeout > 0)
                 {
                     context.TimeManager.ScheduleFutureInvocation(currentThread, timeout);

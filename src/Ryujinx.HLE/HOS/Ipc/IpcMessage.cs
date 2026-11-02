@@ -124,7 +124,7 @@ namespace Ryujinx.HLE.HOS.Ipc
             }
 
             ObjectIds = [];
-            
+
             MemoryStreamManager.Shared.ReleaseStream(ms);
         }
 

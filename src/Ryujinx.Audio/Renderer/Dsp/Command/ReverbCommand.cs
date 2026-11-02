@@ -66,7 +66,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             _parameter = parameter;
             State = state;
             WorkBuffer = workBuffer;
-            
+
             Span<byte> inputSpan = Parameter.Input.AsSpan();
             Span<byte> outputSpan = Parameter.Output.AsSpan();
 

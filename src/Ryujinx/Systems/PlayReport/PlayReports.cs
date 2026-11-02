@@ -43,7 +43,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 "010049900f546000", // Super Mario 3D All Stars
                 spec => spec
                     .WithDescription("based on what album and track you're listening to.")
-                    .AddMultiValueFormatter(["app_id","song_id"], SuperMario3DAllStars_MainMenu)
+                    .AddMultiValueFormatter(["app_id", "song_id"], SuperMario3DAllStars_MainMenu)
             )
             .AddSpec(
                 ["010049900f546001", "010049900f546002", "010049900F546003"], // Super Mario 3D All Stars
@@ -120,7 +120,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                     .AddValueFormatter("launch_title_id", NsoEmulator_LaunchedGame)
             )
             .AddSpec(
-                [ "010051f0207b2000", "0100ca502552a000" ], // Tomodachi Life: Living the Dream + Demo
+                ["010051f0207b2000", "0100ca502552a000"], // Tomodachi Life: Living the Dream + Demo
                 spec => spec
                     .WithDescription(
                         "based on your total Mii count and island level.")

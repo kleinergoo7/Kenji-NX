@@ -231,7 +231,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator.LdnMitm
                 NetworkInfo.Common.Ssid = _fakeSsid;
 
                 NetworkInfo.Ldn.Nodes = new Array8<NodeInfo>();
-                
+
                 Span<NodeInfo> nodesSpan = NetworkInfo.Ldn.Nodes.AsSpan();
 
                 for (int i = 0; i < LdnConst.NodeCountMax; i++)

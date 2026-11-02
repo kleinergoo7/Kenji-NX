@@ -52,7 +52,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         public ulong AffinityMask { get; private set; }
 
         public ulong ThreadUid { get; private set; }
-        
+
         public bool IsThreadNamed { get; set; }
 
         private long _totalTimeRunning;
@@ -174,7 +174,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             {
                 SiblingsPerCore[i] = new LinkedListNode<KThread>(this);
             }
-            
+
             _mutexWaiters = [];
             _pinnedWaiters = [];
 
@@ -1582,11 +1582,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 }
                 return Encoding.UTF8.GetString(nameBytes.ToArray());
 
-            } catch (InvalidMemoryRegionException)
+            }
+            catch (InvalidMemoryRegionException)
             {
                 Logger.Warning?.Print(LogClass.Kernel, "Failed to get thread name.");
                 return "";
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Logger.Error?.Print(LogClass.Kernel, $"Error getting thread name: {e.Message}");
                 return "";
             }

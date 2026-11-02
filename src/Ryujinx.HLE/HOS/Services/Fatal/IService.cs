@@ -86,7 +86,7 @@ namespace Ryujinx.HLE.HOS.Services.Fatal
                     }
 
                     errorReport.AppendLine("\tRegisters:");
-                    
+
                     Span<ulong> xSpan = cpuContext64.X.AsSpan();
 
                     for (int i = 0; i < xSpan.Length; i++)
@@ -115,7 +115,7 @@ namespace Ryujinx.HLE.HOS.Services.Fatal
                     if (cpuContext32.StackTraceSize > 0)
                     {
                         errorReport.AppendLine("\tStackTrace:");
-                        
+
                         Span<uint> stackTraceSpan = cpuContext32.StackTrace.AsSpan();
 
                         for (int i = 0; i < cpuContext32.StackTraceSize; i++)
@@ -125,7 +125,7 @@ namespace Ryujinx.HLE.HOS.Services.Fatal
                     }
 
                     errorReport.AppendLine("\tRegisters:");
-                    
+
                     Span<uint> xSpan = cpuContext32.X.AsSpan();
 
                     for (int i = 0; i < xSpan.Length; i++)

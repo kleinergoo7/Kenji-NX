@@ -18,7 +18,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         Version_1_5_0 = 10500,
         Version_1_6_0 = 10600,
     }
-    
+
     public static partial class Helpers
     {
         extension(RenderDocVersion rdv)
@@ -28,7 +28,7 @@ namespace Ryujinx.Graphics.RenderDocApi
                 get
                 {
                     int i = (int)rdv;
-                    return new (i / 10000, (i % 10000) / 100, i % 100);
+                    return new(i / 10000, (i % 10000) / 100, i % 100);
                 }
             }
         }

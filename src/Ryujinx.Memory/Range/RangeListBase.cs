@@ -1,4 +1,4 @@
-﻿using Ryujinx.Common;
+using Ryujinx.Common;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,16 +11,16 @@ namespace Ryujinx.Memory.Range
         public TValue Next { get; set; }
         public TValue Previous { get; set; }
     }
-    
+
     public unsafe abstract class RangeListBase<T> : IEnumerable<T> where T : class, IRangeListRange<T>
     {
         private const int BackingInitialSize = 1024;
 
         protected T[] Items;
         protected readonly int BackingGrowthSize;
-        
+
         public int Count { get; protected set; }
-        
+
         /// <summary>
         /// Creates a new range list.
         /// </summary>
@@ -30,15 +30,15 @@ namespace Ryujinx.Memory.Range
             BackingGrowthSize = backingInitialSize;
             Items = new T[backingInitialSize];
         }
-        
+
         public abstract void Add(T item);
-        
+
         public abstract bool Remove(T item);
 
         public abstract void RemoveRange(T startItem, T endItem);
 
         public abstract T FindOverlap(ulong address, ulong size);
-        
+
         public abstract T FindOverlapFast(ulong address, ulong size);
 
         /// <summary>
@@ -77,7 +77,7 @@ namespace Ryujinx.Memory.Range
 
             return ~left;
         }
-        
+
         /// <summary>
         /// Performs binary search for items overlapping a given memory range.
         /// </summary>
@@ -115,7 +115,7 @@ namespace Ryujinx.Memory.Range
 
             return ~left;
         }
-        
+
         /// <summary>
         /// Performs binary search for items overlapping a given memory range.
         /// </summary>
@@ -167,7 +167,7 @@ namespace Ryujinx.Memory.Range
 
             return ~left;
         }
-        
+
         /// <summary>
         /// Performs binary search for items overlapping a given memory range.
         /// </summary>
@@ -219,7 +219,7 @@ namespace Ryujinx.Memory.Range
 
             return ~left;
         }
-        
+
         /// <summary>
         /// Performs binary search for items overlapping a given memory range.
         /// </summary>
@@ -349,7 +349,7 @@ namespace Ryujinx.Memory.Range
 
             return (leftEdge, right + 1);
         }
-        
+
         public abstract IEnumerator<T> GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator()

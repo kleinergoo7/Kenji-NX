@@ -21,7 +21,7 @@ namespace Ryujinx.Memory.Tracking
         /// End address.
         /// </summary>
         public ulong EndAddress => Address + Size;
-        
+
         public T Next { get; set; }
         public T Previous { get; set; }
 

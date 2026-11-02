@@ -15,7 +15,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public CopyMixBufferCommand()
         {
-            
+
         }
 
         public CopyMixBufferCommand Initialize(uint inputBufferIndex, uint outputBufferIndex, int nodeId)

@@ -86,9 +86,9 @@ namespace Ryujinx.Headless
             }
 
             string gamepadName = gamepad.Name;
-            
+
             bool isNintendoStyle = false;
-            
+
             if (gamepad is SDL3Gamepad sdlGp)
             {
                 // Nintendo vendor ID is 0x057E

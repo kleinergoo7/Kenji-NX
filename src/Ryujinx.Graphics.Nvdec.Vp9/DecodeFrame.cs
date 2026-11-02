@@ -24,11 +24,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             Span<Array1<byte>> tx8x8ProbSpan1 = txProbs.Tx8x8Prob.AsSpan();
             Span<Array2<byte>> tx16x16ProbSpan1 = txProbs.Tx16x16Prob.AsSpan();
             Span<Array3<byte>> tx32x32ProbSpan1 = txProbs.Tx32x32Prob.AsSpan();
-            
+
             for (int i = 0; i < EntropyMode.TxSizeContexts; ++i)
             {
                 Span<byte> tx8x8ProbSpan2 = tx8x8ProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < (int)TxSize.TxSizes - 3; ++j)
                 {
                     r.DiffUpdateProb(ref tx8x8ProbSpan2[j]);
@@ -38,7 +38,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             for (int i = 0; i < EntropyMode.TxSizeContexts; ++i)
             {
                 Span<byte> tx16x16ProbSpan2 = tx16x16ProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < (int)TxSize.TxSizes - 2; ++j)
                 {
                     r.DiffUpdateProb(ref tx16x16ProbSpan2[j]);
@@ -48,7 +48,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             for (int i = 0; i < EntropyMode.TxSizeContexts; ++i)
             {
                 Span<byte> tx32x32ProbSpan2 = tx32x32ProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < (int)TxSize.TxSizes - 1; ++j)
                 {
                     r.DiffUpdateProb(ref tx32x32ProbSpan2[j]);
@@ -59,11 +59,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         private static void ReadSwitchableInterpProbs(ref Vp9EntropyProbs fc, ref Reader r)
         {
             Span<Array2<byte>> switchableInterpProbSpan1 = fc.SwitchableInterpProb.AsSpan();
-            
+
             for (int i = 0; i < Constants.SwitchableFilterContexts; ++i)
             {
                 Span<byte> switchableInterpProbSpan2 = switchableInterpProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < Constants.SwitchableFilters - 1; ++j)
                 {
                     r.DiffUpdateProb(ref switchableInterpProbSpan2[j]);
@@ -74,11 +74,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         private static void ReadInterModeProbs(ref Vp9EntropyProbs fc, ref Reader r)
         {
             Span<Array3<byte>> interModeProbSpan1 = fc.InterModeProb.AsSpan();
-            
+
             for (int i = 0; i < Constants.InterModeContexts; ++i)
             {
                 Span<byte> interModeProbSpan2 = interModeProbSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < Constants.InterModes - 1; ++j)
                 {
                     r.DiffUpdateProb(ref interModeProbSpan2[j]);
@@ -102,14 +102,14 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 r.UpdateMvProbs(class0Span[i].AsSpan(), EntropyMv.Class0Size - 1);
                 r.UpdateMvProbs(bitsSpan[i].AsSpan(), EntropyMv.OffsetBits);
             }
-            
+
             Span<Array2<Array3<byte>>> class0FpSpan1 = ctx.Class0Fp.AsSpan();
             Span<Array3<byte>> fpSpan = ctx.Fp.AsSpan();
 
             for (int i = 0; i < 2; ++i)
             {
                 Span<Array3<byte>> class0FpSpan2 = class0FpSpan1[i].AsSpan();
-                
+
                 for (int j = 0; j < EntropyMv.Class0Size; ++j)
                 {
                     r.UpdateMvProbs(class0FpSpan2[j].AsSpan(), EntropyMv.FpSize - 1);
@@ -122,7 +122,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 Span<byte> class0HpSpan = ctx.Class0Hp.AsSpan();
                 Span<byte> hpSpan = ctx.Hp.AsSpan();
-                
+
                 for (int i = 0; i < 2; ++i)
                 {
                     r.UpdateMvProbs(MemoryMarshal.CreateSpan(ref class0HpSpan[i], 1), 1);
@@ -885,7 +885,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         private static void SetPlaneN4(ref MacroBlockD xd, int bw, int bh, int bwl, int bhl)
         {
             Span<MacroBlockDPlane> planeSpan = xd.Plane.AsSpan();
-            
+
             for (int i = 0; i < Constants.MaxMbPlane; i++)
             {
                 planeSpan[i].N4W = (ushort)((bw << 1) >> planeSpan[i].SubsamplingX);
@@ -973,7 +973,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             if (!mi.IsInterBlock())
             {
                 Span<MacroBlockDPlane> planeSpan = xd.Plane.AsSpan();
-                
+
                 for (int plane = 0; plane < Constants.MaxMbPlane; ++plane)
                 {
                     ref MacroBlockDPlane pd = ref planeSpan[plane];
@@ -1008,7 +1008,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 if (mi.Skip == 0)
                 {
                     Span<MacroBlockDPlane> planeSpan = xd.Plane.AsSpan();
-                    
+
                     int eobtotal = 0;
 
                     for (int plane = 0; plane < Constants.MaxMbPlane; ++plane)
@@ -1207,20 +1207,20 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 for (int i = 0; i < Constants.PlaneTypes; ++i)
                 {
-                    Span<Array6<Array6<Array3<byte>>>> coefProbs2 = coefProbs1[i].AsSpan(); 
-                    
+                    Span<Array6<Array6<Array3<byte>>>> coefProbs2 = coefProbs1[i].AsSpan();
+
                     for (int j = 0; j < Entropy.RefTypes; ++j)
                     {
-                        Span<Array6<Array3<byte>>> coefProbs3 = coefProbs2[j].AsSpan(); 
-                        
+                        Span<Array6<Array3<byte>>> coefProbs3 = coefProbs2[j].AsSpan();
+
                         for (int k = 0; k < Entropy.CoefBands; ++k)
                         {
                             Span<Array3<byte>> coefProbs4 = coefProbs3[k].AsSpan();
-                            
+
                             for (int l = 0; l < Entropy.BAND_COEFF_CONTEXTS(k); ++l)
                             {
                                 Span<byte> coefProbs5 = coefProbs4[l].AsSpan();
-                                
+
                                 for (int m = 0; m < Entropy.UnconstrainedNodes; ++m)
                                 {
                                     r.DiffUpdateProb(ref coefProbs5[m]);
@@ -1235,9 +1235,9 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         private static void ReadCoefProbs(ref Vp9EntropyProbs fc, TxMode txMode, ref Reader r)
         {
             Span<Array2<Array2<Array6<Array6<Array3<byte>>>>>> coefProbsSpan = fc.CoefProbs.AsSpan();
-            
+
             int maxTxSize = (int)Luts.TxModeToBiggestTxSize[(int)txMode];
-            
+
             for (int txSize = (int)TxSize.Tx4X4; txSize <= maxTxSize; ++txSize)
             {
                 ReadCoefProbsCommon(coefProbsSpan[txSize].AsSpan(), ref r, txSize);
@@ -1261,7 +1261,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 {
                     Span<sbyte> refDeltasSpan = lf.RefDeltas.AsSpan();
                     Span<sbyte> modeDeltasSpan = lf.ModeDeltas.AsSpan();
-                    
+
                     for (int i = 0; i < LoopFilter.MaxRefLfDeltas; i++)
                     {
                         if (rb.ReadBit() != 0)
@@ -1369,7 +1369,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             bool hasValidRefFrame = false;
             ref BufferPool pool = ref cm.BufferPool.Value;
             Span<RefBuffer> frameRefsSpan = cm.FrameRefs.AsSpan();
-            
+
             for (int i = 0; i < Constants.RefsPerFrame; ++i)
             {
                 if (rb.ReadBit() != 0)
@@ -1432,7 +1432,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
             cm.ResizeContextBuffers(allocator, width, height);
             SetupRenderSize(ref cm, ref rb);
-            
+
             Span<RefCntBuffer> frameBuffsSpan = pool.FrameBufs.AsSpan();
 
             if (cm.GetFrameNewBuffer().ReallocFrameBuffer(
@@ -1519,7 +1519,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             for (int r = 0; r < tileRows; ++r)
             {
                 Span<TileBuffer> tileBuffers2 = tileBuffers1[r].AsSpan();
-                
+
                 for (int c = 0; c < tileCols; ++c)
                 {
                     bool isLast = r == tileRows - 1 && c == tileCols - 1;
@@ -1547,7 +1547,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             MemoryUtil.Fill(cm.AboveSegContext.ToPointer(), (sbyte)0, alignedCols);
 
             LoopFilter.ResetLfm(ref cm);
-            
+
             Span<Array64<TileBuffer>> tileBuffers1 = tileBuffers.AsSpan();
             Span<TileWorkerData> tileWorkerDataSpan = cm.TileWorkerData.AsSpan();
 
@@ -1556,7 +1556,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             for (tileRow = 0; tileRow < tileRows; ++tileRow)
             {
                 Span<TileBuffer> tileBuffers2 = tileBuffers1[tileRow].AsSpan();
-                
+
                 for (tileCol = 0; tileCol < tileCols; ++tileCol)
                 {
                     ref TileBuffer buf = ref tileBuffers2[tileCol];
@@ -1661,7 +1661,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
             cm.AboveContext.AsSpan().Clear();
             cm.AboveSegContext.AsSpan().Clear();
-            
+
             Span<TileWorkerData> tileWorkerDataSpan = cm.TileWorkerData.AsSpan();
 
             for (n = 0; n < numWorkers; ++n)
@@ -1942,7 +1942,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 {
                     Span<RefBuffer> frameRefsSpan = cm.FrameRefs.AsSpan();
                     Span<sbyte> refFrameSignBiasSpan = cm.RefFrameSignBias.AsSpan();
-                    
+
                     /* Skip if need resync */
                     pbi.RefreshFrameFlags = rb.ReadLiteral(Constants.RefFrames);
                     for (int i = 0; i < Constants.RefsPerFrame; ++i)
@@ -2095,7 +2095,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 {
                     ReadSwitchableInterpProbs(ref fc, ref r);
                 }
-                
+
                 Span<byte> intraInterProbSpan = fc.IntraInterProb.AsSpan();
 
                 for (int i = 0; i < Constants.IntraInterContexts; i++)
@@ -2110,25 +2110,25 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 }
 
                 cm.ReadFrameReferenceModeProbs(ref r);
-                
+
                 Span<Array9<byte>> yModeProbSpan1 = fc.YModeProb.AsSpan();
 
                 for (int j = 0; j < EntropyMode.BlockSizeGroups; j++)
                 {
                     Span<byte> yModeProbSpan2 = yModeProbSpan1[j].AsSpan();
-                    
+
                     for (int i = 0; i < Constants.IntraModes - 1; ++i)
                     {
                         r.DiffUpdateProb(ref yModeProbSpan2[i]);
                     }
                 }
-                
+
                 Span<Array3<byte>> partitionProbSpan1 = fc.PartitionProb.AsSpan();
 
                 for (int j = 0; j < Constants.PartitionContexts; ++j)
                 {
                     Span<byte> partitionProbSpan2 = partitionProbSpan1[j].AsSpan();
-                    
+
                     for (int i = 0; i < Constants.PartitionTypes - 1; ++i)
                     {
                         r.DiffUpdateProb(ref partitionProbSpan2[i]);

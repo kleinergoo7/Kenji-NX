@@ -41,7 +41,7 @@ namespace Ryujinx.Input.HLE
         private bool _enableKeyboard;
         private bool _enableMouse;
         private Switch _device;
-        
+
         private readonly List<GamepadInput> _hleInputStates = [];
         private readonly List<SixAxisInput> _hleMotionStates = new(NpadDevices.MaxControllers);
 
@@ -487,7 +487,7 @@ namespace Ryujinx.Input.HLE
                     Vector2 position = IMouse.GetScreenPosition(mouseInput.Position, mouse.ClientSize, aspectRatio);
 
                     _device.Hid.Mouse.Update((int)position.X, (int)position.Y, buttons, (int)mouseInput.Scroll.X, (int)mouseInput.Scroll.Y, true);
-                    
+
                     ArrayPool<bool>.Shared.Return(mouseInput.ButtonState);
                 }
                 else

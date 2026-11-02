@@ -37,7 +37,7 @@ namespace Ryujinx.Ava.UI.Models
 
         public DateTimeOffset CreatedAt { get; init; }
 
-        public string FormattedCreatedAt 
+        public string FormattedCreatedAt
             => LocaleManager.GetFormatted(LocaleKeys.LdnGameListCreatedAt, CreatedAt.Humanize());
 
         public string CreatedAtToolTip => CreatedAt.DateTime.ToString(CultureInfo.CurrentUICulture);
@@ -100,7 +100,7 @@ namespace Ryujinx.Ava.UI.Models
 
             IEnumerator IEnumerable.GetEnumerator() => _ldnDatas.GetEnumerator();
         }
-        
+
         public static async Task<IEnumerable<LdnGameModel>> GetAllAsync(HttpClient client = null)
             => LdnGameJsonModel.ParseArray(await GetAllAsyncRequestImpl(client))
                 .Select(FromJson);
@@ -164,7 +164,7 @@ namespace Ryujinx.Ava.UI.Models
 
         public static LdnGameJsonModel Parse(string value)
             => JsonHelper.Deserialize(value, LdnGameJsonModelSerializerContext.Default.LdnGameJsonModel);
-        
+
         public static LdnGameJsonModel[] ParseArray(string value)
             => JsonHelper.Deserialize(value, LdnGameJsonModelSerializerContext.Default.LdnGameJsonModelArray);
     }

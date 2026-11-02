@@ -23,7 +23,7 @@ namespace Ryujinx.Cpu.LightningJit.Cache
                 return Offset.CompareTo(other.Offset);
             }
         }
-        
+
         private readonly int _regionSize;
         private int _regionCount;
 
@@ -33,14 +33,14 @@ namespace Ryujinx.Cpu.LightningJit.Cache
         {
             _regionCount = 0;
             _regionSize = regionSize;
-            
+
             for (; initialRegionCount > 0; initialRegionCount--)
             {
                 _blocks.Add(new MemoryBlock(_regionSize * _regionCount, _regionSize));
                 _regionCount++;
             }
         }
-        
+
         public void AddNewBlocks(int count)
         {
             for (; count > 0; count--)
@@ -119,7 +119,7 @@ namespace Ryujinx.Cpu.LightningJit.Cache
             {
                 index = ~index;
             }
-            
+
             int endOffs = block.Offset + block.Size;
 
             // Don't merge blocks from different allocations

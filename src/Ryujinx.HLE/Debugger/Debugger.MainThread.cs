@@ -14,7 +14,7 @@ namespace Ryujinx.HLE.Debugger
         {
             IPEndPoint endpoint = new(IPAddress.Any, GdbStubPort);
             _listenerSocket = new TcpListener(endpoint);
-            
+
             try
             {
                 _listenerSocket.Start();
@@ -36,7 +36,7 @@ namespace Ryujinx.HLE.Debugger
                 }
                 catch (SocketException se)
                 {
-                    Logger.Error?.Print(LogClass.GdbStub, 
+                    Logger.Error?.Print(LogClass.GdbStub,
                         $"Failed to accept incoming GDB client connection: {Enum.GetName(se.SocketErrorCode)}");
                     return;
                 }
@@ -110,7 +110,7 @@ namespace Ryujinx.HLE.Debugger
                     }
                 }
 
-                EndOfLoop:
+            EndOfLoop:
                 Logger.Notice.Print(LogClass.GdbStub, "GDB client lost connection");
                 _readStream.Close();
                 _readStream = null;

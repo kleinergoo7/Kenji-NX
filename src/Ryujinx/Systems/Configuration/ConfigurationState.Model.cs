@@ -271,7 +271,7 @@ namespace Ryujinx.Ava.Systems.Configuration
             /// Enables printing FS access log messages
             /// </summary>
             public ReactiveObject<bool> EnableFsAccessLog { get; private set; }
-            
+
             /// <summary>
             /// Enables printing network log messages
             /// </summary>
@@ -431,7 +431,7 @@ namespace Ryujinx.Ava.Systems.Configuration
             /// Uses Hypervisor over JIT if available
             /// </summary>
             public ReactiveObject<bool> UseHypervisor { get; private set; }
-            
+
             /// <summary>
             /// Enable or disable low-latency garbage collection
             /// </summary>
@@ -853,7 +853,7 @@ namespace Ryujinx.Ava.Systems.Configuration
         /// </summary>
         public static ConfigurationState Instance { get; private set; }
 
-        public static ConfigurationState InstanceExtra{ get; private set; }
+        public static ConfigurationState InstanceExtra { get; private set; }
 
         /// <summary>
         /// The UI section

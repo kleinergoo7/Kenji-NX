@@ -20,9 +20,9 @@ namespace Ryujinx.Ava.UI.Helpers
 
             if (value is not XCITrimmerFileModel app)
                 return default(FASymbol);
-            
+
             bool isProcessing = app.PercentageProgress != null;
-            
+
             if (isProcessing)
                 return FASymbol.Sync;
 

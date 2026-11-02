@@ -26,7 +26,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public MixRampCommand()
         {
-            
+
         }
 
         public MixRampCommand Initialize(float volume0, float volume1, uint inputBufferIndex, uint outputBufferIndex, int lastSampleIndex, Memory<VoiceState> state, int nodeId)

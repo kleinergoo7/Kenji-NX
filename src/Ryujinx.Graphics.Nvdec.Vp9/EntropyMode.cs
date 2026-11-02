@@ -309,7 +309,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             Span<uint> ct32X32PSpan0 = ct32X32P[0].AsSpan();
             Span<uint> ct32X32PSpan1 = ct32X32P[1].AsSpan();
             Span<uint> ct32X32PSpan2 = ct32X32P[2].AsSpan();
-            
+
             ct32X32PSpan0[0] = txCount32X32P[(int)TxSize.Tx4X4];
             ct32X32PSpan0[1] = txCount32X32P[(int)TxSize.Tx8X8] + txCount32X32P[(int)TxSize.Tx16X16] +
                              txCount32X32P[(int)TxSize.Tx32X32];
@@ -324,7 +324,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         {
             Span<uint> ct16X16PSpan0 = ct16X16P[0].AsSpan();
             Span<uint> ct16X16PSpan1 = ct16X16P[1].AsSpan();
-            
+
             ct16X16PSpan0[0] = txCount16X16P[(int)TxSize.Tx4X4];
             ct16X16PSpan0[1] = txCount16X16P[(int)TxSize.Tx8X8] + txCount16X16P[(int)TxSize.Tx16X16];
             ct16X16PSpan1[0] = txCount16X16P[(int)TxSize.Tx8X8];
@@ -335,7 +335,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             ReadOnlySpan<Array2<uint>> ct8X8P)
         {
             Span<uint> ct8X8PSpan = ct8X8P[0].AsSpan();
-            
+
             ct8X8PSpan[0] = txCount8X8P[(int)TxSize.Tx4X4];
             ct8X8PSpan[1] = txCount8X8P[(int)TxSize.Tx8X8];
         }

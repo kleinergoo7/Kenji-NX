@@ -1,11 +1,9 @@
-using System.Reflection;
-
 using NUnit.Framework;
-
 using Ryujinx.Cpu;
 using Ryujinx.HLE.HOS.Services.Mii;
 using Ryujinx.HLE.HOS.Services.Mii.StaticService;
 using Ryujinx.HLE.HOS.Services.Mii.Types;
+using System.Reflection;
 
 namespace Ryujinx.Tests.HLE
 {

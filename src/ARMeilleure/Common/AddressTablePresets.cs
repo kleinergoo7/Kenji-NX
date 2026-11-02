@@ -29,7 +29,7 @@ namespace ARMeilleure.Common
         [
                 new( 1, 31)
         ];
-        
+
         public static AddressTableLevel[] GetArmPreset(bool for64Bits, bool mono)
         {
             if (mono)

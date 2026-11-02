@@ -318,12 +318,13 @@ namespace Ryujinx.HLE.Debugger.Gdb
                 //ushort? signal = null;
                 if (cmd is 'C' or 'S')
                 {
-                    /*signal = (ushort)*/stream.ReadLengthAsHex(2);
+                    /*signal = (ushort)*/
+                    stream.ReadLengthAsHex(2);
                     // we still call the read length method even if we have signals commented
                     // since that method advances the underlying string position
                 }
 
-                ulong? threadId = stream.ConsumePrefix(":") 
+                ulong? threadId = stream.ConsumePrefix(":")
                     ? stream.ReadRemainingAsThreadUid()
                     : null;
 

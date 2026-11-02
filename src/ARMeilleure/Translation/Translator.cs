@@ -45,7 +45,7 @@ namespace ARMeilleure.Translation
             _oldFuncs = new ConcurrentQueue<KeyValuePair<ulong, TranslatedFunction>>();
 
             JitCache = new JitCache(allocator);
-            
+
             _ptc = new Ptc(JitCache);
 
             Queue = new TranslatorQueue();
@@ -53,9 +53,9 @@ namespace ARMeilleure.Translation
 
             CountTable = new EntryTable<uint>();
             Functions = new TranslatorCache<TranslatedFunction>();
-            
+
             FunctionTable = functionTable;
-            
+
             Stubs = new TranslatorStubs(JitCache, FunctionTable);
 
             FunctionTable.Fill = (ulong)Stubs.SlowDispatchStub;

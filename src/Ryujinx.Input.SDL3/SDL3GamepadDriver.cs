@@ -1,16 +1,16 @@
 using Ryujinx.Common.Logging;
 using Ryujinx.SDL3.Common;
+using SDL;
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using SDL;
 using System.Linq;
+using System.Threading;
 using static SDL.SDL3;
 
 namespace Ryujinx.Input.SDL3
 {
-    
-    
+
+
     public unsafe class SDL3GamepadDriver : IGamepadDriver
     {
         private readonly Dictionary<SDL_JoystickID, string> _gamepadsInstanceIdsMapping;
@@ -22,7 +22,7 @@ namespace Ryujinx.Input.SDL3
         /// <summary>
         /// Linked joy-cons, remove dual joy-con from <c>_gamepadsIds</c> when a linked joy-con is removed
         /// </summary>
-        private readonly Dictionary<SDL_JoystickID,string> _linkedJoyConsIds;
+        private readonly Dictionary<SDL_JoystickID, string> _linkedJoyConsIds;
         private readonly Lock _lock = new();
 
         public ReadOnlySpan<string> GamepadsIds
@@ -73,7 +73,8 @@ namespace Ryujinx.Input.SDL3
             string map = "0123456789abcdef";
             char[] guidBytes = new char[33];
 
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 16; i++)
+            {
                 byte c = guid.data[i];
                 guidBytes[i * 2] = map[c >> 4];
                 guidBytes[(i * 2) + 1] = map[c & 0x0f];
@@ -144,7 +145,7 @@ namespace Ryujinx.Input.SDL3
                             break;
                         }
                     }
-                        
+
                     string leftId = fakeId!.Split('_')[0];
                     string rightId = fakeId!.Split('_')[1];
 
@@ -158,7 +159,7 @@ namespace Ryujinx.Input.SDL3
                         _linkedJoyConsIds.Remove(GetInstanceIdFromId(leftId));
                         _joyConsIds.Add(GetInstanceIdFromId(leftId), leftId);
                     }
-                        
+
                     _linkedJoyConsIds.Remove(joystickInstanceId);
                     _gamepadsIds.Remove(GetInstanceIdFromId(fakeId));
                     joyConPairDisconnected = true;
@@ -208,7 +209,7 @@ namespace Ryujinx.Input.SDL3
                                 _joyConsIds.Remove(match, out string matchId);
                                 _linkedJoyConsIds.Add(joystickInstanceId, id);
                                 _linkedJoyConsIds.Add(match, matchId);
-                                
+
                                 uint fakeInstanceId = uint.MaxValue;
                                 fakeId = SDL3JoyCon.IsLeftJoyCon(joystickInstanceId)
                                     ? $"{id}_{matchId}"
@@ -254,12 +255,12 @@ namespace Ryujinx.Input.SDL3
                 {
                     OnGamepadDisconnected?.Invoke(gamepad.Value);
                 }
-                
+
                 foreach (var gamepad in _joyConsIds)
                 {
                     OnGamepadDisconnected?.Invoke(gamepad.Value);
                 }
-                
+
                 foreach (var gamepad in _linkedJoyConsIds)
                 {
                     OnGamepadDisconnected?.Invoke(gamepad.Value);
@@ -282,7 +283,8 @@ namespace Ryujinx.Input.SDL3
             Dispose(true);
         }
 
-        public SDL_JoystickID GetInstanceIdFromId(string id) {
+        public SDL_JoystickID GetInstanceIdFromId(string id)
+        {
             return _gamepadsInstanceIdsMapping.Where(e => e.Value == id).FirstOrDefault().Key;
         }
 
@@ -295,7 +297,7 @@ namespace Ryujinx.Input.SDL3
                 {
                     string leftId = id.Split('_')[0];
                     string rightId = id.Split('_')[1];
-                    
+
                     SDL_JoystickID leftInstanceId = GetInstanceIdFromId(leftId);
                     SDL_JoystickID rightInstanceId = GetInstanceIdFromId(rightId);
 
@@ -346,7 +348,7 @@ namespace Ryujinx.Input.SDL3
                     yield return GetGamepad(gamepad.Value);
                 }
             }
-            
+
             lock (_linkedJoyConsIds)
             {
                 foreach (var gamepad in _linkedJoyConsIds)

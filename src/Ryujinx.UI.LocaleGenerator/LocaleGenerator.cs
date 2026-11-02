@@ -22,11 +22,11 @@ namespace Ryujinx.UI.LocaleGenerator
                 enumSourceBuilder.AppendLine("namespace Ryujinx.Ava.Common.Locale;");
                 enumSourceBuilder.AppendLine("public enum LocaleKeys");
                 enumSourceBuilder.AppendLine("{");
-                
+
                 foreach ((string, string) content in contents)
                 {
                     IEnumerable<string> lines = content.Item1.Split('\n').Where(x => x.Trim().StartsWith("\"ID\":")).Select(x => x.Split(':')[1].Trim().Replace("\"", string.Empty).Replace(",", string.Empty));
-                    
+
                     foreach (string? line in lines)
                     {
                         if (content.Item2 == "Root.json")
@@ -39,7 +39,7 @@ namespace Ryujinx.UI.LocaleGenerator
                         }
                     }
                 }
-                
+
                 enumSourceBuilder.AppendLine("}");
 
                 spc.AddSource("LocaleKeys", enumSourceBuilder.ToString());

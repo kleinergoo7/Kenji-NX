@@ -37,7 +37,7 @@ namespace Ryujinx.Ava.UI.Windows
             RefreshFlush.Command = RefreshNormal.Command =
                 Commands.Create(() => (DataContext as LdnGamesListViewModel)?.RefreshAsync().OrCompleted());
 
-            InfoFlush.Command = InfoNormal.Command = 
+            InfoFlush.Command = InfoNormal.Command =
                 Commands.Create(() => OpenHelper.OpenUrl(SharedConstants.MultiplayerWikiUrl));
         }
 

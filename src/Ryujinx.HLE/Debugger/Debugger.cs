@@ -27,7 +27,7 @@ namespace Ryujinx.HLE.Debugger
         private Socket _clientSocket;
         private NetworkStream _readStream;
         private NetworkStream _writeStream;
-        
+
         private GdbCommands _commands;
 
         private bool _shuttingDown;
@@ -37,7 +37,7 @@ namespace Ryujinx.HLE.Debugger
         internal ulong? GThreadId;
 
         internal KThread CThread => CThreadId?.Into(DebugProcess.GetThread);
-        
+
         internal KThread GThread => GThreadId?.Into(DebugProcess.GetThread);
 
         public readonly BreakpointManager BreakpointManager;

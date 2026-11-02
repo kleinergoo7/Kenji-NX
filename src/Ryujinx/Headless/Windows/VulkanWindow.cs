@@ -2,10 +2,10 @@ using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
 using Ryujinx.Input.HLE;
 using Ryujinx.SDL3.Common;
-using System;
 using SDL;
-using static SDL.SDL3;
+using System;
 using System.Runtime.InteropServices;
+using static SDL.SDL3;
 
 namespace Ryujinx.Headless
 {
@@ -74,7 +74,8 @@ namespace Ryujinx.Headless
         {
             uint extensionCount = 0;
             byte** extensions = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
-            if (extensionCount == 0) {
+            if (extensionCount == 0)
+            {
                 string errorMessage = $"SDL_Vulkan_GetInstanceExtensions failed with error \"{SDL_GetError()}\"";
 
                 Logger.Error?.Print(LogClass.Application, errorMessage);
@@ -82,7 +83,8 @@ namespace Ryujinx.Headless
                 throw new Exception(errorMessage);
             }
             string[] extensionArr = new string[extensionCount];
-            for (int i = 0; i < extensionCount; i++) {
+            for (int i = 0; i < extensionCount; i++)
+            {
                 extensionArr[i] = Marshal.PtrToStringUTF8((nint)extensions[i]);
             }
             return extensionArr;

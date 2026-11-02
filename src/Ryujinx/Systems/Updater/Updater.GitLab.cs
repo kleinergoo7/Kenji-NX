@@ -1,4 +1,4 @@
-﻿using Gommon;
+using Gommon;
 using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.UI.Helpers;
 using Ryujinx.Common;
@@ -22,10 +22,10 @@ namespace Ryujinx.Ava.Systems
         {
             _updateClient ??= UpdateClient.Builder()
                 .WithServerEndpoint("https://update.ryujinx.app") // This is the default, and doesn't need to be provided; it's here for transparency.
-                .WithLogger((format, args, caller) => 
+                .WithLogger((format, args, caller) =>
                     Logger.Info?.Print(
-                        LogClass.Application, 
-                        args.Length is 0 ? format : format.Format(args), 
+                        LogClass.Application,
+                        args.Length is 0 ? format : format.Format(args),
                         caller: caller)
                 );
 
@@ -97,7 +97,7 @@ namespace Ryujinx.Ava.Systems
                 {
                     await ContentDialogHelper.CreateUpdaterUpToDateInfoDialog(
                         LocaleManager.Instance[LocaleKeys.DialogUpdaterAlreadyOnLatestVersionMessage],
-                        string.Empty, 
+                        string.Empty,
                         _versionResponse.ReleaseUrlFormat.Format(currentVersion));
                 }
 

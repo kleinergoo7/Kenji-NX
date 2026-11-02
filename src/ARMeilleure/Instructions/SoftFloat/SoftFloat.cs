@@ -97,12 +97,12 @@ namespace ARMeilleure.Instructions
 
         extension(FPCR fpcr)
         {
-            public FPRoundingMode RoundingMode 
+            public FPRoundingMode RoundingMode
             {
-                get 
+                get
                 {
                     const int RModeShift = 22;
-                    
+
                     return (FPRoundingMode)(((uint)fpcr >> RModeShift) & 3u);
                 }
             }

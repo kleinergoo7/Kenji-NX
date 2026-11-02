@@ -386,7 +386,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             }
 
             ulong rwdataStart = roInfo.Address + roInfo.Size;
-            
+
             KMemoryInfo.Pool.Release(roInfo);
 
             try

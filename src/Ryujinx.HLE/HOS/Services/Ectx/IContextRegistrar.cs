@@ -1,6 +1,6 @@
-using System;
 using Ryujinx.Common.Logging;
 using Ryujinx.Horizon.Common;
+using System;
 
 namespace Ryujinx.HLE.HOS.Services.Ectx
 {
@@ -22,7 +22,7 @@ namespace Ryujinx.HLE.HOS.Services.Ectx
 
             context.ResponseData.Write(0); // TODO: return context_descriptor
 
-            Logger.Stub?.PrintStub(LogClass.ServiceEctx, $"Result: {result}, rawContext: {Convert.ToHexString(rawContext)}" );
+            Logger.Stub?.PrintStub(LogClass.ServiceEctx, $"Result: {result}, rawContext: {Convert.ToHexString(rawContext)}");
 
             return ResultCode.Success;
         }

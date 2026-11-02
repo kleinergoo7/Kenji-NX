@@ -15,7 +15,7 @@ namespace ARMeilleure.Translation
     class TranslatorStubs : IDisposable
     {
         private readonly JitCache _jitCache;
-        
+
         private readonly Lazy<nint> _slowDispatchStub;
 
         private bool _disposed;
@@ -91,7 +91,7 @@ namespace ARMeilleure.Translation
         public TranslatorStubs(JitCache jitCache, IAddressTable<ulong> functionTable)
         {
             ArgumentNullException.ThrowIfNull(functionTable);
-            
+
             _jitCache = jitCache;
 
             _functionTable = functionTable;

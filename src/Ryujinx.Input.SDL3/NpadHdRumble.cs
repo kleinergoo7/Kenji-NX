@@ -1,8 +1,8 @@
 using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Hid;
 using SDL;
-using static SDL.SDL3;
 using System;
+using static SDL.SDL3;
 
 namespace Ryujinx.Input.SDL3
 {
@@ -12,11 +12,11 @@ namespace Ryujinx.Input.SDL3
     public unsafe class NpadHdRumble : IDisposable
     {
         private readonly SDL_hid_device* _hidHandle;
-        
+
         private byte[] _buffer;
         private static ushort _vendor;
         private static ushort _product;
-        
+
         private int _globalCount;
         private ulong _lastWriteTicks;
 
@@ -46,7 +46,7 @@ namespace Ryujinx.Input.SDL3
             {
                 int.TryParse(serial, out serialNumber);
             }
-            
+
             return new NpadHdRumble(SDL_hid_open(_vendor, _product, serialNumber));
         }
 
@@ -57,43 +57,43 @@ namespace Ryujinx.Input.SDL3
             int leftLowFreq = EncodeLowFreq(left.FrequencyLow) + (leftLowAmp >> 8);
             int leftHighFreq = EncodeHighFreq(left.FrequencyHigh);
             int leftHighAmp = EncodeHighAmp(left.AmplitudeHigh) + (leftHighFreq >> 8);
-                
+
             int rightLowAmp = EncodeLowAmp(right.AmplitudeLow);
             int rightLowFreq = EncodeLowFreq(right.FrequencyLow) + (rightLowAmp >> 8);
             int rightHighFreq = EncodeHighFreq(right.FrequencyHigh);
             int rightHighAmp = EncodeHighAmp(right.AmplitudeHigh) + (rightHighFreq >> 8);
-            
+
             _buffer[0] = 0x10;
             _buffer[1] = (byte)((_globalCount++) & 0xF);
-            
+
             // Left LRA
             _buffer[2] = (byte)(leftLowFreq & 0xFF);
             _buffer[3] = (byte)(leftHighAmp & 0xFF);
             _buffer[4] = (byte)(leftHighFreq & 0xFF);
             _buffer[5] = (byte)(leftLowAmp & 0xFF);
-            
+
             // Right LRA
             _buffer[6] = (byte)(rightLowFreq & 0xFF);
             _buffer[7] = (byte)(rightHighAmp & 0xFF);
             _buffer[8] = (byte)(rightHighFreq & 0xFF);
             _buffer[9] = (byte)(rightLowAmp & 0xFF);
-            
+
             if (_globalCount > 0xF)
             {
                 _globalCount = 0x0;
             }
-            
+
             fixed (byte* ptr = _buffer)
             {
                 if (SendHdRumble(ptr, (nuint)_buffer.Length) >= 0)
                 {
                     return true;
                 }
-                
+
                 Logger.Error?.PrintMsg(LogClass.Hid, SDL_GetError());
                 SDL_ClearError();
             }
-            
+
             return false;
         }
 
@@ -113,16 +113,16 @@ namespace Ryujinx.Input.SDL3
 
             if (rawAmp is > 0 and < 0.012f)
                 encodedAmp = 1;
-            
+
             else if (rawAmp is >= 0.012f and < 0.112f)
                 encodedAmp = 4 * Math.Log2(rawAmp * 110f);
-            
+
             else if (rawAmp is >= 0.112f and < 0.225f)
                 encodedAmp = 16 * Math.Log2(rawAmp * 17f);
-            
+
             else if (rawAmp is >= 0.225f and <= 1f)
                 encodedAmp = 32 * Math.Log2(rawAmp * 8.7f);
-            
+
             encodedAmp = Math.Round((encodedAmp / 2.0) + 64.0);
             encodedAmp = Math.Clamp(encodedAmp, 0.0, 100.2867);
             return (int)Math.Round(encodedAmp);
@@ -134,16 +134,16 @@ namespace Ryujinx.Input.SDL3
 
             if (rawAmp is > 0 and < 0.012f)
                 encodedAmp = 1;
-            
+
             else if (rawAmp is >= 0.012f and < 0.112f)
                 encodedAmp = 4 * Math.Log2(rawAmp * 110f);
-            
+
             else if (rawAmp is >= 0.112f and < 0.225f)
                 encodedAmp = 16 * Math.Log2(rawAmp * 17f);
-            
+
             else if (rawAmp is >= 0.225f and <= 1f)
                 encodedAmp = 32 * Math.Log2(rawAmp * 8.7f);
-            
+
             encodedAmp = Math.Round(encodedAmp / 2.0);
             encodedAmp = Math.Clamp(encodedAmp, 0.0, 100.2867);
             return (int)encodedAmp;
@@ -151,11 +151,11 @@ namespace Ryujinx.Input.SDL3
 
         public bool HdRumble(VibrationValue left, VibrationValue right)
         {
-            if(_product is (ushort) HDRumbleSupportedProduct.ProController
-               or (ushort) HDRumbleSupportedProduct.JoyconLeft
-               or (ushort) HDRumbleSupportedProduct.JoyconRight
-               or (ushort) HDRumbleSupportedProduct.JoyconPair
-               or (ushort) HDRumbleSupportedProduct.JoyconGrip)
+            if (_product is (ushort)HDRumbleSupportedProduct.ProController
+               or (ushort)HDRumbleSupportedProduct.JoyconLeft
+               or (ushort)HDRumbleSupportedProduct.JoyconRight
+               or (ushort)HDRumbleSupportedProduct.JoyconPair
+               or (ushort)HDRumbleSupportedProduct.JoyconGrip)
             {
                 return WriteNintendoHdRumble(left, right);
             }
@@ -173,13 +173,13 @@ namespace Ryujinx.Input.SDL3
             {
                 return result;
             }
-            
+
             result = SDL_hid_write(_hidHandle, data, length);
             if (result >= 0)
             {
                 _lastWriteTicks = currentTicks;
             }
-            
+
             return result;
         }
 
@@ -191,8 +191,8 @@ namespace Ryujinx.Input.SDL3
                 byte[] init = new byte[64];
 
                 // Pro Controller and Charge Grip
-                if (_product 
-                    is (ushort)HDRumbleSupportedProduct.ProController 
+                if (_product
+                    is (ushort)HDRumbleSupportedProduct.ProController
                     or (ushort)HDRumbleSupportedProduct.JoyconGrip)
                 {
                     SDL_LockJoysticks();
@@ -203,43 +203,43 @@ namespace Ryujinx.Input.SDL3
                         SDL_hid_write(_hidHandle, ptr, 64);
                     }
                     SDL_UnlockJoysticks();
-                
+
                     return;
                 }
-            
+
                 // Joycons
-                if (_product 
-                    is (ushort)HDRumbleSupportedProduct.JoyconLeft 
+                if (_product
+                    is (ushort)HDRumbleSupportedProduct.JoyconLeft
                     or (ushort)HDRumbleSupportedProduct.JoyconRight
                     or (ushort)HDRumbleSupportedProduct.JoyconPair)
                 {
-                
+
                     SDL_LockJoysticks();
                     fixed (byte* ptr = init)
                     {
                         // we could write data to the controller here (see above)
                     }
                     SDL_UnlockJoysticks();
-                    
+
                     return;
                 }
             }
         }
-        
+
         private ulong GetPollRate()
         {
             ulong pollRate = 0;
             if (_vendor is (ushort)HDRumbleSupportedVendor.Nintendo)
             {
                 // https://docs.handheldlegend.com/s/progcc-3/doc/lag-comparison-aAR1mV3JLX
-                pollRate = (ulong) 16.67;
+                pollRate = (ulong)16.67;
                 if (_product is (ushort)HDRumbleSupportedProduct.ProController
                     && SDL_hid_get_device_info(_hidHandle)->bus_type == SDL_hid_bus_type.SDL_HID_API_BUS_USB)
                 {
-                    pollRate = (ulong) 8.33;
+                    pollRate = (ulong)8.33;
                 }
             }
-            
+
             return pollRate;
         }
 
@@ -261,27 +261,27 @@ namespace Ryujinx.Input.SDL3
     {
         // TODO: Currently, HD Rumble only supports the Pro Controller and JoyCons.
         //       We need to initialize and report to each device differently.
-        
+
         // Nintendo Switch: 0x057e
         JoyconLeft = 0x2006,
         JoyconRight = 0x2007,
         JoyconPair = 0x2008,
         ProController = 0x2009,
         JoyconGrip = 0x200e,
-        
+
         // Nintendo Switch 2: 0x057e
         Joycon2Right = 0x2066,
         Joycon2Left = 0x2067,
         Joycon2Pair = 0x2068,
         Switch2ProController = 0x2069,
         GamecubeController = 0x2073,
-        
+
         // Valve Steam Family: 0x28de
         // https://github.com/libsdl-org/SDL/issues/9148
         SteamDeck = 0x11ff,
         SteamDeckVirtualDevice = 0x1205,
         SteamController = 0x1106,
-        
+
         // PlayStation Dualsense: 0x054c
         Dualsense = 0x0ce6
     }

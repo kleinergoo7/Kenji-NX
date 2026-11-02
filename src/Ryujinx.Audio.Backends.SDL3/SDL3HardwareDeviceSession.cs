@@ -3,12 +3,12 @@ using Ryujinx.Audio.Common;
 using Ryujinx.Common.Logging;
 using Ryujinx.Common.Memory;
 using Ryujinx.Memory;
+using SDL;
 using System;
 using System.Collections.Concurrent;
-using System.Threading;
-using SDL;
-using static SDL.SDL3;
 using System.Runtime.InteropServices;
+using System.Threading;
+using static SDL.SDL3;
 
 namespace Ryujinx.Audio.Backends.SDL3
 {
@@ -68,9 +68,12 @@ namespace Ryujinx.Audio.Backends.SDL3
 
                     _outputStream = newOutputStream;
 
-                    if (_started) {
+                    if (_started)
+                    {
                         SDL_ResumeAudioStreamDevice(_outputStream);
-                    } else {
+                    }
+                    else
+                    {
                         SDL_PauseAudioStreamDevice(_outputStream);
                     }
 
@@ -107,7 +110,8 @@ namespace Ryujinx.Audio.Backends.SDL3
             // Zero the dest buffer
             streamSpan.Clear();
 
-            fixed (byte* pStreamDst = streamSpan) {
+            fixed (byte* pStreamDst = streamSpan)
+            {
                 fixed (byte* pStreamSrc = samples)
                 {
 

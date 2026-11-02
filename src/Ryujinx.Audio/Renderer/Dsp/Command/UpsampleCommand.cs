@@ -24,7 +24,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public UpsampleCommand()
         {
-            
+
         }
 
         public UpsampleCommand Initialize(uint bufferOffset, UpsamplerInfo info, uint inputCount, Span<byte> inputBufferOffset, uint bufferCount, uint sampleCount, uint sampleRate, int nodeId)

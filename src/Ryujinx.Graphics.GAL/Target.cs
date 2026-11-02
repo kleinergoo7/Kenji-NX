@@ -21,7 +21,7 @@ namespace Ryujinx.Graphics.GAL
             public bool IsMultisample => target is Target.Texture2DMultisample or Target.Texture2DMultisampleArray;
 
             public bool HasDepthOrLayers =>
-                target is 
+                target is
                     Target.Texture3D or
                     Target.Texture1DArray or
                     Target.Texture2DArray or

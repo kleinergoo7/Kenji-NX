@@ -2,10 +2,10 @@ using Gommon;
 using Ryujinx.Common.Configuration.Hid;
 using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Hid;
+using SDL;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using SDL;
 using static SDL.SDL3;
 
 namespace Ryujinx.Input.SDL3
@@ -126,11 +126,11 @@ namespace Ryujinx.Input.SDL3
                 if (SDL_GetGamepadNameForID(joyConId) == matchName)
                 {
                     match = joyConId;
-                    
+
                     return true;
                 }
             }
-            
+
             return false;
         }
     }

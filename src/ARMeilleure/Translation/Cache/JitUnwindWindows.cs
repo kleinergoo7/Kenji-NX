@@ -28,13 +28,13 @@ namespace ARMeilleure.Translation.Cache
             public byte FrameRegister;
             public unsafe fixed ushort UnwindCodes[MaxUnwindCodesArraySize];
         }
-        
+
         private unsafe struct InternalFunctionHandler
         {
             public InternalFunctionHandler(JitCache jitCache, nint workBufferPtr)
             {
                 _jitCache = jitCache;
-                
+
                 _runtimeFunction = (RuntimeFunction*)workBufferPtr;
 
                 _unwindInfo = (UnwindInfo*)(workBufferPtr + _sizeOfRuntimeFunction);
@@ -45,10 +45,10 @@ namespace ARMeilleure.Translation.Cache
             readonly RuntimeFunction* _runtimeFunction;
 
             readonly UnwindInfo* _unwindInfo;
-            
+
             public RuntimeFunction* FunctionTableHandler(ulong controlPc, nint context)
             {
-                return JitUnwindWindows.FunctionTableHandler(_jitCache, _runtimeFunction, _unwindInfo,  controlPc,  context);
+                return JitUnwindWindows.FunctionTableHandler(_jitCache, _runtimeFunction, _unwindInfo, controlPc, context);
             }
         }
 
@@ -85,7 +85,7 @@ namespace ARMeilleure.Translation.Cache
         private static GetRuntimeFunctionCallback _getRuntimeFunctionCallback;
 
         private static readonly int _sizeOfRuntimeFunction;
-        
+
         private static readonly ConcurrentDictionary<ulong, InternalFunctionHandler> _functionTableHandlers = new();
 
         static JitUnwindWindows()
@@ -103,7 +103,7 @@ namespace ARMeilleure.Translation.Cache
 
             unsafe
             {
-                handler =  new InternalFunctionHandler(jitCache, workBufferPtr);
+                handler = new InternalFunctionHandler(jitCache, workBufferPtr);
 
                 _getRuntimeFunctionCallback = handler.FunctionTableHandler;
 
@@ -139,7 +139,7 @@ namespace ARMeilleure.Translation.Cache
             {
                 throw new InvalidOperationException("Failure removing function table callback.");
             }
-            
+
             _functionTableHandlers.Remove(codeCachePtr, out _);
         }
 

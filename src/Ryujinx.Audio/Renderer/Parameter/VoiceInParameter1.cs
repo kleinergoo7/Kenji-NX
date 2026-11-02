@@ -172,161 +172,161 @@ namespace Ryujinx.Audio.Renderer.Parameter
         /// </summary>
         private unsafe fixed uint _reserved3[2];
     }
-    
+
     /// <summary>
-        /// Input information for a voice wavebuffer.
+    /// Input information for a voice wavebuffer.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, Size = 0x38, Pack = 1)]
+    public struct WaveBufferInternal
+    {
+        /// <summary>
+        /// Address of the wavebuffer data.
         /// </summary>
-        [StructLayout(LayoutKind.Sequential, Size = 0x38, Pack = 1)]
-        public struct WaveBufferInternal
-        {
-            /// <summary>
-            /// Address of the wavebuffer data.
-            /// </summary>
-            public ulong Address;
-
-            /// <summary>
-            /// Size of the wavebuffer data.
-            /// </summary>
-            public ulong Size;
-
-            /// <summary>
-            /// Offset of the first sample to play.
-            /// </summary>
-            public uint StartSampleOffset;
-
-            /// <summary>
-            /// Offset of the last sample to play.
-            /// </summary>
-            public uint EndSampleOffset;
-
-            /// <summary>
-            /// If set to true, the wavebuffer will loop when reaching <see cref="EndSampleOffset"/>.
-            /// </summary>
-            /// <remarks>
-            /// Starting with REV8, you can specify how many times to loop the wavebuffer (<see cref="LoopCount"/>) and where it should start and end when looping (<see cref="LoopFirstSampleOffset"/> and <see cref="LoopLastSampleOffset"/>)
-            /// </remarks>
-            [MarshalAs(UnmanagedType.I1)]
-            public bool ShouldLoop;
-
-            /// <summary>
-            /// Indicates that this is the last wavebuffer to play of the voice.
-            /// </summary>
-            [MarshalAs(UnmanagedType.I1)]
-            public bool IsEndOfStream;
-
-            /// <summary>
-            /// Indicates if the server should update its internal state.
-            /// </summary>
-            [MarshalAs(UnmanagedType.I1)]
-            public bool SentToServer;
-
-            /// <summary>
-            /// Reserved/unused.
-            /// </summary>
-            private readonly byte _reserved;
-
-            /// <summary>
-            /// If set to anything other than 0, specifies how many times to loop the wavebuffer.
-            /// </summary>
-            /// <remarks>This was added in REV8.</remarks>
-            public int LoopCount;
-
-            /// <summary>
-            /// Address of the context used by the sample decoder.
-            /// </summary>
-            /// <remarks>This is only currently used by <see cref="SampleFormat.Adpcm"/>.</remarks>
-            public ulong ContextAddress;
-
-            /// <summary>
-            /// Size of the context used by the sample decoder.
-            /// </summary>
-            /// <remarks>This is only currently used by <see cref="SampleFormat.Adpcm"/>.</remarks>
-            public ulong ContextSize;
-
-            /// <summary>
-            /// If set to anything other than 0, specifies the offset of the first sample to play when looping.
-            /// </summary>
-            /// <remarks>This was added in REV8.</remarks>
-            public uint LoopFirstSampleOffset;
-
-            /// <summary>
-            /// If set to anything other than 0, specifies the offset of the last sample to play when looping.
-            /// </summary>
-            /// <remarks>This was added in REV8.</remarks>
-            public uint LoopLastSampleOffset;
-
-            /// <summary>
-            /// Check if the sample offsets are in a valid range for generic PCM.
-            /// </summary>
-            /// <typeparam name="T">The PCM sample type</typeparam>
-            /// <returns>Returns true if the sample offset are in range of the size.</returns>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private readonly bool IsSampleOffsetInRangeForPcm<T>() where T : unmanaged
-            {
-                uint dataTypeSize = (uint)Unsafe.SizeOf<T>();
-
-                return (ulong)StartSampleOffset * dataTypeSize <= Size &&
-                       (ulong)EndSampleOffset * dataTypeSize <= Size;
-            }
-
-            /// <summary>
-            /// Check if the sample offsets are in a valid range for the given <see cref="SampleFormat"/>.
-            /// </summary>
-            /// <param name="format">The target <see cref="SampleFormat"/></param>
-            /// <returns>Returns true if the sample offset are in range of the size.</returns>
-            public readonly bool IsSampleOffsetValid(SampleFormat format)
-            {
-                return format switch
-                {
-                    SampleFormat.PcmInt16 => IsSampleOffsetInRangeForPcm<ushort>(),
-                    SampleFormat.PcmFloat => IsSampleOffsetInRangeForPcm<float>(),
-                    SampleFormat.Adpcm => AdpcmHelper.GetAdpcmDataSize((int)StartSampleOffset) <= Size && AdpcmHelper.GetAdpcmDataSize((int)EndSampleOffset) <= Size,
-                    _ => throw new NotImplementedException($"{format} not implemented!"),
-                };
-            }
-        }
+        public ulong Address;
 
         /// <summary>
-        /// Flag altering the behaviour of wavebuffer decoding.
+        /// Size of the wavebuffer data.
         /// </summary>
-        [Flags]
-        public enum DecodingBehaviour : ushort
-        {
-            /// <summary>
-            /// Default decoding behaviour.
-            /// </summary>
-            Default = 0,
-
-            /// <summary>
-            /// Reset the played samples accumulator when looping.
-            /// </summary>
-            PlayedSampleCountResetWhenLooping = 1,
-
-            /// <summary>
-            /// Skip pitch and Sample Rate Conversion (SRC).
-            /// </summary>
-            SkipPitchAndSampleRateConversion = 2,
-        }
+        public ulong Size;
 
         /// <summary>
-        /// Specify the quality to use during Sample Rate Conversion (SRC) and pitch handling.
+        /// Offset of the first sample to play.
+        /// </summary>
+        public uint StartSampleOffset;
+
+        /// <summary>
+        /// Offset of the last sample to play.
+        /// </summary>
+        public uint EndSampleOffset;
+
+        /// <summary>
+        /// If set to true, the wavebuffer will loop when reaching <see cref="EndSampleOffset"/>.
+        /// </summary>
+        /// <remarks>
+        /// Starting with REV8, you can specify how many times to loop the wavebuffer (<see cref="LoopCount"/>) and where it should start and end when looping (<see cref="LoopFirstSampleOffset"/> and <see cref="LoopLastSampleOffset"/>)
+        /// </remarks>
+        [MarshalAs(UnmanagedType.I1)]
+        public bool ShouldLoop;
+
+        /// <summary>
+        /// Indicates that this is the last wavebuffer to play of the voice.
+        /// </summary>
+        [MarshalAs(UnmanagedType.I1)]
+        public bool IsEndOfStream;
+
+        /// <summary>
+        /// Indicates if the server should update its internal state.
+        /// </summary>
+        [MarshalAs(UnmanagedType.I1)]
+        public bool SentToServer;
+
+        /// <summary>
+        /// Reserved/unused.
+        /// </summary>
+        private readonly byte _reserved;
+
+        /// <summary>
+        /// If set to anything other than 0, specifies how many times to loop the wavebuffer.
         /// </summary>
         /// <remarks>This was added in REV8.</remarks>
-        public enum SampleRateConversionQuality : byte
+        public int LoopCount;
+
+        /// <summary>
+        /// Address of the context used by the sample decoder.
+        /// </summary>
+        /// <remarks>This is only currently used by <see cref="SampleFormat.Adpcm"/>.</remarks>
+        public ulong ContextAddress;
+
+        /// <summary>
+        /// Size of the context used by the sample decoder.
+        /// </summary>
+        /// <remarks>This is only currently used by <see cref="SampleFormat.Adpcm"/>.</remarks>
+        public ulong ContextSize;
+
+        /// <summary>
+        /// If set to anything other than 0, specifies the offset of the first sample to play when looping.
+        /// </summary>
+        /// <remarks>This was added in REV8.</remarks>
+        public uint LoopFirstSampleOffset;
+
+        /// <summary>
+        /// If set to anything other than 0, specifies the offset of the last sample to play when looping.
+        /// </summary>
+        /// <remarks>This was added in REV8.</remarks>
+        public uint LoopLastSampleOffset;
+
+        /// <summary>
+        /// Check if the sample offsets are in a valid range for generic PCM.
+        /// </summary>
+        /// <typeparam name="T">The PCM sample type</typeparam>
+        /// <returns>Returns true if the sample offset are in range of the size.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private readonly bool IsSampleOffsetInRangeForPcm<T>() where T : unmanaged
         {
-            /// <summary>
-            /// Resample interpolating 4 samples per output sample.
-            /// </summary>
-            Default,
+            uint dataTypeSize = (uint)Unsafe.SizeOf<T>();
 
-            /// <summary>
-            /// Resample interpolating 8 samples per output sample.
-            /// </summary>
-            High,
-
-            /// <summary>
-            /// Resample interpolating 1 samples per output sample.
-            /// </summary>
-            Low,
+            return (ulong)StartSampleOffset * dataTypeSize <= Size &&
+                   (ulong)EndSampleOffset * dataTypeSize <= Size;
         }
+
+        /// <summary>
+        /// Check if the sample offsets are in a valid range for the given <see cref="SampleFormat"/>.
+        /// </summary>
+        /// <param name="format">The target <see cref="SampleFormat"/></param>
+        /// <returns>Returns true if the sample offset are in range of the size.</returns>
+        public readonly bool IsSampleOffsetValid(SampleFormat format)
+        {
+            return format switch
+            {
+                SampleFormat.PcmInt16 => IsSampleOffsetInRangeForPcm<ushort>(),
+                SampleFormat.PcmFloat => IsSampleOffsetInRangeForPcm<float>(),
+                SampleFormat.Adpcm => AdpcmHelper.GetAdpcmDataSize((int)StartSampleOffset) <= Size && AdpcmHelper.GetAdpcmDataSize((int)EndSampleOffset) <= Size,
+                _ => throw new NotImplementedException($"{format} not implemented!"),
+            };
+        }
+    }
+
+    /// <summary>
+    /// Flag altering the behaviour of wavebuffer decoding.
+    /// </summary>
+    [Flags]
+    public enum DecodingBehaviour : ushort
+    {
+        /// <summary>
+        /// Default decoding behaviour.
+        /// </summary>
+        Default = 0,
+
+        /// <summary>
+        /// Reset the played samples accumulator when looping.
+        /// </summary>
+        PlayedSampleCountResetWhenLooping = 1,
+
+        /// <summary>
+        /// Skip pitch and Sample Rate Conversion (SRC).
+        /// </summary>
+        SkipPitchAndSampleRateConversion = 2,
+    }
+
+    /// <summary>
+    /// Specify the quality to use during Sample Rate Conversion (SRC) and pitch handling.
+    /// </summary>
+    /// <remarks>This was added in REV8.</remarks>
+    public enum SampleRateConversionQuality : byte
+    {
+        /// <summary>
+        /// Resample interpolating 4 samples per output sample.
+        /// </summary>
+        Default,
+
+        /// <summary>
+        /// Resample interpolating 8 samples per output sample.
+        /// </summary>
+        High,
+
+        /// <summary>
+        /// Resample interpolating 1 samples per output sample.
+        /// </summary>
+        Low,
+    }
 }

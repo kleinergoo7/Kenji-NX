@@ -11,7 +11,9 @@ namespace Ryujinx.BuildValidationTasks
     {
         static readonly JsonSerializerOptions _jsonOptions = new()
         {
-            WriteIndented = true, NewLine = "\n", Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            WriteIndented = true,
+            NewLine = "\n",
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         public LocalesValidationTask() { }

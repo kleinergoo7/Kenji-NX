@@ -16,7 +16,7 @@ namespace Ryujinx.Common.Configuration.Hid.Controller
         /// Enable Rumble
         /// </summary>
         public bool EnableRumble { get; set; }
-        
+
         /// <summary>
         /// Enable HD Rumble support
         /// </summary

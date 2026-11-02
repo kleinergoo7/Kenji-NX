@@ -17,7 +17,7 @@ namespace ARMeilleure.IntermediateRepresentation
         extension(OperandType type)
         {
             public bool IsInteger => type is OperandType.I32 or OperandType.I64;
-            
+
             public RegisterType Register => type switch
             {
                 OperandType.FP32 => RegisterType.Vector,
@@ -27,7 +27,7 @@ namespace ARMeilleure.IntermediateRepresentation
                 OperandType.V128 => RegisterType.Vector,
                 _ => throw new InvalidOperationException($"Invalid operand type \"{type}\".")
             };
-            
+
             public int ByteSize => type switch
             {
                 OperandType.FP32 => 4,
@@ -37,7 +37,7 @@ namespace ARMeilleure.IntermediateRepresentation
                 OperandType.V128 => 16,
                 _ => throw new InvalidOperationException($"Invalid operand type \"{type}\".")
             };
-            
+
             public int ByteSizeLog2 => type switch
             {
                 OperandType.FP32 => 2,

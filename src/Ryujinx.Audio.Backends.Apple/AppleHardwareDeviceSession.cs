@@ -4,8 +4,8 @@ using Ryujinx.Memory;
 using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Runtime.Versioning;
+using System.Threading;
 using static Ryujinx.Audio.Backends.Apple.Native.AudioToolbox;
 
 namespace Ryujinx.Audio.Backends.Apple

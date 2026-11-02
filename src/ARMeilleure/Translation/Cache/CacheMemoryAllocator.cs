@@ -22,7 +22,7 @@ namespace ARMeilleure.Translation.Cache
                 return Offset.CompareTo(other.Offset);
             }
         }
-        
+
         private readonly int _regionSize;
         private int _regionCount;
 
@@ -32,7 +32,7 @@ namespace ARMeilleure.Translation.Cache
         {
             _regionCount = 0;
             _regionSize = regionSize;
-            
+
             for (; initialRegionCount > 0; initialRegionCount--)
             {
                 _blocks.Add(new MemoryBlock(_regionSize * _regionCount, _regionSize));
@@ -84,7 +84,7 @@ namespace ARMeilleure.Translation.Cache
             {
                 index = ~index;
             }
-            
+
             int endOffs = block.Offset + block.Size;
 
             // Don't merge blocks from different allocations

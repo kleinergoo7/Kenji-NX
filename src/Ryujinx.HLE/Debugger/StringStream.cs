@@ -12,7 +12,7 @@ namespace Ryujinx.HLE.Debugger
         {
             _data = s;
         }
-        
+
         public bool IsEmpty => _position >= _data.Length;
 
         public char ReadChar() => _data[_position++];
@@ -45,13 +45,13 @@ namespace Ryujinx.HLE.Debugger
             return result;
         }
 
-        public ulong ReadRemainingAsHex() 
+        public ulong ReadRemainingAsHex()
             => ulong.Parse(ReadRemaining(), NumberStyles.HexNumber);
 
-        public ulong ReadUntilAsHex(char needle) 
+        public ulong ReadUntilAsHex(char needle)
             => ulong.Parse(ReadUntil(needle), NumberStyles.HexNumber);
 
-        public ulong ReadLengthAsHex(int len) 
+        public ulong ReadLengthAsHex(int len)
             => ulong.Parse(ReadLength(len), NumberStyles.HexNumber);
 
         public ulong ReadLengthAsLittleEndianHex(int len)

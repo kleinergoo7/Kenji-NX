@@ -39,11 +39,11 @@ namespace Ryujinx.Memory
 
             if (_fill is not null)
             {
-                if (_fill.Size % _pageSize !=0)
+                if (_fill.Size % _pageSize != 0)
                 {
                     throw new ArgumentException("Fill memory block should be page sized.", nameof(_fill));
                 }
-                
+
                 // Fill the block with mappings from the fill block.
 
                 int repeats = (int)BitUtils.DivRoundUp(size, _fill.Size);
@@ -82,7 +82,7 @@ namespace Ryujinx.Memory
             {
                 _reservedBlock.UnmapView(_fill, pageOffset, _pageSize);
             }
-            
+
             _reservedBlock.MapView(block, _mappedBlockUsage, pageOffset, _pageSize);
 
             _mappedBlockUsage += _pageSize;

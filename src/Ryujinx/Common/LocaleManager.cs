@@ -69,7 +69,7 @@ namespace Ryujinx.Ava.Common.Locale
 
         public static string GetUnformatted(LocaleKeys key) => Instance.Get(key);
 
-        public static string GetFormatted(LocaleKeys key, params object[] values) 
+        public static string GetFormatted(LocaleKeys key, params object[] values)
             => GetUnformatted(key).Format(values);
 
         public static string FormatDynamicValue(LocaleKeys key, params object[] values)
@@ -175,18 +175,18 @@ namespace Ryujinx.Ava.Common.Locale
                     string path = uri[..^".json".Length];
                     path = path.Replace('.', '/');
                     path = path.Append(".json");
-                    
+
                     locales.TryAdd(Path.GetFileName(path), EmbeddedResources.ReadAllText(path)
                             .Into(it => JsonHelper.Deserialize(it, LocalesJsonContext.Default.LocalesJson)));
                 }
-                
+
                 _localeData = new LocalesData
                 {
                     Languages = EmbeddedResources.ReadAllText("Ryujinx/Assets/Languages.json")
                         .Into(it => JsonHelper.Deserialize(it, LanguagesJsonContext.Default.LanguagesJson)).Languages.Keys.ToList(),
                     LocalesFiles = locales
                 };
-                
+
 
             }
 
@@ -206,7 +206,7 @@ namespace Ryujinx.Ava.Common.Locale
                             $"Locale key {{{locale.ID}}} has too many languages! Has {locale.Translations.Count} translations, expected {_localeData.Value.Languages.Count}!");
                     }
 
-                    if (!Enum.TryParse<LocaleKeys>(fileName == "Root.json" ? locale.ID : $"{fileName[..^".json".Length]}_{locale.ID}" , out LocaleKeys localeKey))
+                    if (!Enum.TryParse<LocaleKeys>(fileName == "Root.json" ? locale.ID : $"{fileName[..^".json".Length]}_{locale.ID}", out LocaleKeys localeKey))
                         continue;
 
                     string str = locale.Translations.TryGetValue(languageCode, out string val) && !string.IsNullOrEmpty(val)
@@ -252,7 +252,7 @@ namespace Ryujinx.Ava.Common.Locale
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(LocalesJson))]
     internal partial class LocalesJsonContext : JsonSerializerContext;
-    
+
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(LanguagesJson))]
     internal partial class LanguagesJsonContext : JsonSerializerContext;

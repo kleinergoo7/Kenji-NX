@@ -11,7 +11,7 @@ namespace Ryujinx.Graphics.Vulkan
     class MultiFenceHolder
     {
         public static readonly ObjectPool<FenceHolder[]> FencePool = new(() => new FenceHolder[CommandBufferPool.MaxCommandBuffers]);
-        
+
         private const int BufferUsageTrackingGranularity = 4096;
 
         public FenceHolder[] Fences { get; }

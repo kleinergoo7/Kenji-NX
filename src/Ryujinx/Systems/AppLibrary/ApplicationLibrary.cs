@@ -1207,12 +1207,12 @@ namespace Ryujinx.Ava.Systems.AppLibrary
                 Logger.Warning?.PrintMsg(LogClass.Application, "Cannot save metadata because title ID is invalid.");
                 return null;
             }
-            
+
             string metadataFolder = Path.Combine(AppDataManager.GamesDirPath, titleId, "gui");
             string metadataFile = Path.Combine(metadataFolder, "metadata.json");
 
             ApplicationMetadata appMetadata;
-            
+
             if (!File.Exists(metadataFile))
             {
                 Logger.Info?.Print(LogClass.Application, $"Metadata file does not exist. Creating metadata for {titleId}...");

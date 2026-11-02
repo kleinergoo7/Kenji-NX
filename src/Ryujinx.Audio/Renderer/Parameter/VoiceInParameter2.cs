@@ -91,7 +91,7 @@ namespace Ryujinx.Audio.Renderer.Parameter
         /// <summary>
         /// Reserved/unused.
         /// </summary>
-        private readonly uint 
+        private readonly uint
             _reserved1;
 
         /// <summary>

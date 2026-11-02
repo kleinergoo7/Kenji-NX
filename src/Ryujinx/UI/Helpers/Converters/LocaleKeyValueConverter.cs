@@ -11,7 +11,7 @@ namespace Ryujinx.Ava.UI.Helpers
         private static readonly Lazy<LocaleKeyValueConverter> _shared = new(() => new());
         public static LocaleKeyValueConverter Shared => _shared.Value;
 
-        public object Convert(object value, Type _, object __, CultureInfo ___) 
+        public object Convert(object value, Type _, object __, CultureInfo ___)
             => LocaleManager.Instance[value.Cast<LocaleKeys>()];
 
         public object ConvertBack(object value, Type _, object __, CultureInfo ___)

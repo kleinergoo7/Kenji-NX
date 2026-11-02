@@ -432,7 +432,7 @@ namespace Ryujinx.Graphics.Shader.Translation
             if (found)
             {
                 selectedMeta.UsageFlags |= TextureUsageFlags.NeedsScaleValue;
-                
+
                 int dimensions = type.Dimensions;
                 bool canScale = _stage.SupportsRenderScale && selectedInfo.ArrayLength == 1 && dimensions == 2;
 

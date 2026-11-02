@@ -8,7 +8,7 @@ namespace Ryujinx.Horizon.Sdk.Audio.Detail
     partial class AudioSnoopManager : IAudioSnoopManager
     {
         private byte[] _dspStatisticsParameter;
-        
+
         // Note: The interface changed completely on firmware 17.0.0, this implementation is for older firmware.
 
         [CmifCommand(0)] // [6.0.0-16.1.0]
@@ -22,7 +22,7 @@ namespace Ryujinx.Horizon.Sdk.Audio.Detail
         {
             return Result.Success;
         }
-        
+
         [CmifCommand(6)] // [6.0.0-16.1.0]
         public Result GetDspUsage(out uint usage)
         {

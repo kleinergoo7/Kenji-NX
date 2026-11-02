@@ -74,7 +74,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         private readonly List<(uint Address, uint Value)> _writes = new();
 
         private bool _memoValid;
-        private long _memoGeneration;        private int[] _memoParameters = Array.Empty<int>();
+        private long _memoGeneration; private int[] _memoParameters = Array.Empty<int>();
         private (uint Address, uint Value)[] _memoDataRamReads = Array.Empty<(uint, uint)>();
         private (uint Address, uint Value)[] _memoDataRamWrites = Array.Empty<(uint, uint)>();
         private (uint Address, uint Value)[] _memoWrites = Array.Empty<(uint, uint)>();
@@ -255,12 +255,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
                     switch (reg)
                     {
-                        case 24: return 0;
-                        case 25: return (uint)(int)(short)d.Imm[lane];
-                        case 26: return (uint)(int)(short)d.Imm[1 - lane];
-                        case 27: return (d.Imm[0] << 16) | d.Imm[1];
-                        case 28: return loadValues[0];
-                        case 29: return loadValues[1];
+                        case 24:
+                            return 0;
+                        case 25:
+                            return (uint)(int)(short)d.Imm[lane];
+                        case 26:
+                            return (uint)(int)(short)d.Imm[1 - lane];
+                        case 27:
+                            return (d.Imm[0] << 16) | d.Imm[1];
+                        case 28:
+                            return loadValues[0];
+                        case 29:
+                            return loadValues[1];
                         default:
                             Fail("invalid source register");
                             return 0;
@@ -315,15 +321,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                             break;
                         case 4:
                         case 6:
-                        {
-                            ulong a = d.Op[lane] == 4 ? (ulong)(long)(int)x : x;
-                            ulong b = d.Op[lane] == 4 ? (ulong)(long)(int)y : y;
-                            ulong product = a * b;
+                            {
+                                ulong a = d.Op[lane] == 4 ? (ulong)(long)(int)x : x;
+                                ulong b = d.Op[lane] == 4 ? (ulong)(long)(int)y : y;
+                                ulong product = a * b;
 
-                            value = (uint)product;
-                            carry = (uint)(product >> 32);
-                            break;
-                        }
+                                value = (uint)product;
+                                carry = (uint)(product >> 32);
+                                break;
+                            }
                         case 5:
                             value = carry;
                             break;
@@ -361,22 +367,22 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                             value = x ^ y;
                             break;
                         case 16:
-                        {
-                            uint dest = (imm >> 10) & 63;
-                            uint count = (imm >> 5) & 31;
-                            uint source = imm & 31;
-
-                            if (dest >= 32)
                             {
-                                Fail("invalid merge destination");
+                                uint dest = (imm >> 10) & 63;
+                                uint count = (imm >> 5) & 31;
+                                uint source = imm & 31;
+
+                                if (dest >= 32)
+                                {
+                                    Fail("invalid merge destination");
+                                    break;
+                                }
+
+                                uint bitsMask = count == 0 ? 0 : (1u << (int)count) - 1;
+
+                                value = (x & ~(bitsMask << (int)dest)) | (((y >> (int)source) & bitsMask) << (int)dest);
                                 break;
                             }
-
-                            uint bitsMask = count == 0 ? 0 : (1u << (int)count) - 1;
-
-                            value = (x & ~(bitsMask << (int)dest)) | (((y >> (int)source) & bitsMask) << (int)dest);
-                            break;
-                        }
                         case 17:
                         case 18:
                         case 19:
@@ -488,15 +494,24 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                 {
                     switch (selector)
                     {
-                        case 1: return aluValues[0];
-                        case 2: return aluValues[1];
-                        case 3: return loadValues[0];
-                        case 4: return loadValues[1];
-                        case 5: return d.Imm[0];
-                        case 6: return d.Imm[1];
-                        case 8: return d.Imm[0] >> 12;
-                        case 9: return d.Imm[1] >> 12;
-                        case 10: return (d.Imm[0] << 16) | d.Imm[1];
+                        case 1:
+                            return aluValues[0];
+                        case 2:
+                            return aluValues[1];
+                        case 3:
+                            return loadValues[0];
+                        case 4:
+                            return loadValues[1];
+                        case 5:
+                            return d.Imm[0];
+                        case 6:
+                            return d.Imm[1];
+                        case 8:
+                            return d.Imm[0] >> 12;
+                        case 9:
+                            return d.Imm[1] >> 12;
+                        case 10:
+                            return (d.Imm[0] << 16) | d.Imm[1];
                         default:
                             Fail("invalid output selector");
                             return 0;

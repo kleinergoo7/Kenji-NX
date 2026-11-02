@@ -31,10 +31,10 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
                     {
                         return 0;
                     }
-                    
+
                     return _v1.Id;
                 }
-                
+
                 return _v2.Id;
             }
         }
@@ -52,10 +52,10 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
                     {
                         return 0;
                     }
-                    
+
                     return _v1.DestinationId;
                 }
-                
+
                 return _v2.DestinationId;
             }
         }
@@ -74,10 +74,10 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
                     {
                         return Span<float>.Empty;
                     }
-                    
+
                     return _v1.MixBufferVolume;
                 }
-                
+
                 return _v2.MixBufferVolume;
             }
         }
@@ -96,10 +96,10 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
                     {
                         return Span<float>.Empty;
                     }
-                    
+
                     return _v1.PreviousMixBufferVolume;
                 }
-                
+
                 return _v2.PreviousMixBufferVolume;
             }
         }
@@ -119,10 +119,10 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
                         {
                             return new SplitterDestination();
                         }
-                        
+
                         return new SplitterDestination(ref _v1.Next);
                     }
-                    
+
                     return new SplitterDestination(ref _v2.Next);
                 }
             }
@@ -218,7 +218,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
             {
                 return _v1.IsConfigured();
             }
-                
+
             return _v2.IsConfigured();
         }
 
@@ -233,7 +233,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
             {
                 return _v1.GetMixVolume(destinationIndex);
             }
-                
+
             return _v2.GetMixVolume(destinationIndex);
         }
 
@@ -248,7 +248,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
             {
                 return _v1.GetMixVolumePrev(destinationIndex);
             }
-                
+
             return _v2.GetMixVolumePrev(destinationIndex);
         }
 
@@ -276,13 +276,13 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
             if (Unsafe.IsNullRef(ref _v2))
             {
                 Debug.Assert(!Unsafe.IsNullRef(ref next._v1));
-                    
+
                 _v1.Link(ref next._v1);
             }
             else
             {
                 Debug.Assert(!Unsafe.IsNullRef(ref next._v2));
-                    
+
                 _v2.Link(ref next._v2);
             }
         }
@@ -330,7 +330,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
         public ref BiquadFilterParameter2 GetBiquadFilterParameter(int index)
         {
             Debug.Assert(!Unsafe.IsNullRef(ref _v2));
-                
+
             return ref _v2.GetBiquadFilterParameter(index);
         }
 

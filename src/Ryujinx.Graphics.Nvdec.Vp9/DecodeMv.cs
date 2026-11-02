@@ -273,7 +273,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 int n = (int)mvClass + Constants.Class0Bits - 1; // Number of bits
 
                 Span<byte> bitsSpan = fc.Bits[mvcomp].AsSpan();
-                
+
                 d = 0;
                 for (int i = 0; i < n; ++i)
                 {
@@ -452,7 +452,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             mi.InterpFilter = Constants.SwitchableFilters;
 
             Span<sbyte> refFrameSpan = mi.RefFrame.AsSpan();
-            
+
             refFrameSpan[0] = Constants.IntraFrame;
             refFrameSpan[1] = Constants.None;
         }
@@ -562,7 +562,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 Span<sbyte> refFrameSpan = mbmi.RefFrame.AsSpan();
                 Span<Mv> mvSpan = mbmi.Mv.AsSpan();
-                
+
                 if (refFrameSpan[0] != refFrame)
                 {
                     if (AddRefListEb(mbmi.ScaleMv(0, refFrame, refSignBias), ref refmvCount, mvRefList,
@@ -613,7 +613,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
             // Blank the reference vector list
             mvRefList[..Constants.MaxMvRefCandidates].Clear();
-            
+
             i = 0;
             if (isSub8X8 != 0)
             {
@@ -628,7 +628,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                         differentRefFound = true;
 
                         Span<sbyte> refFrameSpan = candidateMi.RefFrame.AsSpan();
-                        
+
                         if (refFrameSpan[0] == refFrame)
                         {
                             if (AddRefListEb(candidateMi.GetSubBlockMv(0, mvRef.Col, block), ref refmvCount,
@@ -659,7 +659,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 {
                     ref ModeInfo candidate = ref xd.Mi[mvRef.Col + (mvRef.Row * xd.MiStride)].Value;
                     differentRefFound = true;
-                    
+
                     Span<sbyte> refFrameSpan = candidate.RefFrame.AsSpan();
                     Span<Mv> mvSpan = candidate.Mv.AsSpan();
 
@@ -685,7 +685,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 Span<sbyte> refFrameSpan = prevFrameMvs.Value.RefFrame.AsSpan();
                 Span<Mv> mvSpan = prevFrameMvs.Value.Mv.AsSpan();
-                
+
                 if (refFrameSpan[0] == refFrame)
                 {
                     if (AddRefListEb(mvSpan[0], ref refmvCount, mvRefList, earlyBreak))
@@ -729,7 +729,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 Span<sbyte> refFrameSpan = prevFrameMvs.Value.RefFrame.AsSpan();
                 Span<Mv> mvSpan = prevFrameMvs.Value.Mv.AsSpan();
-                
+
                 if (refFrameSpan[0] != refFrame && refFrameSpan[0] > Constants.IntraFrame)
                 {
                     Mv mv = mvSpan[0];
@@ -1106,7 +1106,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 case BlockSize.Block4X4:
                     bmiSpan = mi.Value.Bmi.AsSpan();
-                    
+
                     for (int i = 0; i < 4; ++i)
                     {
                         bmiSpan[i].Mode =
@@ -1117,7 +1117,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     break;
                 case BlockSize.Block4X8:
                     bmiSpan = mi.Value.Bmi.AsSpan();
-                    
+
                     bmiSpan[0].Mode = bmiSpan[2].Mode =
                         ReadIntraMode(ref r, GetYModeProbs(ref cm.Fc.Value, mi, aboveMi, leftMi, 0));
                     bmiSpan[1].Mode = bmiSpan[3].Mode = mi.Value.Mode =
@@ -1125,7 +1125,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     break;
                 case BlockSize.Block8X4:
                     bmiSpan = mi.Value.Bmi.AsSpan();
-                    
+
                     bmiSpan[0].Mode = bmiSpan[1].Mode =
                         ReadIntraMode(ref r, GetYModeProbs(ref cm.Fc.Value, mi, aboveMi, leftMi, 0));
                     bmiSpan[2].Mode = bmiSpan[3].Mode = mi.Value.Mode =

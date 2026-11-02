@@ -236,7 +236,7 @@ namespace Ryujinx.Audio.Renderer.Server.Performance
             {
                 return false;
             }
-            
+
             performanceEntry = PerformanceEntryAddresses.PerformanceEntryAddressesPool.Allocate();
             performanceEntry.BaseMemory = SpanMemoryManager<int>.Cast(CurrentBuffer);
             performanceEntry.EntryCountOffset = (uint)CurrentHeader.GetEntryCountOffset();

@@ -20,8 +20,8 @@ namespace Ryujinx.Ava.UI.ViewModels
 
         [ObservableProperty]
         public partial bool NifmDisableIsAnyInternetRequestAccepted { get; set; } = ConfigurationState.Instance.Hacks.DisableNifmIsAnyInternetRequestAccepted;
-        
-        
+
+
         public static string Xc2MenuFixTooltip { get; } = Lambda.String(sb =>
         {
             sb.AppendLine(

@@ -23,7 +23,7 @@ namespace ARMeilleure.State
             public int Running;
             public long Tpidr2El0;
             public int CallDepth;
-            
+
             /// <summary>
             /// Precise PC value used for debugging.
             /// This will only be set when Optimizations.EnableDebugging is true.

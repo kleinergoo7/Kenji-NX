@@ -21,9 +21,9 @@ namespace Ryujinx.Ava.UI.Applet
         //Fix compiler warning
         public ProfileSelectorDialog()
         {
-            
+
         }
-        
+
         public ProfileSelectorDialog(ProfileSelectorDialogViewModel viewModel)
         {
             DataContext = ViewModel = viewModel;

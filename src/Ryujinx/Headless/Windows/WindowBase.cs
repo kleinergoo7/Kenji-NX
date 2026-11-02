@@ -1,5 +1,6 @@
 using Humanizer;
 using LibHac.Ns;
+using LibHac.Util;
 using Ryujinx.Ava;
 using Ryujinx.Common;
 using Ryujinx.Common.Configuration;
@@ -17,19 +18,18 @@ using Ryujinx.Input;
 using Ryujinx.Input.HLE;
 using Ryujinx.Input.SDL3;
 using Ryujinx.SDL3.Common;
+using SDL;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using SDL;
 using static SDL.SDL3;
 using AntiAliasing = Ryujinx.Common.Configuration.AntiAliasing;
 using ScalingFilter = Ryujinx.Common.Configuration.ScalingFilter;
 using Switch = Ryujinx.HLE.Switch;
 using UserProfile = Ryujinx.HLE.HOS.Services.Account.Acc.UserProfile;
-using LibHac.Util;
 
 namespace Ryujinx.Headless
 {
@@ -529,16 +529,17 @@ namespace Ryujinx.Headless
             {
                 string buttonText = buttonsText[i];
                 fixed (byte* pButtonText = &buttonText.ToBytes()[0])
-                buttons[i] = new SDL_MessageBoxButtonData
-                {
-                    buttonID = i,
-                    text = pButtonText,
-                };
+                    buttons[i] = new SDL_MessageBoxButtonData
+                    {
+                        buttonID = i,
+                        text = pButtonText,
+                    };
             }
 
             fixed (byte* pTitle = &title.ToBytes()[0])
             fixed (byte* pMessage = &message.ToBytes()[0])
-            fixed (SDL_MessageBoxButtonData* p = &buttons[0]) {
+            fixed (SDL_MessageBoxButtonData* p = &buttons[0])
+            {
                 SDL_MessageBoxData data = new()
                 {
                     title = pTitle,
@@ -580,7 +581,7 @@ namespace Ryujinx.Headless
         {
             return AccountSaveDataManager.GetLastUsedUser();
         }
-        
+
         public void TakeScreenshot()
         {
             throw new NotImplementedException();

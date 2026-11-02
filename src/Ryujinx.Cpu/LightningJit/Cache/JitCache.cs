@@ -21,12 +21,12 @@ namespace Ryujinx.Cpu.LightningJit.Cache
 
         private readonly JitCacheInvalidation _jitCacheInvalidator;
 
-        private readonly  CacheMemoryAllocator _cacheAllocator;
+        private readonly CacheMemoryAllocator _cacheAllocator;
 
         private readonly List<CacheEntry> _cacheEntries = [];
 
         private readonly Lock _lock = new();
-        
+
         private readonly List<ReservedRegion> _jitRegions = [];
 
         public JitCache(IJitMemoryAllocator allocator)
@@ -34,9 +34,9 @@ namespace Ryujinx.Cpu.LightningJit.Cache
             lock (_lock)
             {
                 _jitRegions.Add(new(allocator, CacheSize));
-                
+
                 _cacheAllocator = new CacheMemoryAllocator((int)CacheSize);
-                
+
                 if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
                 {
                     _jitCacheInvalidator = new JitCacheInvalidation(allocator);
@@ -127,18 +127,18 @@ namespace Ryujinx.Cpu.LightningJit.Cache
         private int Allocate(int codeSize)
         {
             codeSize = AlignCodeSize(codeSize);
-            
-            int allocOffset = _cacheAllocator.Allocate(codeSize); 
+
+            int allocOffset = _cacheAllocator.Allocate(codeSize);
 
             if (allocOffset >= 0)
             {
                 GetRegion(allocOffset).ExpandIfNeeded((ulong)(allocOffset % (int)CacheSize) + (ulong)codeSize);
                 return allocOffset;
             }
-            
+
             _cacheAllocator.AddNewBlocks(1);
             ReservedRegion newRegion = new(_jitRegions[0].Allocator, CacheSize);
-            
+
             Logger.Warning?.Print(LogClass.Cpu, $"JIT Cache of size {(_jitRegions.Count * CacheSize).Bytes()} exhausted, creating new Cache Region ({((_jitRegions.Count + 1) * CacheSize).Bytes()} Total Allocation).");
 
             _jitRegions.Add(newRegion);
@@ -152,7 +152,7 @@ namespace Ryujinx.Cpu.LightningJit.Cache
             GetRegion(allocOffset).ExpandIfNeeded((ulong)(allocOffset % (int)CacheSize) + (ulong)codeSize);
             return allocOffset;
         }
-        
+
         private nint GetFunctionPtr(int offset)
         {
             return GetRegion(offset).Pointer + (offset % (int)CacheSize);
@@ -207,7 +207,7 @@ namespace Ryujinx.Cpu.LightningJit.Cache
             entryIndex = 0;
             return false;
         }
-        
+
         public void Dispose()
         {
             foreach (ReservedRegion jitRegion in _jitRegions)

@@ -15,7 +15,7 @@ namespace Ryujinx.Tests.Cpu
         {
             bool sparse = memory.Type is not MemoryManagerType.SoftwareMmu and not MemoryManagerType.SoftwarePageTable;
             IAddressTable<ulong> functionTable = sparse ? SparseAddressTable<ulong>.CreateForArm(for64Bit) : AddressTable<ulong>.CreateForArm(for64Bit);
-            
+
             _translator = new Translator(new JitMemoryAllocator(), memory, functionTable);
             memory.UnmapEvent += UnmapHandler;
         }

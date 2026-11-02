@@ -821,7 +821,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             // on the screen scissor state, then we need to force only one texture to be bound to avoid
             // host clipping.
             ScreenScissorState screenScissorState = _state.State.ScreenScissorState;
-            
+
             Span<ScissorState> scissorStateSpan = _state.State.ScissorState.AsSpan();
 
             bool clearAffectedByStencilMask = (_state.State.ClearFlags & 1) != 0;

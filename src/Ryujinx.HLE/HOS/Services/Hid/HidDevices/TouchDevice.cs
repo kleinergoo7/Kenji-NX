@@ -24,7 +24,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
                 newState.TouchesCount = points.Length;
 
                 Span<TouchState> touchesSpan = newState.Touches.AsSpan();
-                
+
                 int pointsLength = Math.Min(points.Length, touchesSpan.Length);
 
                 for (int i = 0; i < pointsLength; ++i)

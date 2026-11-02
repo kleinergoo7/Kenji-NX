@@ -4,10 +4,10 @@ using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.OpenGL;
 using Ryujinx.Input.HLE;
-using System;
 using SDL;
-using static SDL.SDL3;
+using System;
 using System.Runtime.InteropServices;
+using static SDL.SDL3;
 
 namespace Ryujinx.Headless
 {

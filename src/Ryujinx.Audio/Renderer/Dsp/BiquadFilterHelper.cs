@@ -15,57 +15,61 @@ namespace Ryujinx.Audio.Renderer.Dsp
         {
             BiquadFilterParameter1 result = new()
             {
-                Enable = parameter.Enable, Numerator = new Array3<short>(), Denominator = new Array2<short>()
+                Enable = parameter.Enable,
+                Numerator = new Array3<short>(),
+                Denominator = new Array2<short>()
             };
 
             Span<short> resultNumeratorSpan = result.Numerator.AsSpan();
             Span<short> resultDenominatorSpan = result.Denominator.AsSpan();
-            
+
             Span<float> parameterNumeratorSpan = parameter.Numerator.AsSpan();
             Span<float> parameterDenominatorSpan = parameter.Denominator.AsSpan();
-            
-            
+
+
             resultNumeratorSpan[0] = (short)FixedPointHelper.ToFixed(parameterNumeratorSpan[0], FixedPointPrecisionForParameter);
             resultNumeratorSpan[1] = (short)FixedPointHelper.ToFixed(parameterNumeratorSpan[1], FixedPointPrecisionForParameter);
             resultNumeratorSpan[2] = (short)FixedPointHelper.ToFixed(parameterNumeratorSpan[2], FixedPointPrecisionForParameter);
-            
+
             resultDenominatorSpan[0] = (short)FixedPointHelper.ToFixed(parameterDenominatorSpan[0], FixedPointPrecisionForParameter);
             resultDenominatorSpan[1] = (short)FixedPointHelper.ToFixed(parameterDenominatorSpan[1], FixedPointPrecisionForParameter);
-            
+
             return result;
         }
-        
+
         public static BiquadFilterParameter2 ToBiquadFilterParameter2(BiquadFilterParameter1 parameter)
         {
             BiquadFilterParameter2 result = new()
             {
-                Enable = parameter.Enable, Numerator = new Array3<float>(), Denominator = new Array2<float>()
+                Enable = parameter.Enable,
+                Numerator = new Array3<float>(),
+                Denominator = new Array2<float>()
             };
 
             Span<float> resultNumeratorSpan = result.Numerator.AsSpan();
             Span<float> resultDenominatorSpan = result.Denominator.AsSpan();
-            
+
             Span<short> parameterNumeratorSpan = parameter.Numerator.AsSpan();
             Span<short> parameterDenominatorSpan = parameter.Denominator.AsSpan();
-            
-            
+
+
             resultNumeratorSpan[0] = FixedPointHelper.ToFloat(parameterNumeratorSpan[0], FixedPointPrecisionForParameter);
             resultNumeratorSpan[1] = FixedPointHelper.ToFloat(parameterNumeratorSpan[1], FixedPointPrecisionForParameter);
             resultNumeratorSpan[2] = FixedPointHelper.ToFloat(parameterNumeratorSpan[2], FixedPointPrecisionForParameter);
-            
+
             resultDenominatorSpan[0] = FixedPointHelper.ToFloat(parameterDenominatorSpan[0], FixedPointPrecisionForParameter);
             resultDenominatorSpan[1] = FixedPointHelper.ToFloat(parameterDenominatorSpan[1], FixedPointPrecisionForParameter);
-            
+
             return result;
         }
-        
+
         public static BiquadFilterEffectParameter1 ToBiquadFilterEffectParameter1(BiquadFilterEffectParameter2 parameter)
         {
             BiquadFilterEffectParameter1 result = new()
             {
-                Input = parameter.Input, 
-                Output = parameter.Output, 
-                Numerator = new Array3<short>(), 
+                Input = parameter.Input,
+                Output = parameter.Output,
+                Numerator = new Array3<short>(),
                 Denominator = new Array2<short>(),
                 ChannelCount = parameter.ChannelCount,
                 Status = parameter.Status,
@@ -73,28 +77,28 @@ namespace Ryujinx.Audio.Renderer.Dsp
 
             Span<short> resultNumeratorSpan = result.Numerator.AsSpan();
             Span<short> resultDenominatorSpan = result.Denominator.AsSpan();
-            
+
             Span<float> parameterNumeratorSpan = parameter.Numerator.AsSpan();
             Span<float> parameterDenominatorSpan = parameter.Denominator.AsSpan();
-            
-            
+
+
             resultNumeratorSpan[0] = (short)FixedPointHelper.ToFixed(parameterNumeratorSpan[0], FixedPointPrecisionForParameter);
             resultNumeratorSpan[1] = (short)FixedPointHelper.ToFixed(parameterNumeratorSpan[1], FixedPointPrecisionForParameter);
             resultNumeratorSpan[2] = (short)FixedPointHelper.ToFixed(parameterNumeratorSpan[2], FixedPointPrecisionForParameter);
-            
+
             resultDenominatorSpan[0] = (short)FixedPointHelper.ToFixed(parameterDenominatorSpan[0], FixedPointPrecisionForParameter);
             resultDenominatorSpan[1] = (short)FixedPointHelper.ToFixed(parameterDenominatorSpan[1], FixedPointPrecisionForParameter);
-            
+
             return result;
         }
-        
+
         public static BiquadFilterEffectParameter2 ToBiquadFilterEffectParameter2(BiquadFilterEffectParameter1 parameter)
         {
             BiquadFilterEffectParameter2 result = new()
             {
-                Input = parameter.Input, 
-                Output = parameter.Output, 
-                Numerator = new Array3<float>(), 
+                Input = parameter.Input,
+                Output = parameter.Output,
+                Numerator = new Array3<float>(),
                 Denominator = new Array2<float>(),
                 ChannelCount = parameter.ChannelCount,
                 Status = parameter.Status,
@@ -102,18 +106,18 @@ namespace Ryujinx.Audio.Renderer.Dsp
 
             Span<float> resultNumeratorSpan = result.Numerator.AsSpan();
             Span<float> resultDenominatorSpan = result.Denominator.AsSpan();
-            
+
             Span<short> parameterNumeratorSpan = parameter.Numerator.AsSpan();
             Span<short> parameterDenominatorSpan = parameter.Denominator.AsSpan();
-            
-            
+
+
             resultNumeratorSpan[0] = FixedPointHelper.ToFloat(parameterNumeratorSpan[0], FixedPointPrecisionForParameter);
             resultNumeratorSpan[1] = FixedPointHelper.ToFloat(parameterNumeratorSpan[1], FixedPointPrecisionForParameter);
             resultNumeratorSpan[2] = FixedPointHelper.ToFloat(parameterNumeratorSpan[2], FixedPointPrecisionForParameter);
-            
+
             resultDenominatorSpan[0] = FixedPointHelper.ToFloat(parameterDenominatorSpan[0], FixedPointPrecisionForParameter);
             resultDenominatorSpan[1] = FixedPointHelper.ToFloat(parameterDenominatorSpan[1], FixedPointPrecisionForParameter);
-            
+
             return result;
         }
 
@@ -136,7 +140,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
         {
             Span<float> numeratorSpan = parameter.Numerator.AsSpan();
             Span<float> denominatorSpan = parameter.Denominator.AsSpan();
-            
+
             float a0 = numeratorSpan[0];
             float a1 = numeratorSpan[1];
             float a2 = numeratorSpan[2];
@@ -177,7 +181,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
         {
             Span<float> numeratorSpan = parameter.Numerator.AsSpan();
             Span<float> denominatorSpan = parameter.Denominator.AsSpan();
-            
+
             float a0 = numeratorSpan[0];
             float a1 = numeratorSpan[1];
             float a2 = numeratorSpan[2];
@@ -223,7 +227,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
         {
             Span<float> numeratorSpan = parameter.Numerator.AsSpan();
             Span<float> denominatorSpan = parameter.Denominator.AsSpan();
-            
+
             float a0 = numeratorSpan[0];
             float a1 = numeratorSpan[1];
             float a2 = numeratorSpan[2];
@@ -274,7 +278,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
                 BiquadFilterParameter2 parameter = parameters[stageIndex];
 
                 ref BiquadFilterState state = ref states[stageIndex];
-                
+
                 Span<float> numeratorSpan = parameter.Numerator.AsSpan();
                 Span<float> denominatorSpan = parameter.Denominator.AsSpan();
 
@@ -325,8 +329,8 @@ namespace Ryujinx.Audio.Renderer.Dsp
             Span<float> numerator1Span = parameter1.Numerator.AsSpan();
             Span<float> denominator0Span = parameter0.Denominator.AsSpan();
             Span<float> denominator1Span = parameter1.Denominator.AsSpan();
-            
-            
+
+
             float a00 = numerator0Span[0];
             float a10 = numerator0Span[1];
             float a20 = numerator0Span[2];
@@ -391,7 +395,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
             Span<float> numerator1Span = parameter1.Numerator.AsSpan();
             Span<float> denominator0Span = parameter0.Denominator.AsSpan();
             Span<float> denominator1Span = parameter1.Denominator.AsSpan();
-            
+
             float a00 = numerator0Span[0];
             float a10 = numerator0Span[1];
             float a20 = numerator0Span[2];

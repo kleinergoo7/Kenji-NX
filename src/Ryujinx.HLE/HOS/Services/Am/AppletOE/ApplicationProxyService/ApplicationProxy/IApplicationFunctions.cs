@@ -654,7 +654,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService.Applicati
 
             return ResultCode.Success;
         }
-        
+
         [CommandCmif(210)] // 20.0.0+
         // GetUnknownEvent() -> handle<copy>
         public ResultCode GetUnknownEvent(ServiceCtx context)

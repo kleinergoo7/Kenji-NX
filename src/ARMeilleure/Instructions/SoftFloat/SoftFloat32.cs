@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace ARMeilleure.Instructions
 {
-static class SoftFloat32
+    static class SoftFloat32
     {
         [UnmanagedCallersOnly]
         public static float FPAdd(float value1, float value2)

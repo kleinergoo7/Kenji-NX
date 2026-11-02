@@ -21,9 +21,9 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public VolumeRampCommand()
         {
-            
+
         }
-        
+
         public VolumeRampCommand Initialize(float volume0, float volume1, uint bufferIndex, int nodeId)
         {
             Enabled = true;

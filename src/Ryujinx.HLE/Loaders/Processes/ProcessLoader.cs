@@ -209,7 +209,7 @@ namespace Ryujinx.HLE.Loaders.Processes
         public bool LoadUnpackedNca(string exeFsDirPath, string romFsPath = null)
         {
             ProcessResult processResult = new LocalFileSystem(exeFsDirPath).Load(_device, romFsPath);
-            
+
             if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
             {
                 if (processResult.Start(_device))

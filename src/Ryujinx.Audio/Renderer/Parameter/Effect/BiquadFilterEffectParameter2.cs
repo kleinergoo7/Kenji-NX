@@ -19,7 +19,7 @@ namespace Ryujinx.Audio.Renderer.Parameter.Effect
         /// The output channel indices that will be used by the <see cref="Dsp.AudioProcessor"/>.
         /// </summary>
         public Array6<byte> Output;
-        
+
         /// <summary>
         /// Reserved/unused.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Ryujinx.Audio.Renderer.Parameter.Effect
         /// The current usage status of the effect on the client side.
         /// </summary>
         public UsageState Status;
-        
+
         /// <summary>
         /// Reserved/unused.
         /// </summary>

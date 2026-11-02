@@ -197,7 +197,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
 
             // make sure increment is thread safe
             int index = Interlocked.Increment(ref _refProducerPtr) - 1;
-            
+
             index %= _refQueue.Length;
 
             _refQueue[index] = obj;
@@ -538,7 +538,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
             {
                 _gpuThread.Join();
             }
-            
+
             if (_backendThread is { IsAlive: true })
             {
                 _backendThread.Join();

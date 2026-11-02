@@ -120,7 +120,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
                 IpcRefCount,
                 DeviceRefCount);
         }
-        
+
         public KMemoryInfo GetInfo(KMemoryInfo oldInfo)
         {
             ulong size = PagesCount * KPageTableBase.PageSize;

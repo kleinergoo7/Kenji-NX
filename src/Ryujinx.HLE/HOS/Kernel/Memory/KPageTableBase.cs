@@ -2545,7 +2545,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
             MemoryAttribute firstAttribute = info.Attribute;
 
             info = currBlock.GetInfo(info);
-            
+
             while (info.Address + info.Size - 1 < endAddr - 1 && (currBlock = currBlock.Successor) != null)
             {
                 // Check if the block state matches what we expect.
@@ -2559,15 +2559,15 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
                     outState = MemoryState.Unmapped;
                     outPermission = KMemoryPermission.None;
                     outAttribute = MemoryAttribute.None;
-                    
+
                     KMemoryInfo.Pool.Release(info);
 
                     return false;
                 }
-                
+
                 info = currBlock.GetInfo(info);
             }
-            
+
             KMemoryInfo.Pool.Release(info);
 
             outState = firstState;
@@ -2599,13 +2599,13 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
                     (info.Attribute & attributeMask) != attributeExpected)
                 {
                     KMemoryInfo.Pool.Release(info);
-                    
+
                     return false;
                 }
-                
+
                 info = currBlock.GetInfo(info);
             }
-            
+
             KMemoryInfo.Pool.Release(info);
 
             return true;
@@ -2656,7 +2656,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
 
                     ulong currBaseAddr = info.Address + reservedPagesCount * PageSize;
                     ulong currEndAddr = info.Address + info.Size;
-                    
+
                     KMemoryInfo.Pool.Release(info);
 
                     if (aslrAddress >= regionStart &&
@@ -2749,10 +2749,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
                 {
                     break;
                 }
-                
+
                 info = currBlock.GetInfo(info);
             }
-            
+
             KMemoryInfo.Pool.Release(info);
 
             return 0;

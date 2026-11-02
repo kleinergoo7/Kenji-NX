@@ -11,7 +11,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
     class KServerSession : KSynchronizationObject
     {
         public readonly ObjectPool<KSessionRequest> RequestPool = new(() => new KSessionRequest());
-        
+
         private static readonly MemoryState[] _ipcMemoryStates =
         [
             MemoryState.IpcBuffer3,
@@ -283,7 +283,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
                 KernelContext.CriticalSection.Leave();
 
                 WakeClientThread(request, clientResult);
-                
+
                 RequestPool.Release(request);
             }
 
@@ -641,7 +641,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
                 CloseAllHandles(clientMsg, serverHeader, clientProcess);
 
                 FinishRequest(request, clientResult);
-                
+
                 RequestPool.Release(request);
             }
 
@@ -881,7 +881,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
 
             // Unmap buffers from server.
             FinishRequest(request, clientResult);
-            
+
             RequestPool.Release(request);
 
             return serverResult;
@@ -1116,7 +1116,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
             foreach (KSessionRequest request in IterateWithRemovalOfAllRequests())
             {
                 FinishRequest(request, KernelResult.PortRemoteClosed);
-                
+
                 RequestPool.Release(request);
             }
         }
@@ -1137,7 +1137,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
                 {
                     SendResultToAsyncRequestClient(request, KernelResult.PortRemoteClosed);
                 }
-                
+
                 RequestPool.Release(request);
             }
 

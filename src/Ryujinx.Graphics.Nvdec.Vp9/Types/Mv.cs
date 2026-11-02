@@ -100,7 +100,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             else
             {
                 Span<Array2<uint>> bitsSpan = counts.Bits[comp].AsSpan();
-                
+
                 int b = c + Constants.Class0Bits - 1; // Number of bits
                 for (int i = 0; i < b; ++i)
                 {

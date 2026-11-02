@@ -711,7 +711,7 @@ namespace Ryujinx.Graphics.Vulkan
         public void SetBlendState(AdvancedBlendDescriptor blend)
         {
             Span<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan = _newState.Internal.ColorBlendAttachmentState.AsSpan();
-            
+
             for (int index = 0; index < Constants.MaxRenderTargets; index++)
             {
                 ref PipelineColorBlendAttachmentState vkBlend = ref colorBlendAttachmentStateSpan[index];
@@ -987,7 +987,7 @@ namespace Ryujinx.Graphics.Vulkan
         {
             int count = Math.Min(Constants.MaxRenderTargets, componentMask.Length);
             int writtenAttachments = 0;
-            
+
             Span<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan = _newState.Internal.ColorBlendAttachmentState.AsSpan();
 
             for (int i = 0; i < count; i++)
@@ -1170,7 +1170,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             int count = Math.Min(Constants.MaxVertexAttributes, vertexAttribs.Length);
             uint dirtyVbSizes = 0;
-            
+
             Span<VertexInputAttributeDescription> vertexAttributeDescriptionsSpan = _newState.Internal.VertexAttributeDescriptions.AsSpan();
 
             for (int i = 0; i < count; i++)
@@ -1221,7 +1221,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             BufferHandle lastHandle = default;
             Auto<DisposableBuffer> lastBuffer = null;
-            
+
             Span<VertexInputBindingDescription> vertexBindingDescriptionsSpan = _newState.Internal.VertexBindingDescriptions.AsSpan();
 
             for (int i = 0; i < count; i++)

@@ -53,7 +53,7 @@ namespace ARMeilleure.Common
         {
             return (bits >> shift) | (bits << (size - shift));
         }
-        
+
         public static T AlignUp<T>(T value, T size) where T : IBinaryInteger<T>
             => (value + (size - T.One)) & -size;
 

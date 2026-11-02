@@ -5,8 +5,8 @@ using Ryujinx.Common.Configuration.Hid.Controller;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using Key = Ryujinx.Input.Key;
 using HidKey = Ryujinx.Common.Configuration.Hid.Key;
+using Key = Ryujinx.Input.Key;
 
 namespace Ryujinx.Ava.UI.Helpers
 {

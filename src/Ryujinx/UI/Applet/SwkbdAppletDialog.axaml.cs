@@ -75,8 +75,8 @@ namespace Ryujinx.Ava.UI.Controls
             content._host = contentDialog;
             contentDialog.Title = title;
 
-            contentDialog.PrimaryButtonText = string.IsNullOrWhiteSpace(args.SubmitText) 
-                ? LocaleManager.Instance[LocaleKeys.InputDialogOk] 
+            contentDialog.PrimaryButtonText = string.IsNullOrWhiteSpace(args.SubmitText)
+                ? LocaleManager.Instance[LocaleKeys.InputDialogOk]
                 : args.SubmitText;
 
             contentDialog.IsPrimaryButtonEnabled = content._checkLength(content.Message.Length);

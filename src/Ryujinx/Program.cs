@@ -120,9 +120,9 @@ namespace Ryujinx.Ava
                             "Ryujinx is not intended to be run as administrator.", "Ok");
                         return 0;
                     }
-                    
+
                     string downloadFiles = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-                    
+
                     if (Environment.CurrentDirectory.StartsWithIgnoreCase(downloadFiles))
                     {
                         Logger.Error?.PrintMsg(LogClass.Application, "Ryujinx is not intended to be run from the Downloads folder. Exiting...");
@@ -130,9 +130,9 @@ namespace Ryujinx.Ava
                             "Ryujinx is not intended to be run from the Downloads folder.", "Ok");
                         return 0;
                     }
-                    
+
                     string icloudFiles = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library/Mobile Documents/com~apple~CloudDocs");
-                    
+
                     if (Environment.CurrentDirectory.StartsWithIgnoreCase(icloudFiles))
                     {
                         Logger.Error?.PrintMsg(LogClass.Application, "Ryujinx is not intended to be run from the iCloud folder. Exiting...");
@@ -150,9 +150,9 @@ namespace Ryujinx.Ava
                         LinuxSDLInterop.SimpleMessageBox($"Ryujinx {Version}", "Ryujinx is not intended to be run as administrator.");
                         return 0;
                     }
-                    
+
                     string container = Environment.GetEnvironmentVariable("container");
-                    
+
                     if (container is not null && container.EqualsIgnoreCase("flatpak"))
                     {
                         Logger.Info?.PrintMsg(LogClass.Application, "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=");
@@ -199,12 +199,12 @@ namespace Ryujinx.Ava
         public static AppBuilder BuildAvaloniaApp() =>
             AppBuilder.Configure<RyujinxApp>()
                 .UsePlatformDetect()
-                
+
                 // Vulkan UI rendering performs better, but its unpolished, and as such it lacks effective transparency.
                 // https://github.com/AvaloniaUI/Avalonia/issues/19378
                 // https://github.com/AvaloniaUI/Avalonia/issues/9610
                 // X11RenderingMode.Glx && X11RenderingMode.Egl, Win32RenderingMode.Vulkan have these issues.
-                
+
                 .With(new X11PlatformOptions
                 {
                     EnableMultiTouch = true,
@@ -466,8 +466,8 @@ namespace Ryujinx.Ava
         internal static void PrintSystemInfo()
         {
             // Print the ryubing logo + joke splash
-            SplashTextHelper.PrintSplash(); 
-            
+            SplashTextHelper.PrintSplash();
+
             Logger.Notice.Print(LogClass.Application, $"{RyujinxApp.FullAppName} Version: {Version}");
             Logger.Notice.Print(LogClass.Application, $".NET Runtime: {RuntimeInformation.FrameworkDescription}");
             SystemInfo.Gather().Print();

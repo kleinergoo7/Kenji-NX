@@ -8,9 +8,9 @@ using Ryujinx.Common.Logging;
 using Ryujinx.Input;
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Threading;
 using AvaKey = Avalonia.Input.Key;
 using ConfigPhysicalKey = Ryujinx.Common.Configuration.Hid.PhysicalKey;
 using Key = Ryujinx.Input.Key;
@@ -29,7 +29,7 @@ namespace Ryujinx.Ava.Input
         [Flags]
         private enum CGEventFlags : ulong
         {
-             AlphaShift = 1UL << 16 // CapsLock
+            AlphaShift = 1UL << 16 // CapsLock
         }
 
         private enum CGEventSourceStateID : uint

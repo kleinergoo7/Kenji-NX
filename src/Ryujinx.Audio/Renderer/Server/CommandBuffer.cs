@@ -189,7 +189,7 @@ namespace Ryujinx.Audio.Renderer.Server
                     throw new NotImplementedException();
             }
         }
-        
+
         /// <summary>
         /// Create a new <see cref="CommandBuffer"/>.
         /// </summary>
@@ -848,9 +848,9 @@ namespace Ryujinx.Audio.Renderer.Server
         public void GenerateFillBuffer(SplitterDestination destination, float value, int length, int nodeId)
         {
             FillBufferCommand command = _fillBufferCommandPool.Allocate().Initialize(destination, length, value, nodeId);
-            
+
             command.EstimatedProcessingTime = _commandProcessingTimeEstimator.Estimate(command);
-            
+
             AddCommand(command);
         }
     }

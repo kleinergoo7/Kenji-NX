@@ -53,7 +53,8 @@ namespace Ryujinx.Ava.UI.Renderer
 
         public bool ToggleRenderDocCapture(Switch device)
         {
-            if (!RenderDoc.IsAvailable) return false;
+            if (!RenderDoc.IsAvailable)
+                return false;
 
             if (RenderDoc.IsFrameCapturing)
             {
@@ -62,7 +63,7 @@ namespace Ryujinx.Ava.UI.Renderer
                     Logger.Info?.Print(LogClass.Application, "Ended RenderDoc capture.");
                     return true;
                 }
-            } 
+            }
             else if (StartRenderDocCapture(device))
             {
                 Logger.Info?.Print(LogClass.Application, "Starting RenderDoc capture.");
@@ -74,9 +75,11 @@ namespace Ryujinx.Ava.UI.Renderer
 
         public bool StartRenderDocCapture(Switch device)
         {
-            if (!RenderDoc.IsAvailable) return false;
+            if (!RenderDoc.IsAvailable)
+                return false;
 
-            if (RenderDoc.IsFrameCapturing) return false;
+            if (RenderDoc.IsFrameCapturing)
+                return false;
 
             RenderDoc.StartFrameCapture(nint.Zero, WindowHandle);
             RenderDoc.SetCaptureTitle(TitleHelper.FormatRenderDocCaptureTitle(device.Processes.ActiveApplication, Program.Version));
@@ -86,16 +89,20 @@ namespace Ryujinx.Ava.UI.Renderer
 
         public bool EndRenderDocCapture()
         {
-            if (!RenderDoc.IsAvailable) return false;
-            if (!RenderDoc.IsFrameCapturing) return false;
+            if (!RenderDoc.IsAvailable)
+                return false;
+            if (!RenderDoc.IsFrameCapturing)
+                return false;
 
             return RenderDoc.IsFrameCapturing && RenderDoc.EndFrameCapture(nint.Zero, WindowHandle);
         }
 
         public bool DiscardRenderDocCapture()
         {
-            if (!RenderDoc.IsAvailable) return false;
-            if (!RenderDoc.IsFrameCapturing) return false;
+            if (!RenderDoc.IsAvailable)
+                return false;
+            if (!RenderDoc.IsFrameCapturing)
+                return false;
 
             return RenderDoc.IsFrameCapturing && RenderDoc.DiscardFrameCapture(nint.Zero, WindowHandle);
         }
@@ -194,7 +201,7 @@ namespace Ryujinx.Ava.UI.Renderer
         {
             _className = "NativeWindow-" + Guid.NewGuid();
 
-            _wndProcDelegate = delegate(nint hWnd, WindowsMessages msg, nint wParam, nint lParam)
+            _wndProcDelegate = delegate (nint hWnd, WindowsMessages msg, nint wParam, nint lParam)
             {
                 switch (msg)
                 {

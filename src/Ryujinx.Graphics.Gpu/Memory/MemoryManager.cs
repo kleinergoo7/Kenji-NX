@@ -69,7 +69,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
         /// Cache of GPU counters.
         /// </summary>
         internal CounterCache CounterCache { get; }
-        
+
         private delegate void WriteCallback(ulong address, ReadOnlySpan<byte> data);
 
         private WriteCallback _write;
@@ -814,7 +814,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
             if (_pageTable[l0] == null)
             {
                 _pageTable[l0] = new ulong[PtLvl1Size];
-                
+
                 Array.Fill(_pageTable[l0], PteUnmapped);
             }
 

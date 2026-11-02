@@ -104,10 +104,11 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             {
                 DirectoryInfo shaderCacheDir = new(System.IO.Path.Combine(AppDataManager.GamesDirPath, IdString, "cache", "shader"));
 
-                if (!shaderCacheDir.Exists) return false;
+                if (!shaderCacheDir.Exists)
+                    return false;
 
-                return shaderCacheDir.EnumerateDirectories("*").Any() || 
-                       shaderCacheDir.GetFiles("*.toc").Length != 0 || 
+                return shaderCacheDir.EnumerateDirectories("*").Any() ||
+                       shaderCacheDir.GetFiles("*.toc").Length != 0 ||
                        shaderCacheDir.GetFiles("*.data").Length != 0;
             }
         }

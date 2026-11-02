@@ -50,8 +50,8 @@ namespace Ryujinx.Ava.UI.ViewModels
             {
                 field = value;
 
-                SelectedImage = field == -1 
-                    ? null 
+                SelectedImage = field == -1
+                    ? null
                     : Images[field].Data;
 
                 OnPropertyChanged();

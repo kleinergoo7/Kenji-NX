@@ -14,10 +14,10 @@ namespace Ryujinx.Cpu.Jit
         public JitCpuContext(ITickSource tickSource, IMemoryManager memory, bool for64Bit)
         {
             _tickSource = tickSource;
-            
+
             bool sparse = memory.Type is not MemoryManagerType.SoftwareMmu and not MemoryManagerType.SoftwarePageTable;
             IAddressTable<ulong> functionTable = sparse ? SparseAddressTable<ulong>.CreateForArm(for64Bit) : AddressTable<ulong>.CreateForArm(for64Bit);
-            
+
             _translator = new Translator(new JitMemoryAllocator(forJit: true), memory, functionTable);
 
             if (memory.Type.IsHostMappedOrTracked)

@@ -29,7 +29,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         {
             ModeRefDeltaEnabled = true;
             ModeRefDeltaUpdate = true;
-            
+
             Span<sbyte> refDeltasSpan = RefDeltas.AsSpan();
             Span<sbyte> modeDeltasSpan = ModeDeltas.AsSpan();
 

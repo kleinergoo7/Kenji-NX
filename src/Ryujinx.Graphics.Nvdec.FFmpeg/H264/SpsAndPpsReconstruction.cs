@@ -93,7 +93,7 @@ namespace Ryujinx.Graphics.Nvdec.FFmpeg.H264
             if (pictureInfo.ScalingMatrixPresent)
             {
                 Span<Array16<byte>> scalingLists4x4Span = pictureInfo.ScalingLists4x4.AsSpan();
-                
+
                 for (int index = 0; index < 6; index++)
                 {
                     writer.WriteBit(true);
@@ -104,7 +104,7 @@ namespace Ryujinx.Graphics.Nvdec.FFmpeg.H264
                 if (pictureInfo.Transform8x8ModeFlag)
                 {
                     Span<Array64<byte>> scalingLists8x8Span = pictureInfo.ScalingLists8x8.AsSpan();
-                    
+
                     for (int index = 0; index < 2; index++)
                     {
                         writer.WriteBit(true);

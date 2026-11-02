@@ -1,12 +1,12 @@
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.Common.Models.Amiibo;
 using Ryujinx.Ava.Systems;
 using Ryujinx.Ava.Systems.Configuration;
 using Ryujinx.Ava.UI.ViewModels;
-using Avalonia.Controls;
 using System;
-using Avalonia.Controls.Primitives;
 
 namespace Ryujinx.Ava.UI.Windows
 {
@@ -36,9 +36,9 @@ namespace Ryujinx.Ava.UI.Windows
         }
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
-            {
-                FlyoutBase.ShowAttachedFlyout((Control)sender!);
-            }
+        {
+            FlyoutBase.ShowAttachedFlyout((Control)sender!);
+        }
 
         private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
@@ -46,7 +46,7 @@ namespace Ryujinx.Ava.UI.Windows
                 return;
 
             AppHost host = RyujinxApp.MainWindow?.ViewModel?.AppHost;
-            if (host == null) 
+            if (host == null)
                 return;
 
             if (ViewModel.PauseEmulationWhileScanningAmiibo)

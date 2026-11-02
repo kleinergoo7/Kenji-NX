@@ -16,13 +16,13 @@ namespace Ryujinx.Ava.UI.Windows
     {
         public static async Task ShowAsync(StyleableAppWindow appWindow, Window owner = null)
         {
-/*
-#if DEBUG
-        appWindow.AttachDevTools(new KeyGesture(Key.F12, KeyModifiers.Control));
-#endif
-*/
-        await appWindow.ShowDialog(owner ?? RyujinxApp.MainWindow);
-    }
+            /*
+            #if DEBUG
+                    appWindow.AttachDevTools(new KeyGesture(Key.F12, KeyModifiers.Control));
+            #endif
+            */
+            await appWindow.ShowDialog(owner ?? RyujinxApp.MainWindow);
+        }
 
         protected StyleableAppWindow(bool useCustomTitleBar = false, double? titleBarHeight = null)
         {
@@ -60,11 +60,11 @@ namespace Ryujinx.Ava.UI.Windows
     {
         public static async Task ShowAsync(StyleableWindow window, Window owner = null)
         {
-/*
-#if DEBUG
-            window.AttachDevTools(new KeyGesture(Key.F12, KeyModifiers.Control));
-#endif
-*/
+            /*
+            #if DEBUG
+                        window.AttachDevTools(new KeyGesture(Key.F12, KeyModifiers.Control));
+            #endif
+            */
             await window.ShowDialog(owner ?? RyujinxApp.MainWindow);
         }
 

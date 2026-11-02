@@ -28,7 +28,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public DeviceSinkCommand()
         {
-            
+
         }
 
         public DeviceSinkCommand Initialize(uint bufferOffset, DeviceSink sink, int sessionId, Memory<float> buffers, int nodeId)
@@ -38,11 +38,11 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
             // Unused and wasting time and memory, re-add if needed
             // DeviceName = Encoding.ASCII.GetString(sink.Parameter.DeviceName).TrimEnd('\0');
-            
+
             SessionId = sessionId;
             InputCount = sink.Parameter.InputCount;
             InputBufferIndices = new ushort[InputCount];
-            
+
             Span<byte> inputSpan = sink.Parameter.Input.AsSpan();
 
             for (int i = 0; i < Math.Min(InputCount, Constants.ChannelCountMax); i++)
@@ -105,7 +105,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
                 }
 
                 device.AppendBuffer(outputBuffer.AsSpan(..((int)inputCount * SampleCount)), inputCount);
-                
+
                 ArrayPool<short>.Shared.Return(outputBuffer);
             }
             else

@@ -47,23 +47,23 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
 
             return ResultCode.Success;
         }
-        
+
         [CommandCmif(1)]
         // PushOutData(object<nn::am::service::IStorage>)
         public ResultCode PushOutData(ServiceCtx context)
         {
             IStorage appletData = GetObject<IStorage>(context, 0);
-            
+
             if (appletData == null || appletData.Data.Length == 0) // is this necessary?
             {
                 return ResultCode.NullObject;
             }
-    
+
             _appletStandalone.InputData.Enqueue(appletData.Data);
 
             return ResultCode.Success;
         }
-        
+
         [CommandCmif(10)]
         // ExitProcessAndReturn -> nn::am::service::LibraryAppletInfo
         public ResultCode ExitProcessAndReturn(ServiceCtx context)
@@ -71,7 +71,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             // Exits the LibraryApplet and returns to running the title which launched this LibraryApplet (qlaunch for example).
             // On success, official sw will enter an infinite loop with sleep-thread value 86400000000000.
             // Since we don't currently support qlaunch, it's fine to stub it.
-            
+
             Logger.Stub?.PrintStub(LogClass.Service);
             return ResultCode.Success;
         }

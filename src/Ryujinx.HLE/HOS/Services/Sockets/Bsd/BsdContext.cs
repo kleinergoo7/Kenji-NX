@@ -167,7 +167,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                 count = _fds.Count;
             }
 
-            for (int fd = 0; fd < count; fd++) {
+            for (int fd = 0; fd < count; fd++)
+            {
                 CloseFileDescriptor(fd);
             }
         }

@@ -24,12 +24,12 @@ using Ryujinx.Input;
 using Ryujinx.Input.HLE;
 using Ryujinx.Input.SDL3;
 using Ryujinx.SDL3.Common;
+using SDL;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using SDL;
 
 namespace Ryujinx.Headless
 {

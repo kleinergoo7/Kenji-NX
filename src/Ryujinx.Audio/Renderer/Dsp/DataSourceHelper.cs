@@ -1,6 +1,7 @@
 using Ryujinx.Audio.Common;
 using Ryujinx.Audio.Renderer.Common;
 using Ryujinx.Audio.Renderer.Dsp.State;
+using Ryujinx.Audio.Renderer.Parameter;
 using Ryujinx.Common.Logging;
 using Ryujinx.Memory;
 using System;
@@ -10,7 +11,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
-using Ryujinx.Audio.Renderer.Parameter;
 
 namespace Ryujinx.Audio.Renderer.Dsp
 {

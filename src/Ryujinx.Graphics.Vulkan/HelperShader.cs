@@ -885,7 +885,7 @@ namespace Ryujinx.Graphics.Vulkan
             int primitiveCount = pattern.GetPrimitiveCount(indexCount);
             int convertedCount = pattern.GetConvertedCount(indexCount);
             int outputIndexSize = 4;
-            
+
             Buffer dstBuffer = dstIndexBuffer.GetBuffer().Get(cbs, 0, convertedCount * outputIndexSize).Value;
 
             const int ParamsBufferSize = 16 * sizeof(int);

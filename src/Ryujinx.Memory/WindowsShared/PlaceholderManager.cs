@@ -30,7 +30,7 @@ namespace Ryujinx.Memory.WindowsShared
         {
             _mappings = new MappingTree<ulong>();
             _protections = new MappingTree<MemoryPermission>();
-            
+
             _protectionObjectPool = new ObjectPool<RangeNode<MemoryPermission>>(() => new RangeNode<MemoryPermission>());
 
             _partialUnmapStatePtr = PartialUnmapState.GlobalState;
@@ -640,7 +640,7 @@ namespace Ryujinx.Memory.WindowsShared
                             _protections.Add(_protectionObjectPool.Allocate().Init(endAddress, protEndAddress, protPermission));
                         }
                     }
-                    
+
                     _protectionObjectPool.Release(protection);
 
                     if (node.End >= endAddress)
@@ -689,7 +689,7 @@ namespace Ryujinx.Memory.WindowsShared
                     }
 
                     _protectionObjectPool.Release(protection);
-                    
+
                     if (node.End >= endAddress)
                     {
                         break;

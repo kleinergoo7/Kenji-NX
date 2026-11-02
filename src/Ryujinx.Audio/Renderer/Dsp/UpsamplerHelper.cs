@@ -79,7 +79,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
 
                 Debug.Assert(state.History.Length == HistoryLength);
                 Debug.Assert(bank.Length == FilterBankLength);
-                
+
                 Span<float> bankSpan = bank.AsSpan();
                 Span<float> historySpan = state.History.AsSpan();
 

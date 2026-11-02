@@ -26,7 +26,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public MixRampGroupedCommand()
         {
-            
+
         }
 
         public MixRampGroupedCommand Initialize(
@@ -57,7 +57,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             }
 
             State = state;
-            
+
             return this;
         }
 
@@ -87,9 +87,9 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
         public void Process(CommandList context)
         {
             ref VoiceState state = ref State.Span[0];
-            
+
             Span<float> lastSamplesSpan = state.LastSamples.AsSpan();
-            
+
             for (int i = 0; i < MixBufferCount; i++)
             {
                 ReadOnlySpan<float> inputBuffer = context.GetBuffer(InputBufferIndices[i]);

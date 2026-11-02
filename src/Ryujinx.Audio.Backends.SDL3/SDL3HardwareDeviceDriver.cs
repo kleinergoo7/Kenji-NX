@@ -3,13 +3,13 @@ using Ryujinx.Audio.Integration;
 using Ryujinx.Common.Logging;
 using Ryujinx.Memory;
 using Ryujinx.SDL3.Common;
+using SDL;
 using System;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Threading;
 using static Ryujinx.Audio.Integration.IHardwareDeviceDriver;
-using SDL;
 using static SDL.SDL3;
-using System.Runtime.InteropServices;
 
 
 namespace Ryujinx.Audio.Backends.SDL3

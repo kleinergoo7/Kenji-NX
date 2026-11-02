@@ -30,7 +30,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             InputBufferIndices = new ushort[Constants.VoiceChannelCountMax];
             OutputBufferIndices = new ushort[Constants.VoiceChannelCountMax];
         }
-        
+
         public LimiterCommandVersion1 Initialize(uint bufferOffset, LimiterParameter parameter, Memory<LimiterState> state, bool isEnabled, ulong workBuffer, int nodeId)
         {
             Enabled = true;

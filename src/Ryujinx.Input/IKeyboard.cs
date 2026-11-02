@@ -36,7 +36,7 @@ namespace Ryujinx.Input
             {
                 _keyState = new bool[(int)ConfigPhysicalKey.Count];
             }
-            
+
             for (ConfigPhysicalKey key = 0; key < ConfigPhysicalKey.Count; key++)
             {
                 _keyState[(int)key] = keyboard.IsPressed((Key)(int)key);

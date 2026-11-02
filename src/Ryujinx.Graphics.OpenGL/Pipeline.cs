@@ -924,8 +924,8 @@ namespace Ryujinx.Graphics.OpenGL
                 GL.Disable(EnableCap.CullFace);
                 return;
             }
-            
-            GL.CullFace((TriangleFace) face.Convert());
+
+            GL.CullFace((TriangleFace)face.Convert());
 
             GL.Enable(EnableCap.CullFace);
         }
@@ -1085,12 +1085,12 @@ namespace Ryujinx.Graphics.OpenGL
         {
             if (frontMode == backMode)
             {
-                GL.PolygonMode((TriangleFace) MaterialFace.FrontAndBack, frontMode.Convert());
+                GL.PolygonMode((TriangleFace)MaterialFace.FrontAndBack, frontMode.Convert());
             }
             else
             {
-                GL.PolygonMode((TriangleFace) MaterialFace.Front, frontMode.Convert());
-                GL.PolygonMode((TriangleFace) MaterialFace.Back, backMode.Convert());
+                GL.PolygonMode((TriangleFace)MaterialFace.Front, frontMode.Convert());
+                GL.PolygonMode((TriangleFace)MaterialFace.Back, backMode.Convert());
             }
         }
 

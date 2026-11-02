@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using System.Runtime.Versioning;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DynamicData;
@@ -54,6 +53,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using Key = Ryujinx.Input.Key;
@@ -76,7 +76,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         [ObservableProperty] public partial string LoadHeading { get; set; }
 
         [ObservableProperty] public partial string CacheLoadStatus { get; set; }
-        
+
         [ObservableProperty] public partial string Splash { get; set; }
 
         [ObservableProperty] public partial string DockedStatusText { get; set; }
@@ -287,11 +287,11 @@ namespace Ryujinx.Ava.UI.ViewModels
             SetMainContent = setMainContent;
             TopLevel = topLevel;
 
-/*
-#if DEBUG
-            topLevel.AttachDevTools(new KeyGesture(Avalonia.Input.Key.F12, KeyModifiers.Control));
-#endif
-*/
+            /*
+            #if DEBUG
+                        topLevel.AttachDevTools(new KeyGesture(Avalonia.Input.Key.F12, KeyModifiers.Control));
+            #endif
+            */
 
             Window.ApplicationLibrary.TotalTimePlayedRecalculated += TotalTimePlayed_Recalculated;
         }
@@ -403,10 +403,11 @@ namespace Ryujinx.Ava.UI.ViewModels
                 OnPropertyChanged(nameof(SkylanderButtonHeader));
             }, DispatcherPriority.Render);
         }
-        
+
         private void UpdateSkylanderState()
         {
-            if (AppHost?.Device?.System == null) return;
+            if (AppHost?.Device?.System == null)
+                return;
 
             IsSkylanderRequested = AppHost.Device.System.SearchingForSkylander(out _);
             HasSkylander = AppHost.Device.System.HasSkylander(out _);
@@ -416,7 +417,8 @@ namespace Ryujinx.Ava.UI.ViewModels
 
         private async void ExecuteToggleSkylander()
         {
-            if (!IsGameRunning) return;
+            if (!IsGameRunning)
+                return;
 
             if (HasSkylander)
             {
@@ -993,10 +995,10 @@ namespace Ryujinx.Ava.UI.ViewModels
         }
 
         private void RefreshFileTypeAssociationToggle()
-            {
-                OnPropertyChanged(nameof(FileTypeAssociationsMenuHeader));
-                OnPropertyChanged(nameof(FileTypeAssociationsIcon));
-            }
+        {
+            OnPropertyChanged(nameof(FileTypeAssociationsMenuHeader));
+            OnPropertyChanged(nameof(FileTypeAssociationsIcon));
+        }
 
         private bool _areMimeTypesRegistered = FileAssociationHelper.AreMimeTypesRegistered;
 
@@ -1148,7 +1150,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                         {
                             RefreshFirmwareStatus();
                         }
-                    }) { Name = "GUI.FirmwareInstallerThread", };
+                    })
+                    { Name = "GUI.FirmwareInstallerThread", };
 
                     thread.Start();
                 }
@@ -1256,7 +1259,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                         {
                             VirtualFileSystem.ReloadKeySet();
                         }
-                    }) { Name = "GUI.KeysInstallerThread", };
+                    })
+                    { Name = "GUI.KeysInstallerThread", };
 
                     thread.Start();
                 }
@@ -1305,7 +1309,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                         break;
                     case ShaderCacheLoadingState shaderCacheState:
                         CacheLoadStatus = $"{current} / {total}";
-                        
+
                         string splash = SplashTextHelper.GetSplash();
 
                         if (!splash.IsNullOrEmpty())
@@ -1810,7 +1814,8 @@ namespace Ryujinx.Ava.UI.ViewModels
             {
                 ApplicationData applicationData = new()
                 {
-                    Name = Path.GetFileNameWithoutExtension(value.Path.LocalPath), Path = value.Path.LocalPath,
+                    Name = Path.GetFileNameWithoutExtension(value.Path.LocalPath),
+                    Path = value.Path.LocalPath,
                 };
 
                 await LoadApplication(applicationData);
@@ -1819,9 +1824,9 @@ namespace Ryujinx.Ava.UI.ViewModels
 
         private async Task<IReadOnlyList<string>> PickFolders(LocaleKeys titleKey)
         {
-            return (await StorageProvider.OpenMultiFolderPickerAsync(new FolderPickerOpenOptions 
-            { 
-                Title = LocaleManager.Instance[titleKey] 
+            return (await StorageProvider.OpenMultiFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = LocaleManager.Instance[titleKey]
             })).TryGet(out IReadOnlyList<IStorageFolder> folders)
                 ? folders.Select(f => f.Path.LocalPath).ToList()
                 : null;
@@ -1925,7 +1930,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 UserChannelPersistence,
                 this,
                 TopLevel);
-            
+
             CancellationTokenSource cts = new CancellationTokenSource();
 
             try
@@ -1944,11 +1949,11 @@ namespace Ryujinx.Ava.UI.ViewModels
             {
                 cts.Dispose();
             }
-            
+
             CanUpdate = false;
 
             application.Name ??= AppHost.Device.Processes.ActiveApplication.Name;
-            
+
             SelectedIcon ??= ApplicationLibrary.GetApplicationIcon(application.Path,
                 ConfigurationState.Instance.System.Language, application.Id);
 
@@ -1974,9 +1979,9 @@ namespace Ryujinx.Ava.UI.ViewModels
                 RendererHostControl.Focus();
             });
 
-        public static void UpdateGameMetadata(string titleId, TimeSpan playTime) 
+        public static void UpdateGameMetadata(string titleId, TimeSpan playTime)
             => ApplicationLibrary.LoadAndSaveMetaData(titleId, appMetadata => appMetadata.UpdatePostGame(playTime));
-        
+
         public void RefreshFirmwareStatus()
         {
             SystemVersion version = null;
@@ -2107,16 +2112,16 @@ namespace Ryujinx.Ava.UI.ViewModels
             {
                 Optional<IStorageFile> result = await StorageProvider.OpenSingleFilePickerAsync(
                     new FilePickerOpenOptions
-                {
-                    Title = LocaleManager.Instance[LocaleKeys.Dialog_Skylanders_ScanSkylanderFilePickerTitle],
-                    FileTypeFilter = new List<FilePickerFileType>
+                    {
+                        Title = LocaleManager.Instance[LocaleKeys.Dialog_Skylanders_ScanSkylanderFilePickerTitle],
+                        FileTypeFilter = new List<FilePickerFileType>
                 {
                     new(LocaleManager.Instance[LocaleKeys.Common_FilePicker_AllSupportedFormats])
                     {
                         Patterns = ["*.sky", "*.bin", "*.dmp", "*.dump"],
                     },
                 },
-                });
+                    });
                 if (result.HasValue)
                 {
                     // Open reading stream from the first file.
@@ -2162,7 +2167,8 @@ namespace Ryujinx.Ava.UI.ViewModels
 
         public void ToggleCapture()
         {
-            if (ShowLoadProgress) return;
+            if (ShowLoadProgress)
+                return;
 
             AppHost.RendererHost.EmbeddedWindow.ToggleRenderDocCapture(AppHost.Device);
             RenderDocIsCapturing = RenderDoc.IsFrameCapturing;
@@ -2226,7 +2232,8 @@ namespace Ryujinx.Ava.UI.ViewModels
         private void MakeWindowFullscreen()
         {
             nint hwnd = Window.TryGetPlatformHandle()?.Handle ?? nint.Zero;
-            if (hwnd == nint.Zero) return;
+            if (hwnd == nint.Zero)
+                return;
 
             PixelPoint windowCenter = new(
                 Window.Position.X + (int)(Window.Bounds.Width / 2),
@@ -2267,7 +2274,8 @@ namespace Ryujinx.Ava.UI.ViewModels
         private void RestoreWindowFromFullscreen()
         {
             nint hwnd = Window.TryGetPlatformHandle()?.Handle ?? nint.Zero;
-            if (hwnd == nint.Zero) return;
+            if (hwnd == nint.Zero)
+                return;
 
             // Restore original window style
             Win32NativeInterop.SetWindowLongPtrW(hwnd, Win32NativeInterop.GWL_STYLE, _savedWindowStyle);
@@ -2469,7 +2477,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                                 StatusBarVisible = false;
                             });
                         }
-                    }) { Name = "GUI.XCIFileTrimmerThread", IsBackground = true, };
+                    })
+                    { Name = "GUI.XCIFileTrimmerThread", IsBackground = true, };
                     XCIFileTrimThread.Start();
                 }
             }
@@ -2916,7 +2925,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 });
 
         public static RelayCommand<MainWindowViewModel> DiscardRenderDocCapture { get; } =
-            Commands.CreateConditional<MainWindowViewModel>(vm => RenderDoc.IsAvailable  && !vm.ShowLoadProgress,
+            Commands.CreateConditional<MainWindowViewModel>(vm => RenderDoc.IsAvailable && !vm.ShowLoadProgress,
                 viewModel =>
                 {
                     if (RenderDoc.IsFrameCapturing)

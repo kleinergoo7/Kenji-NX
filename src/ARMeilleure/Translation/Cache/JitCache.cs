@@ -132,7 +132,7 @@ namespace ARMeilleure.Translation.Cache
             int regionEnd = endOffs % (int)CacheSize == 0
                 ? (((int)CacheSize) + _pageMask) & ~_pageMask
                 : ((endOffs % (int)CacheSize) + _pageMask) & ~_pageMask;
-            
+
             GetRegion(offset).Block.MapAsRwx((ulong)regionStart, (ulong)(regionEnd - regionStart));
         }
 
@@ -161,11 +161,11 @@ namespace ARMeilleure.Translation.Cache
 
             _cacheAllocator.AddNewBlocks(1);
             ReservedRegion newRegion = new(_jitRegions[0].Allocator, CacheSize);
-            
+
             Logger.Warning?.Print(LogClass.Cpu, $"JIT Cache of size {(_jitRegions.Count * CacheSize).Bytes()} exhausted, creating new Cache Region ({((_jitRegions.Count + 1) * CacheSize).Bytes()} Total Allocation).");
 
             _jitRegions.Add(newRegion);
-            
+
             allocOffset = _cacheAllocator.Allocate(codeSize);
             if (allocOffset < 0)
             {

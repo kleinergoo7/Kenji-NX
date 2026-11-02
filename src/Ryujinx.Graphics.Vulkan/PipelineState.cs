@@ -520,7 +520,7 @@ namespace Ryujinx.Graphics.Vulkan
                 };
 
                 uint blendEnables = 0;
-                
+
                 Span<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan =
                     Internal.ColorBlendAttachmentState.AsSpan();
 
@@ -727,7 +727,7 @@ namespace Ryujinx.Graphics.Vulkan
         {
             Span<VertexInputBindingDescription> vertexBindingDescriptionsSpan =
                 Internal.VertexBindingDescriptions.AsSpan();
-            
+
             for (int index = 0; index < VertexBindingDescriptionsCount; index++)
             {
                 if (vertexBindingDescriptionsSpan[index].Binding == binding)

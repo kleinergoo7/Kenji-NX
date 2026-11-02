@@ -22,7 +22,7 @@ namespace Ryujinx.Graphics.Shader
                 InputTopology.TrianglesAdjacency => "triangles_adjacency",
                 _ => "points",
             };
-            
+
             public int InputVertexCount => topology switch
             {
                 InputTopology.Points => 1,
@@ -32,7 +32,7 @@ namespace Ryujinx.Graphics.Shader
                 InputTopology.TrianglesAdjacency => 6,
                 _ => 1,
             };
-            
+
             public int InputVertexCountNoAdjacency => topology switch
             {
                 InputTopology.Points => 1,

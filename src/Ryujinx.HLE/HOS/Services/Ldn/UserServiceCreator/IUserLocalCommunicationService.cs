@@ -66,11 +66,11 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             {
                 if (localCommunicationId == localCommunicationIdChecked)
                 {
-                    Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,"CheckLocalCommumicationIdPermission: Checked!");
+                    Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "CheckLocalCommumicationIdPermission: Checked!");
                     return true;
                 }
             }
-            Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,"CheckLocalCommumicationIdPermission: Check failed!");
+            Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "CheckLocalCommumicationIdPermission: Check failed!");
             return false;
         }
 
@@ -81,7 +81,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             if (_nifmResultCode != ResultCode.Success)
             {
                 context.ResponseData.Write((int)NetworkState.Error);
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,$"GetState: _nifmResultCode = {_nifmResultCode.ToString()}");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetState: _nifmResultCode = {_nifmResultCode.ToString()}");
                 return ResultCode.Success;
             }
 
@@ -113,14 +113,14 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
 
             if (_nifmResultCode != ResultCode.Success)
             {
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,$"GetNetworkInfo: _nifmResultCode = {_nifmResultCode.ToString()}");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetNetworkInfo: _nifmResultCode = {_nifmResultCode.ToString()}");
                 return _nifmResultCode;
             }
 
             ResultCode resultCode = GetNetworkInfoImpl(out NetworkInfo networkInfo);
             if (resultCode != ResultCode.Success)
             {
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,$"GetState: resultCode = {resultCode.ToString()}");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetState: resultCode = {resultCode.ToString()}");
                 return resultCode;
             }
 
@@ -136,22 +136,22 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             if (_state == NetworkState.StationConnected)
             {
                 networkInfo = _station.NetworkInfo;
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,"GetNetworkInfoImpl: _station");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "GetNetworkInfoImpl: _station");
             }
             else if (_state == NetworkState.AccessPointCreated)
             {
                 networkInfo = _accessPoint.NetworkInfo;
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,"GetNetworkInfoImpl: _accessPoint");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "GetNetworkInfoImpl: _accessPoint");
             }
             else
             {
                 networkInfo = new NetworkInfo();
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,"GetNetworkInfoImpl: Invalid state!");
-                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,$"GetNetworkInfoImpl: networkInfo = {networkInfo}");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "GetNetworkInfoImpl: Invalid state!");
+                Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetNetworkInfoImpl: networkInfo = {networkInfo}");
                 return ResultCode.InvalidState;
             }
 
-            Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,$"GetNetworkInfoImpl: networkInfo = {networkInfo}");
+            Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetNetworkInfoImpl: networkInfo = {networkInfo}");
             return ResultCode.Success;
         }
 
@@ -270,7 +270,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             };
 
             context.ResponseData.WriteStruct(securityParameter);
-            
+
             Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetSecurityParameter: securityParameter = {securityParameter}");
             return ResultCode.Success;
         }
@@ -302,7 +302,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             };
 
             context.ResponseData.WriteStruct(networkConfig);
-            
+
             Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"GetNetworkConfig: networkConfig = {networkConfig}");
 
             return ResultCode.Success;
@@ -455,7 +455,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
                     }
                 }
             }
-            
+
             Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"ScanImpl: resultCode = {resultCode}");
             return resultCode;
         }
@@ -513,7 +513,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
         // SetProtocol
         public ResultCode SetProtocol(ServiceCtx context)
         {
-            uint protocolValue =  context.RequestData.ReadUInt32();
+            uint protocolValue = context.RequestData.ReadUInt32();
 
             // On NX only input value 1 or 3 is allowed, with an error being thrown otherwise.
 
@@ -521,9 +521,9 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             {
                 throw new ArgumentException($"{GetType().FullName}: Protocol value is not 1 or 3!! Protocol value: {protocolValue}");
             }
-            
+
             Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"SetProtocol: protocolValue = {protocolValue}");
-            Logger.Stub?.PrintStub(LogClass.ServiceLdn, new { protocolValue});
+            Logger.Stub?.PrintStub(LogClass.ServiceLdn, new { protocolValue });
             return ResultCode.Success;
         }
 
@@ -863,7 +863,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
 
             // NOTE: Calls nifm service and returns related result codes.
             //       Since we use our own implementation we can return ResultCode.Success.
-            
+
             Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"OpenStation: _station = {_station}");
 
             return ResultCode.Success;
@@ -890,7 +890,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
             }
 
             SetState(NetworkState.Initialized);
-            
+
             Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "CloseStation: Closed.");
             return ResultCode.Success;
         }

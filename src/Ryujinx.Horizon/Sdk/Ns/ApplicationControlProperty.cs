@@ -84,10 +84,10 @@ namespace Ryujinx.Horizon.Sdk.Ns
         public readonly string DisplayVersionString => Encoding.UTF8.GetString(DisplayVersion.AsSpan()).TrimEnd('\0');
         public readonly string ApplicationErrorCodeCategoryString => Encoding.UTF8.GetString(ApplicationErrorCodeCategory.AsSpan()).TrimEnd('\0');
         public readonly string BcatPassphraseString => Encoding.UTF8.GetString(BcatPassphrase.AsSpan()).TrimEnd('\0');
-        
+
         private const int TitleCount = 32;
         private const int TitleEntrySize = 0x300;
-        
+
 
         /// <summary>
         /// Returns the resolved title entries. When <see cref="TitleCompression"/> is
@@ -100,11 +100,11 @@ namespace Ryujinx.Horizon.Sdk.Ns
             get
             {
                 var titles = new ApplicationTitle[TitleCount];
-                
+
                 if (TitleCompression != TitleCompressionValue.Enable)
                 {
                     TitleBlock.AsSpan().CopyTo(titles);
-                    
+
                     return titles;
                 }
 

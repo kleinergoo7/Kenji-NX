@@ -22,7 +22,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public MultiTapBiquadFilterCommand()
         {
-            
+
         }
 
         public MultiTapBiquadFilterCommand Initialize(int baseIndex, ReadOnlySpan<BiquadFilterParameter2> filters, Memory<BiquadFilterState> biquadFilterStateMemory, int inputBufferOffset, int outputBufferOffset, ReadOnlySpan<bool> isInitialized, int nodeId)
@@ -35,7 +35,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
             Enabled = true;
             NodeId = nodeId;
-            
+
             return this;
         }
 

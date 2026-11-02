@@ -1,12 +1,12 @@
 using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
+using SDL;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using SDL;
 using static SDL.SDL3;
 
 namespace Ryujinx.Input.SDL3

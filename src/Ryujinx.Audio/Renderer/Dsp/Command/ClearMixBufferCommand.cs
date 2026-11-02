@@ -12,7 +12,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public ClearMixBufferCommand()
         {
-            
+
         }
 
         public ClearMixBufferCommand Initialize(int nodeId)

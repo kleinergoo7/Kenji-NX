@@ -108,7 +108,7 @@ namespace Ryujinx.Ava.UI.Helpers
 
             return await ShowContentDialog(title, content, primaryButton, secondaryButton, closeButton, primaryButtonResult, deferResetEvent, deferCloseAction);
         }
-        
+
         public async static Task<UserResult> ShowTextDialogWithButton(
             string title,
             string primaryText,
@@ -263,7 +263,7 @@ namespace Ryujinx.Ava.UI.Helpers
 
             buttonContent.Children.Add(new TextBlock
             {
-                Text = buttonName, 
+                Text = buttonName,
                 Margin = new Thickness(2)
             });
 
@@ -563,11 +563,11 @@ namespace Ryujinx.Ava.UI.Helpers
                     ShowInTaskbar = false,
                 };
 
-/*
-#if DEBUG
-                _contentDialogOverlayWindow.AttachDevTools(new KeyGesture(Key.F12, KeyModifiers.Control));
-#endif
-*/
+                /*
+                #if DEBUG
+                                _contentDialogOverlayWindow.AttachDevTools(new KeyGesture(Key.F12, KeyModifiers.Control));
+                #endif
+                */
 
                 parent.PositionChanged += OverlayOnPositionChanged;
 

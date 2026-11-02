@@ -118,7 +118,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
 
             return ResultCode.Success;
         }
-        
+
         [CommandCmif(90)]
         // Unknown90(ulong[4])
         public ResultCode Unknown90(ServiceCtx context)

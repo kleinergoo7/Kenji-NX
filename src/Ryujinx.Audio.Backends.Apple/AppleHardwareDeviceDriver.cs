@@ -1,3 +1,4 @@
+using Ryujinx.Audio.Backends.Apple.Native;
 using Ryujinx.Audio.Common;
 using Ryujinx.Audio.Integration;
 using Ryujinx.Common.Logging;
@@ -5,9 +6,8 @@ using Ryujinx.Memory;
 using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Runtime.Versioning;
-using Ryujinx.Audio.Backends.Apple.Native;
+using System.Threading;
 using static Ryujinx.Audio.Backends.Apple.Native.AudioToolbox;
 using static Ryujinx.Audio.Integration.IHardwareDeviceDriver;
 

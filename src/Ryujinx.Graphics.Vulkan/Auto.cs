@@ -176,7 +176,7 @@ namespace Ryujinx.Graphics.Vulkan
                     }
                 }
             }
-            
+
             Debug.Assert(_referenceCount >= 0);
         }
 

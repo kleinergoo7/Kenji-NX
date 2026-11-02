@@ -64,7 +64,7 @@ namespace Ryujinx.Cpu
 
         /// <inheritdoc/>
         public AddressTableType TableType => AddressTableType.Sparse;
-        
+
         /// <inheritdoc/>
         public ulong Mask { get; }
 
@@ -113,9 +113,9 @@ namespace Ryujinx.Cpu
             {
                 Mask |= level.Mask;
             }
-            
+
             _fillBlock = new MemoryBlock(MemoryBlock.GetPageSize() << 10, MemoryAllocationFlags.Mirrorable);
-            
+
             // We need to use the full size, as some games dynamically expand the code range (e.g. SSBU)
             // Limiting the size to only the requested code range will cause crashes
             // This should not be an issue tho, as the SparseBlock dynamically allocates memory as needed, and

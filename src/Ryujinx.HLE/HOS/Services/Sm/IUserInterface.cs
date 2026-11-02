@@ -100,7 +100,7 @@ namespace Ryujinx.HLE.HOS.Services.Sm
                     {
                         _commonServer = new ServerBase(context.Device.System.KernelContext, "Common");
                     }
-                    
+
                     service.TrySetServer(_commonServer);
                     service.Server.AddSessionObj(session.ServerSession, service);
                 }

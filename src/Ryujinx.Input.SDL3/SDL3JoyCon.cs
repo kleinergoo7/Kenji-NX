@@ -2,11 +2,11 @@ using Ryujinx.Common.Configuration.Hid;
 using Ryujinx.Common.Configuration.Hid.Controller;
 using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Hid;
+using SDL;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading;
-using SDL;
 using static SDL.SDL3;
 
 namespace Ryujinx.Input.SDL3
@@ -62,7 +62,7 @@ namespace Ryujinx.Input.SDL3
         public GamepadFeaturesFlag Features { get; }
 
         private SDL_Gamepad* _gamepadHandle;
-        
+
         private NpadHdRumble _hdRumble;
 
         private enum JoyConType
@@ -164,7 +164,7 @@ namespace Ryujinx.Input.SDL3
         {
             // No operations
         }
-        
+
         public bool HDRumble(VibrationValue left, VibrationValue right)
         {
             return _hdRumble?.HdRumble(left, right) ?? false;
@@ -194,7 +194,7 @@ namespace Ryujinx.Input.SDL3
                 if (!SDL_RumbleGamepad(_gamepadHandle, lowFrequencyRaw, highFrequencyRaw, durationMs))
                     Logger.Error?.Print(LogClass.Hid, "Rumble is not supported on this game controller.");
             }
-            
+
             if (!String.IsNullOrEmpty(SDL_GetError()))
             {
                 Logger.Error?.PrintMsg(LogClass.Hid, SDL_GetError());
@@ -221,7 +221,8 @@ namespace Ryujinx.Input.SDL3
 
             float[] values = new float[3];
 
-            fixed (float* pValues = &values[0]) {
+            fixed (float* pValues = &values[0])
+            {
                 if (!SDL_GetGamepadSensorData(_gamepadHandle, sensorType, pValues, ElementCount))
                     return Vector3.Zero;
 
@@ -422,12 +423,12 @@ namespace Ryujinx.Input.SDL3
 
             return SDL_GetGamepadButton(_gamepadHandle, button);
         }
-        
+
         public static bool IsJoyCon(SDL_JoystickID gamepadsId)
         {
             return SDL_GetGamepadNameForID(gamepadsId) is LeftName or RightName;
         }
-        
+
         public static bool IsLeftJoyCon(SDL_JoystickID gamepadsId)
         {
             return SDL_GetGamepadNameForID(gamepadsId) is LeftName;

@@ -13,7 +13,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         {
             LdnData = ldnData ?? [];
         }
-        
+
         public LdnGameDataReceivedEventArgs(IEnumerable<LdnGameModel> ldnData)
         {
             LdnData = ldnData?.ToArray() ?? [];

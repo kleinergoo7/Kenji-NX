@@ -23,7 +23,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.Types
                 Span<NodeLatestUpdate> arraySpan = array.AsSpan();
                 Span<NodeInfo> beforeNodesSpan = beforeNodes.AsSpan();
                 Span<NodeInfo> afterNodesSpan = afterNodes.AsSpan();
-                
+
                 for (int i = 0; i < 8; i++)
                 {
                     if (beforeNodesSpan[i].IsConnected == 0)
@@ -51,7 +51,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.Types
             lock (_lock)
             {
                 Span<NodeLatestUpdate> arraySpan = array.AsSpan();
-                
+
                 for (int i = 0; i < number; i++)
                 {
                     result[i].Reserved = new Array7<byte>();

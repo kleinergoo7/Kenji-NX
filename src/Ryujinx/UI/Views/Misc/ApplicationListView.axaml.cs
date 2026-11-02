@@ -38,7 +38,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
 
             await CompatibilityListWindow.Show((string)playabilityLabel.Tag);
         }
-        
+
         private async void LdnGames_OnClick(object sender, RoutedEventArgs e)
         {
             if (sender is not Button { Content: TextBlock ldnGamesLabel })

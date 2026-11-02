@@ -93,7 +93,7 @@ namespace Ryujinx.HLE.Debugger
             if (GThreadId == null)
                 return "No thread selected\n";
 
-            return Process?.Debugger?.GetGuestStackTrace(DebugProcess.GetThread(GThreadId.Value)) ?? "No application process found\n"; 
+            return Process?.Debugger?.GetGuestStackTrace(DebugProcess.GetThread(GThreadId.Value)) ?? "No application process found\n";
         }
 
         public string GetRegisters()
@@ -125,7 +125,7 @@ namespace Ryujinx.HLE.Debugger
                 if (Process is not { } kProcess)
                     return "No application process found\n";
 
-                return kProcess.Debugger?.GetProcessInfoPrintout() 
+                return kProcess.Debugger?.GetProcessInfoPrintout()
                        ?? "Error getting process info: debugger is null\n";
             }
             catch (Exception e)

@@ -49,7 +49,7 @@ namespace ARMeilleure.Memory
         {
             public bool IsHostMapped => type is MemoryManagerType.HostMapped or MemoryManagerType.HostMappedUnsafe;
             public bool IsHostTracked => type is MemoryManagerType.HostTracked or MemoryManagerType.HostTrackedUnsafe;
-            
+
             public bool IsHostMappedOrTracked => type.IsHostMapped || type.IsHostTracked;
         }
     }

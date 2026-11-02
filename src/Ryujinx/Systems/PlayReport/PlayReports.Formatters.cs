@@ -111,7 +111,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 ? FormattedValue.ForceReset
                 : $"Warped to {locations}";
         }
-        
+
         private static FormattedValue SuperMario3DAllStars(SingleValue value)
         {
             // TODO: Is this really necessary?
@@ -325,7 +325,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 (3, 80) => "Family",
                 _ => ""
             };
-            
+
             return string.IsNullOrEmpty(song) ? FormattedValue.ForceReset : $"{album} - {song}";
         }
 
@@ -511,8 +511,10 @@ namespace Ryujinx.Ava.Systems.PlayReport
 
         private static string PokemonSV_Region(string location)
         {
-            if (location.Contains("a_su02") || location.Contains("a_sch_2")) return "Unova";
-            if (location.Contains("a_su01")) return "Kitakami";
+            if (location.Contains("a_su02") || location.Contains("a_sch_2"))
+                return "Unova";
+            if (location.Contains("a_su01"))
+                return "Kitakami";
             return "Paldea";
         }
 
@@ -529,7 +531,8 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 || title.Contains("스칼렛")
                 || title.Contains("朱")
 
-            ) { return "Naranja"; }
+            )
+            { return "Naranja"; }
             return "Uva";
         }
 
@@ -1075,14 +1078,14 @@ namespace Ryujinx.Ava.Systems.PlayReport
         {
             MessagePackObject messagePackObject = value.Matched.PackedValue;
             MessagePackObjectDictionary messagePackObjectDictionary = messagePackObject.AsDictionary();
-            
+
             int miiCount = messagePackObjectDictionary["MiiNum"].AsInt32();
             int fountainLevel = messagePackObjectDictionary["FountainLevel"].AsInt32();
 
             // Fountain Level should be kept consistent throughout code, so I basically made sure of it
             return $"Looking after {"Mii".ToQuantity(miiCount)}, with a fountain level of {fountainLevel}";
         }
-        
+
         private static FormattedValue AnimalCrossingNewHorizons_AppCommon(SingleValue value)
         {
             MessagePackObject messagePackObject = value.Matched.PackedValue;
@@ -1102,9 +1105,9 @@ namespace Ryujinx.Ava.Systems.PlayReport
             {
                 return $"In the MII selector";
             }
-            
+
             return $"At the main menu";
-            
+
             static string LocFinal(string location) => location switch
             {
                 "0" => "Somewhere in Miitopia",
@@ -1127,7 +1130,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 string coursestr = course.ToString();
                 int courseint = Int32.Parse(coursestr);
                 string gamemodestr = gamemode.ToString();
-                
+
                 try
                 {
                     Dictionary<string, Dictionary<string, Dictionary<string, string>>> output;
@@ -1146,14 +1149,14 @@ namespace Ryujinx.Ava.Systems.PlayReport
                     return FormattedValue.ForceReset;
                 }
             }
-            
+
             if (values.Matched.TryGetValue("RlId", out Value RlId) | values.Matched.TryGetValue("TotalPlayTime", out Value TotalPlayTime))
             {
                 return "At the main menu";
             }
-            
+
             return "";
-            
+
             static string MarioOrLuigiGamemode(string gamemode) => gamemode switch
             {
                 "0" => "mario",
@@ -1162,7 +1165,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 "5" => "mario",
                 _ => gamemode
             };
-            
+
             // static string OtherGameMode(string gamemode) => gamemode switch
             // {
             //     "2" => "Boost Rush",
@@ -1189,7 +1192,7 @@ namespace Ryujinx.Ava.Systems.PlayReport
                 43 => "Castle",
                 _ => "Hazard"
             };
-            
+
             // For future reference
             // Tower course = 21, Castle course = 23,Haunted Mansion/ship = 20
             // Tower course 2 (rock candy) = 22

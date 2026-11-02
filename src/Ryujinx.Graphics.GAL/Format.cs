@@ -298,7 +298,7 @@ namespace Ryujinx.Graphics.GAL
                 or Format.R16G16B16Float or Format.R16G16B16A16Float or Format.R32Float or Format.R32G32Float
                 or Format.R32G32B32Float or Format.R32G32B32A32Float or Format.R11G11B10Float
                 or Format.R9G9B9E5Float;
-            
+
             /// <summary>
             /// Checks if the texture format is an ASTC Unorm format.
             /// </summary>

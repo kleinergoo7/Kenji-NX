@@ -113,7 +113,7 @@ namespace Ryujinx.HLE.Debugger
                 {
                     Logger.Error?.Print(LogClass.GdbStub, $"Failed to restore original instruction at 0x{bp.Key:X16} while clearing all breakpoints.");
                 }
-                
+
             }
             _breakpoints.Clear();
             Logger.Debug?.Print(LogClass.GdbStub, "All breakpoints cleared.");
@@ -127,10 +127,10 @@ namespace Ryujinx.HLE.Debugger
                 {
                     return _aarch32ThumbBreakInstruction;
                 }
-                
+
                 if (length == 4)
                 {
-                     return _aarch32BreakInstruction;
+                    return _aarch32BreakInstruction;
                 }
             }
             else

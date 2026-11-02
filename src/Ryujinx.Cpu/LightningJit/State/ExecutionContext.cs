@@ -52,7 +52,7 @@ namespace Ryujinx.Cpu.LightningJit.State
         }
 
         public bool IsAarch32 { get; set; }
-        
+
         public ulong ThreadUid { get; set; }
 
         internal ExecutionMode ExecutionMode

@@ -27,7 +27,7 @@ namespace Ryujinx.Common.Memory
                 {
                     return Array!.Length.CompareTo(other!.Array!.Length);
                 }
-                
+
                 public int CompareTo(int other)
                 {
                     int self = Array!.Length;
@@ -42,25 +42,25 @@ namespace Ryujinx.Common.Memory
                     {
                         return 1;
                     }
-                    
+
                     return 0;
                 }
             }
-            
+
             // ReSharper disable once StaticMemberInGenericType
             private static int _maxCacheCount = 50;
-            
+
             private const int MaxSkipCount = 50;
-        
+
             static readonly List<Holder> _pool = new();
-            
+
             // ReSharper disable once StaticMemberInGenericType
             static readonly Lock _lock = new();
-            
+
             private static int BinarySearch(List<Holder> list, int size)
             {
                 int min = 0;
-                int max = list.Count-1;
+                int max = list.Count - 1;
 
                 while (min <= max)
                 {
@@ -72,11 +72,11 @@ namespace Ryujinx.Common.Memory
                     }
                     if (comparison < 0)
                     {
-                        min = mid+1;
+                        min = mid + 1;
                     }
                     else
                     {
-                        max = mid-1;
+                        max = mid - 1;
                     }
                 }
                 return ~min;
@@ -91,7 +91,7 @@ namespace Ryujinx.Common.Memory
                     if (index >= 0)
                     {
                         Holder holder = _pool[index];
-                        
+
                         _pool.Remove(holder);
                         return holder.Array!;
                     }
@@ -124,13 +124,13 @@ namespace Ryujinx.Common.Memory
                                 index--;
                             }
                         }
-                        
+
                         _maxCacheCount = _pool.Count * 2;
                     }
                 }
             }
         }
-        
+
         private readonly int _length;
         private T[]? _array;
 

@@ -23,7 +23,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public BiquadFilterCommand()
         {
-            
+
         }
 
         public BiquadFilterCommand Initialize(

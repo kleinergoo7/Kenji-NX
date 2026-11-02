@@ -7,7 +7,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Common
     class KSynchronizationObject : KAutoObject
     {
         private static readonly ObjectPool<LinkedListNode<KThread>> _nodePool = new(() => new LinkedListNode<KThread>(null));
-        
+
         public LinkedList<KThread> WaitingThreads { get; }
 
         public KSynchronizationObject(KernelContext context) : base(context)

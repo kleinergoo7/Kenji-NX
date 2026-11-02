@@ -33,9 +33,9 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public AuxiliaryBufferCommand()
         {
-            
+
         }
-        
+
         public AuxiliaryBufferCommand Initialize(
             uint bufferOffset,
             byte inputBufferOffset,
@@ -60,7 +60,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             UpdateCount = updateCount;
             WriteOffset = writeOffset;
             IsEffectEnabled = isEnabled;
-            
+
             return this;
         }
 

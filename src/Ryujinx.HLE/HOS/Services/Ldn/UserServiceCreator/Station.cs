@@ -37,12 +37,12 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
                 if (Connected)
                 {
                     _parent.SetState(NetworkState.StationConnected);
-                    Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,$"NetworkChanged: {NetworkInfo}");
+                    Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, $"NetworkChanged: {NetworkInfo}");
                 }
                 else
                 {
                     _parent.SetDisconnectReason(e.DisconnectReasonOrDefault(DisconnectReason.DestroyedByUser));
-                    Logger.NetLog?.PrintMsg(LogClass.ServiceLdn,"NetworkChanged: Disconnected (DestroyedByUser)");
+                    Logger.NetLog?.PrintMsg(LogClass.ServiceLdn, "NetworkChanged: Disconnected (DestroyedByUser)");
                 }
             }
             else

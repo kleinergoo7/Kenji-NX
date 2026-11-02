@@ -36,7 +36,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             }
 
             Coefficients = downMixParameter;
-            
+
             return this;
         }
 

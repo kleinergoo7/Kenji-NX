@@ -65,7 +65,7 @@ namespace Ryujinx.Ava.Input
         {
             throw new NotImplementedException();
         }
-        
+
         public bool HDRumble(VibrationValue left, VibrationValue right)
         {
             throw new NotImplementedException();

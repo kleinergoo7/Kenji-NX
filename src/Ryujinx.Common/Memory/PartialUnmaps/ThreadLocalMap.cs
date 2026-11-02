@@ -43,7 +43,7 @@ namespace Ryujinx.Common.Memory.PartialUnmaps
         public int GetOrReserve(int threadId, T initial)
         {
             // Try get a match first.
-            
+
             Span<int> threadIdsSpan = ThreadIds.AsSpan();
             Span<T> structsSpan = Structs.AsSpan();
 

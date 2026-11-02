@@ -23,7 +23,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
 
         public DepopForMixBuffersCommand()
         {
-            
+
         }
 
         public DepopForMixBuffersCommand Initialize(Memory<float> depopBuffer, uint bufferOffset, uint mixBufferCount, int nodeId, uint sampleRate)

@@ -41,7 +41,7 @@ namespace Ryujinx.Memory.WindowsShared
         public T Value { get; private set; }
 
         public RangeNode() { }
-        
+
         public RangeNode(ulong start, ulong end, T value)
         {
             Start = start;

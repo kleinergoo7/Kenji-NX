@@ -89,13 +89,16 @@ namespace Ryujinx.Cpu.AppleHv
 
         private void LogHvWarning(string operation, string regName, string extra = "")
         {
-            if (AggressiveMode) return;
+            if (AggressiveMode)
+                return;
 
             long now = DateTime.UtcNow.Ticks;
-            if (now - _lastWarningTicks <= WarningCooldownTicks) return;
+            if (now - _lastWarningTicks <= WarningCooldownTicks)
+                return;
 
             string msg = $"[AppleHv] BadArgument on {operation} {regName} | PC=0x{_pc:X16}";
-            if (!string.IsNullOrEmpty(extra)) msg += $" | {extra}";
+            if (!string.IsNullOrEmpty(extra))
+                msg += $" | {extra}";
             msg += $" | Total: {Interlocked.Read(ref _fallbackCount)}";
 
             Logger.Warning?.Print(LogClass.Cpu, msg);
@@ -160,7 +163,8 @@ namespace Ryujinx.Cpu.AppleHv
                         Interlocked.Increment(ref _fallbackCount);
                         LogHvWarning("Set", "CPSR (Pstate)", $"value=0x{value:X}");
                     }
-                    else res.ThrowOnError();
+                    else
+                        res.ThrowOnError();
                     _pstateRaw = value;
                 }
             }
@@ -198,7 +202,8 @@ namespace Ryujinx.Cpu.AppleHv
                     return _x[31] = value;
                 }
 
-                if ((uint)index > 30) return 0;
+                if ((uint)index > 30)
+                    return 0;
 
                 if (index == 0 && _earlyBootPhase && _pc == 0)
                 {
@@ -256,7 +261,8 @@ namespace Ryujinx.Cpu.AppleHv
         {
             lock (_registerLock)
             {
-                if ((uint)index > 31) return default;
+                if ((uint)index > 31)
+                    return default;
 
                 HvResult res = HvApi.hv_vcpu_get_simd_fp_reg(_vcpu, HvSimdFPReg.Q0 + (uint)index, out HvSimdFPUchar16 val);
                 if (res == HvResult.BadArgument)
@@ -274,7 +280,8 @@ namespace Ryujinx.Cpu.AppleHv
         {
             lock (_registerLock)
             {
-                if ((uint)index > 31) return;
+                if ((uint)index > 31)
+                    return;
 
                 HvResult res = _setSimdFpReg(_vcpu, HvSimdFPReg.Q0 + (uint)index, value, _setSimdFpRegNativePtr);
                 if (res == HvResult.BadArgument)

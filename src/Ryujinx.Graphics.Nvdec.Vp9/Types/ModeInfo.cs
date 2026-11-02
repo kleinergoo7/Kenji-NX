@@ -67,7 +67,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public Mv MvPredQ4(int idx)
         {
             Span<BModeInfo> bmiSpan = Bmi.AsSpan();
-            
+
             Mv res = new()
             {
                 Row = (short)ReconInter.RoundMvCompQ4(
@@ -83,7 +83,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public Mv MvPredQ2(int idx, int block0, int block1)
         {
             Span<BModeInfo> bmiSpan = Bmi.AsSpan();
-            
+
             Mv res = new()
             {
                 Row = (short)ReconInter.RoundMvCompQ2(
@@ -100,7 +100,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public Mv ScaleMv(int refr, sbyte thisRefFrame, Span<sbyte> refSignBias)
         {
             Mv mv = Mv[refr];
-            
+
             if (refSignBias[RefFrame[refr]] != refSignBias[thisRefFrame])
             {
                 mv.Row *= -1;

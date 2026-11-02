@@ -33,7 +33,7 @@ namespace Ryujinx.HLE
                 _ => throw new AggregateException($"Invalid memory configuration \"{configuration}\"."),
 #pragma warning restore IDE0055
             };
-            
+
             public MemorySize KernelMemorySize => configuration switch
             {
 #pragma warning disable IDE0055 // Disable formatting
@@ -47,7 +47,7 @@ namespace Ryujinx.HLE
                 _ => throw new AggregateException($"Invalid memory configuration \"{configuration}\"."),
 #pragma warning restore IDE0055
             };
-            
+
             public ulong DramSize => configuration switch
             {
 #pragma warning disable IDE0055 // Disable formatting

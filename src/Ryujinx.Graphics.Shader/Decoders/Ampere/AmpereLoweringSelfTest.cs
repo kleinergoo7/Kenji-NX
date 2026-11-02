@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
+using Ryujinx.Graphics.Shader.Translation;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using Ryujinx.Graphics.Shader.Translation;
 
 namespace Ryujinx.Graphics.Shader.Decoders.Ampere
 {

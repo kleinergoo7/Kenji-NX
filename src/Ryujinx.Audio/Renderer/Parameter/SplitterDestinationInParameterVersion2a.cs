@@ -66,7 +66,7 @@ namespace Ryujinx.Audio.Renderer.Parameter
         readonly int ISplitterDestinationInParameter.Id => Id;
 
         readonly int ISplitterDestinationInParameter.DestinationId => DestinationId;
-        
+
         readonly Array2<BiquadFilterParameter2> ISplitterDestinationInParameter.BiquadFilters2
         {
             get
@@ -75,7 +75,7 @@ namespace Ryujinx.Audio.Renderer.Parameter
                 Span<BiquadFilterParameter2> newFiltersSpan = newFilters.AsSpan();
                 newFiltersSpan[0] = BiquadFilterHelper.ToBiquadFilterParameter2(BiquadFilters[0]);
                 newFiltersSpan[1] = BiquadFilterHelper.ToBiquadFilterParameter2(BiquadFilters[1]);
-                
+
                 return newFilters;
             }
         }

@@ -438,7 +438,7 @@ namespace Ryujinx.Graphics.Gpu
                         SyncActions.RemoveAt(i--);
                     }
                 }
-                
+
                 for (int i = 0; i < SyncpointActions.Count; i++)
                 {
                     if (SyncpointActions[i].SyncAction(syncPoint))

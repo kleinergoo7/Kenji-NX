@@ -154,7 +154,7 @@ namespace Ryujinx.Ava.UI.Helpers
 
         [LibraryImport("user32.dll", SetLastError = true)]
         public static partial ushort GetAsyncKeyState(int nVirtKey);
-        
+
         [LibraryImport("user32.dll", SetLastError = true)]
         public static partial int MessageBoxA(nint hWnd, [MarshalAs(UnmanagedType.LPStr)] string text, [MarshalAs(UnmanagedType.LPStr)] string caption, uint type);
     }

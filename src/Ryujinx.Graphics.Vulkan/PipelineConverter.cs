@@ -2,9 +2,9 @@ using Ryujinx.Common;
 using Ryujinx.Graphics.GAL;
 using Silk.NET.Vulkan;
 using System;
-using VulkanFormat = Silk.NET.Vulkan.Format;
 using GALFormat = Ryujinx.Graphics.GAL.Format;
 using PolygonMode = Silk.NET.Vulkan.PolygonMode;
+using VulkanFormat = Silk.NET.Vulkan.Format;
 
 namespace Ryujinx.Graphics.Vulkan
 {
@@ -251,7 +251,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             Span<BufferPipelineDescriptor> vertexBuffersSpan = state.VertexBuffers.AsSpan();
             Span<VertexInputBindingDescription> vertexBindingDescriptionsSpan = pipeline.Internal.VertexBindingDescriptions.AsSpan();
-            
+
             for (int i = 0; i < vbCount; i++)
             {
                 BufferPipelineDescriptor vertexBuffer = vertexBuffersSpan[i];
@@ -280,7 +280,7 @@ namespace Ryujinx.Graphics.Vulkan
             Span<BlendDescriptor> blendDescriptorsSpan = state.BlendDescriptors.AsSpan();
             Span<uint> colorWriteMaskSpan = state.ColorWriteMask.AsSpan();
             Span<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan = pipeline.Internal.ColorBlendAttachmentState.AsSpan();
-            
+
             // NOTE: Viewports, Scissors are dynamic.
 
             for (int i = 0; i < Constants.MaxRenderTargets; i++)
@@ -310,7 +310,7 @@ namespace Ryujinx.Graphics.Vulkan
             int maxColorAttachmentIndex = -1;
             uint attachmentIntegerFormatMask = 0;
             bool allFormatsFloatOrSrgb = true;
-            
+
             Span<bool> attachmentEnableSpan = state.AttachmentEnable.AsSpan();
             Span<GALFormat> attachmentFormatsSpan = state.AttachmentFormats.AsSpan();
             Span<VulkanFormat> pAttachmentFormatsSpan = pipeline.Internal.AttachmentFormats.AsSpan();

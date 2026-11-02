@@ -1,5 +1,5 @@
-using System;
 using ARMeilleure.Translation.PTC;
+using System;
 
 namespace Ryujinx.Cpu
 {

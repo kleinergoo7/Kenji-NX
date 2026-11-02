@@ -81,7 +81,7 @@ namespace Ryujinx.Common.Collections
         private void Insert(T node, T parent = null)
         {
             T newNode = parent != null ? InsertWithParent(node, parent) : BSTInsert(node);
-            
+
             RestoreBalanceAfterInsertion(newNode);
         }
 
@@ -125,35 +125,35 @@ namespace Ryujinx.Common.Collections
             else if (newNode.CompareTo(parent) < 0)
             {
                 parent.Left = newNode;
-                
+
                 newNode.Successor = parent;
-                
+
                 if (parent.Predecessor != null)
                 {
                     newNode.Predecessor = parent.Predecessor;
                     newNode.Predecessor.Successor = newNode;
                 }
-                
+
                 parent.Predecessor = newNode;
             }
             else
             {
                 parent.Right = newNode;
-                
+
                 newNode.Predecessor = parent;
-                
+
                 if (parent.Successor != null)
                 {
                     newNode.Successor = parent.Successor;
                     newNode.Successor.Predecessor = newNode;
                 }
-                
+
                 parent.Successor = newNode;
             }
             Count++;
             return newNode;
         }
-        
+
         /// <summary>
         /// Insertion Mechanism for a Binary Search Tree (BST).
         /// <br></br>
@@ -171,30 +171,30 @@ namespace Ryujinx.Common.Collections
             if (newNode.CompareTo(parent) < 0)
             {
                 parent.Left = newNode;
-                
+
                 newNode.Successor = parent;
-                
+
                 if (parent.Predecessor != null)
                 {
                     newNode.Predecessor = parent.Predecessor;
                     parent.Predecessor = newNode;
                     newNode.Predecessor.Successor = newNode;
                 }
-                
+
                 parent.Predecessor = newNode;
             }
             else
             {
                 parent.Right = newNode;
-                
+
                 newNode.Predecessor = parent;
-                
+
                 if (parent.Successor != null)
                 {
                     newNode.Successor = parent.Successor;
                     newNode.Successor.Predecessor = newNode;
                 }
-                
+
                 parent.Successor = newNode;
             }
 

@@ -1,4 +1,4 @@
-    using Avalonia.Media;
+using Avalonia.Media;
 using Gommon;
 using Ryujinx.Ava.Systems.Configuration.System;
 using Ryujinx.Ava.Systems.Configuration.UI;
@@ -115,7 +115,7 @@ namespace Ryujinx.Ava.Systems.Configuration
             System.SkipUserProfilesManager.Value = cff.SkipUserProfiles;
             System.UseHypervisor.Value = cff.UseHypervisor;
             System.GCLowLatency.Value = cff.GCLowLatency;
- 
+
             UI.GuiColumns.FavColumn.Value = shouldLoadFromFile ? cff.GuiColumns.FavColumn : UI.GuiColumns.FavColumn.Value;
             UI.GuiColumns.IconColumn.Value = shouldLoadFromFile ? cff.GuiColumns.IconColumn : UI.GuiColumns.IconColumn.Value;
             UI.GuiColumns.AppColumn.Value = shouldLoadFromFile ? cff.GuiColumns.AppColumn : UI.GuiColumns.AppColumn.Value;
@@ -157,7 +157,7 @@ namespace Ryujinx.Ava.Systems.Configuration
             Hid.EnableMouse.Value = cff.EnableMouse;
             Hid.DisableInputWhenOutOfFocus.Value = shouldLoadFromFile ? cff.DisableInputWhenOutOfFocus : Hid.DisableInputWhenOutOfFocus.Value; // Get from global config only
             Hid.Hotkeys.Value = shouldLoadFromFile ? cff.Hotkeys : Hid.Hotkeys.Value; // Get from global config only
-            Hid.InputConfig.Value = cff.InputConfig ?? [] ;
+            Hid.InputConfig.Value = cff.InputConfig ?? [];
             Hid.PlayerInputAssignments.Value = cff.PlayerInputAssignments ?? [];
             Hid.AllowDuplicateDeviceAssignment.Value = cff.AllowDuplicateDeviceAssignment;
             Hid.RainbowSpeed.Value = cff.RainbowSpeed;
@@ -541,7 +541,8 @@ namespace Ryujinx.Ava.Systems.Configuration
                 {
                     if (cff.AudioBackend is AudioBackend.SDL2)
                         cff.AudioBackend = AudioBackend.SDL3;
-                }),
+                }
+        ),
                 (72, static cff => cff.GCLowLatency = false)
             );
     }

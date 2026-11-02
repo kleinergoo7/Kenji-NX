@@ -61,7 +61,7 @@ namespace Ryujinx.Tests.Memory
                 new JitMemoryAllocator(),
                 new MockMemoryManager(),
                 AddressTable<ulong>.CreateForArm(true));
-            
+
             NativeSignalHandler.InitializeSignalHandler();
         }
 

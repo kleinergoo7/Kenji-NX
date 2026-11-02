@@ -55,7 +55,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
         /// If set to true, the previous mix volume is explicitly resetted using the input parameter, instead of implicitly on first use.
         /// </summary>
         public bool IsSplitterPrevVolumeResetSupported { get; private set; }
-        
+
         /// <summary>
         /// If set to true, the previous mix volume is explicitly resetted using the input parameter, instead of implicitly on first use.
         /// </summary>
@@ -301,7 +301,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
                 {
                     length = _splitterDestinationsV2.Length;
                 }
-                
+
                 if (parameter.Id >= 0 && parameter.Id < length)
                 {
                     SplitterDestination destination = GetDestination(parameter.Id);
@@ -413,7 +413,7 @@ namespace Ryujinx.Audio.Renderer.Server.Splitter
             {
                 return new SplitterDestination(ref SpanIOHelper.GetFromMemory(_splitterDestinationsV1, id, (uint)_splitterDestinationsV1.Length));
             }
-                
+
             return new SplitterDestination(ref SpanIOHelper.GetFromMemory(_splitterDestinationsV2, id, (uint)_splitterDestinationsV2.Length));
         }
 

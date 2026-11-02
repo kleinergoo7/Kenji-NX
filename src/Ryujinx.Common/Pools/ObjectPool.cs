@@ -15,7 +15,7 @@ namespace Ryujinx.Common
 
             if (!success)
             {
-                instance =  factory();
+                instance = factory();
             }
 
             return instance;
@@ -28,7 +28,7 @@ namespace Ryujinx.Common
                 _items.Add(obj);
             }
         }
-        
+
         public void Clear() => _items.Clear();
     }
 }

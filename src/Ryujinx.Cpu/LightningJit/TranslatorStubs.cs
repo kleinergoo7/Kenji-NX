@@ -20,7 +20,7 @@ namespace Ryujinx.Cpu.LightningJit
         private delegate ulong GetFunctionAddressDelegate(nint framePointer, ulong address);
 
         private readonly JitCache _jitCache;
-        
+
         private readonly Lazy<nint> _slowDispatchStub;
 
         private bool _disposed;

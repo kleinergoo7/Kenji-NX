@@ -17,13 +17,13 @@ namespace Ryujinx.Ava.Systems.Configuration
     {
         public static void Initialize()
         {
-            if (Instance != null || InstanceExtra!= null)
+            if (Instance != null || InstanceExtra != null)
             {
                 throw new InvalidOperationException("Configuration is already initialized");
             }
 
             Instance = new ConfigurationState();
-            InstanceExtra= new ConfigurationState();
+            InstanceExtra = new ConfigurationState();
         }
 
         public ConfigurationFileFormat ToFileFormat()
