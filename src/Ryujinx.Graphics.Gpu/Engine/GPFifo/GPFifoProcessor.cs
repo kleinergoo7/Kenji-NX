@@ -371,8 +371,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 return;
             }
 
-            // The engine id travels in the upper bits of the class argument, in the same order as
-            // the engines above, so an unknown class still reaches the right one.
             int engineField = (argument >> 16) & 0x1f;
 
             _subChannelEngine[subChannel] = classId switch
@@ -381,7 +379,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 0xc7c0 => EngineCompute,   // AMPERE_COMPUTE_B
                 0xc7b5 => EngineDma,       // AMPERE_DMA_COPY_B
                 0xc56f => EngineFifo,      // AMPERE_CHANNEL_GPFIFO_A
-                _ => engineField <= EngineFifo ? engineField : -1,
+                _ => subChannel,           // unknown class: keep the legacy mapping
             };
 
             if (classId is not (0xc797 or 0xc7c0 or 0xc7b5 or 0xc56f) && _unknownClasses.Add(classId))
