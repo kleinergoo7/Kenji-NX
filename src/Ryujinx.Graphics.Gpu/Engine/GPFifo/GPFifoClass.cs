@@ -312,7 +312,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             {
                 // Turing+ instructions are 96 bits (three words). The SDK addresses code by
                 // instruction index, so a sequence of three writes stores one instruction.
-                if (_mmeCodeWriteOffset < _macroCode.Length)
+                if ((uint)_mmeCodeWriteOffset < (uint)_macroCode.Length)
                 {
                     _macroCode[_mmeCodeWriteOffset++] = argument;
                     _mmeCodeGeneration++;
@@ -321,7 +321,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 return;
             }
 
-            _macroCode[_state.State.LoadMmeInstructionRamPointer++] = argument;
+            int pointer = (int)_state.State.LoadMmeInstructionRamPointer;
+
+            if ((uint)pointer < (uint)_macroCode.Length)
+            {
+                _macroCode[pointer] = argument;
+                _state.State.LoadMmeInstructionRamPointer = (uint)(pointer + 1);
+            }
         }
 
         /// <summary>
@@ -333,7 +339,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             if (_context.IsNx2Ampere)
             {
                 // The pointer register names an instruction index; the code array is word packed.
-                _mmeCodeWriteOffset = Math.Min(argument, _macroCode.Length / 3) * 3;
+                // The guest can pass a negative or oversized instruction index; clamp it so the
+                // following writes stay inside the macro RAM.
+                _mmeCodeWriteOffset = Math.Clamp(argument, 0, _macroCode.Length / 3) * 3;
                 _mmeCodeGeneration++;
             }
         }
@@ -344,7 +352,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="argument">Method call argument</param>
         public void LoadMmeStartAddressRam(int argument)
         {
-            _macros[_state.State.LoadMmeStartAddressRamPointer++] = new Macro(argument);
+            int pointer = (int)_state.State.LoadMmeStartAddressRamPointer;
+
+            if ((uint)pointer < (uint)_macros.Length)
+            {
+                _macros[pointer] = new Macro(argument);
+                _state.State.LoadMmeStartAddressRamPointer = (uint)(pointer + 1);
+            }
         }
 
         /// <summary>
