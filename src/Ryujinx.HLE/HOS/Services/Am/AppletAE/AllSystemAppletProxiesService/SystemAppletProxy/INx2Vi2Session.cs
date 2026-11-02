@@ -252,6 +252,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
 
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1" &&
+                System.Threading.Interlocked.Increment(ref _presentWho) <= 12)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2 present pid={context.Process.Pid} image={imageId}");
+            }
+
             if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" &&
                 System.Threading.Interlocked.Increment(ref _threadDumps) == 1200)
             {
@@ -325,7 +332,16 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
                     if (waitId < MaxSyncpoints && waitValue != 0)
                     {
-                        context.Device.Gpu.Synchronization.WaitOnSyncpoint(waitId, waitValue, TimeSpan.FromSeconds(1));
+                        // Up to 4 s, like the console path: the CPU runs frames ahead while the
+                        // GPU is still compiling shaders, and a 1 s cap made presents fail.
+                        bool reached = context.Device.Gpu.Synchronization.WaitOnSyncpoint(
+                            waitId, waitValue, TimeSpan.FromSeconds(4));
+
+                        if (!reached && System.Threading.Interlocked.Increment(ref _fenceTimeouts) <= 8)
+                        {
+                            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                                $"NX2 present fence {waitId},{waitValue} not reached in 4 s");
+                        }
                     }
                 }
             }
@@ -552,6 +568,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static byte[] _sourceBuffer;
         private static byte[] _linearBuffer;
         private static int _presentCount;
+
+        private static int _fenceTimeouts;
+
+        private static int _presentWho;
 
         private static int _threadDumps;
         private static int _compositeLogs;

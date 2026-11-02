@@ -144,6 +144,17 @@ namespace Ryujinx.HLE.HOS.Services
 
             CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
 
+            if (System.Environment.GetEnvironmentVariable("NX2_GSV_LOG") == "1" &&
+                GetType().Name == "INx2GraphicsSystemSession")
+            {
+                int n = CallCounts[$"{GetType().Name}:{commandId}"];
+
+                if (n == 1 || n % 500 == 0)
+                {
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 gsvcall {commandId} n={n}");
+                }
+            }
+
             bool serviceExists = service.CmifCommands.TryGetValue(commandId, out MethodInfo processRequest);
 
             if (context.Device.Configuration.IgnoreMissingServices || serviceExists)
@@ -220,6 +231,17 @@ namespace Ryujinx.HLE.HOS.Services
             int commandId = (int)context.Request.Type - 0x10;
 
             CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_GSV_LOG") == "1" &&
+                GetType().Name == "INx2GraphicsSystemSession")
+            {
+                int n = CallCounts[$"{GetType().Name}:{commandId}"];
+
+                if (n == 1 || n % 500 == 0)
+                {
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 gsvcall {commandId} n={n}");
+                }
+            }
 
             bool serviceExists = TipcCommands.TryGetValue(commandId, out MethodInfo processRequest);
 

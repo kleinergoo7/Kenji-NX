@@ -190,6 +190,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             uint memory = context.RequestData.ReadUInt32();
             (_, _, _, _, ulong size) = Nx2NativeObjects.Layout(preference);
 
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm,
+                    $"nx2:gsv 429 count={count} memory={memory} pref=[{string.Join(',', preference)}] size=0x{size:X}");
+            }
+
             lock (Nx2NativeObjects.Lock)
             {
                 uint id = Nx2NativeObjects.NextImage;
@@ -216,6 +222,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         {
             uint id = context.RequestData.ReadUInt32();
             bool create = (int)context.Request.Type - 0x10 == 315;
+
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm, $"nx2:gsv {(create ? 315 : 314)} id={id}");
+            }
 
             lock (Nx2NativeObjects.Lock)
             {

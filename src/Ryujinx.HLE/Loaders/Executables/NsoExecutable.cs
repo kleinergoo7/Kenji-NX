@@ -52,6 +52,14 @@ namespace Ryujinx.HLE.Loaders.Executables
             Name = name;
             BuildId = reader.Header.ModuleId;
 
+            if (System.Environment.GetEnvironmentVariable("NX2_DUMP_TEXT") == "1" && name != null)
+            {
+                string dir = System.Environment.GetEnvironmentVariable("NX2_DUMP_DIR") ?? ".";
+
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, name + ".text.bin"), Text.ToArray());
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, name + ".layout.txt"), $"textOff=0x{TextOffset:X} textSize=0x{TextSize:X}");
+            }
+
             PrintRoSectionInfo();
         }
 
