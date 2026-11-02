@@ -401,8 +401,25 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// </summary>
         /// <param name="index">Index of the macro</param>
         /// <param name="state">Current GPU state</param>
+        private static int _nx2SkipLogs;
+
         public void CallMme(int index, IDeviceState state)
         {
+            if (_context.IsNx2Ampere)
+            {
+                // Switch 2 drivers upload Turing+ (MME64) macros, which this interpreter does not
+                // describe: it faults on them (uninitialised registers, unknown output selectors)
+                // and the half-executed macro leaves the 3D state torn. The Eglantine nx2 line
+                // skips them the same way and renders, so do that until MME64 is described.
+                if (System.Threading.Interlocked.Increment(ref _nx2SkipLogs) == 1)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                        "nx2: skipping Turing MME macros (MME64 not implemented)");
+                }
+
+                return;
+            }
+
             _macros[index].Execute(_macroCode, state);
         }
 
