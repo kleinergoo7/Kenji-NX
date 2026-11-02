@@ -256,6 +256,8 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         // Diagnostic: guest call-site histogram for SendSyncRequest (pid 109 only).
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<(ulong Pid, ulong Pc), int> GuestCallSites = [];
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> SendLogged = new();
+
         [Svc(0x21)]
         public Result SendSyncRequest(int handle)
         {
@@ -273,6 +275,18 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             if (caller != null)
             {
                 GuestCallSites.AddOrUpdate((caller.Owner.Pid, caller.Context.Pc), 1, (_, v) => v + 1);
+
+                if (System.Environment.GetEnvironmentVariable("NX2_SEND_LOG") == "1" && caller.Owner.Pid == 109)
+                {
+                    uint w0 = caller.Owner.CpuMemory.Read<uint>(caller.TlsAddress + 0x0);
+                    string key = $"{caller.ThreadUid}:{handle:X}:{w0:X8}";
+
+                    if (SendLogged.TryAdd(key, 0))
+                    {
+                        Logger.Warning?.Print(LogClass.KernelSvc,
+                            $"NX2 send tid={caller.ThreadUid}({caller.GetThreadName()}) handle=0x{handle:X} type=0x{w0:X8}");
+                    }
+                }
             }
             else
             {
