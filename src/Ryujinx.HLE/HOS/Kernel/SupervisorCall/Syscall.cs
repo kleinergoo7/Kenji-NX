@@ -2932,6 +2932,16 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             KThread currentThread = KernelStatic.GetCurrentThread();
 
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1" &&
+                currentThread != null && currentThread.Owner.Pid == 109 && handles.Length != 0)
+            {
+                KSynchronizationObject so = currentThread.Owner.HandleTable.GetObject<KSynchronizationObject>(handles[0]);
+                string nm = Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2EventNames.Lookup(so);
+
+                Logger.Warning?.Print(LogClass.KernelSvc,
+                    $"NX2 w tid={currentThread.ThreadUid}({currentThread.GetThreadName()}) obj={so?.GetType().Name} name={nm} timeout={timeout}");
+            }
+
             if (WaitLogEnabled && handles.Length != 0)
             {
                 KSynchronizationObject obj = KernelStatic.GetCurrentProcess().HandleTable.GetObject<KSynchronizationObject>(handles[0]);

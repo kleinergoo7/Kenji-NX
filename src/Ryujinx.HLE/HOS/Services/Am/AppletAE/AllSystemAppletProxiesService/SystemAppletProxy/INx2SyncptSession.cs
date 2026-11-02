@@ -33,6 +33,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             if (!_events.TryGetValue(slot, out KEvent evt))
             {
                 evt = new KEvent(context.Device.System.KernelContext);
+                Nx2EventNames.Register(evt.ReadableEvent, $"spslot{slot}");
                 Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc, $"NX2 syncpt event slot={slot} hash={System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(evt.ReadableEvent)}");
                 _events[slot] = evt;
             }

@@ -82,6 +82,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             {
                 evt = new KEvent(context.Device.System.KernelContext);
                 _events[slot] = evt;
+                Nx2EventNames.Register(evt.ReadableEvent, $"vi2slot{slot}");
             }
 
             return evt;
@@ -136,6 +137,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         {
             // Fresh event per call (oracle creates one per call); signalled on each Present.
             KEvent evt = new(context.Device.System.KernelContext);
+            Nx2EventNames.Register(evt.ReadableEvent, "vi2vsync");
 
             TrackTickEvent(evt);
 
@@ -160,14 +162,71 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
         [CommandTipc(101)]
         [CommandTipc(201)]
-        [CommandTipc(212)]
         [CommandTipc(251)]
         [CommandTipc(111)]
         [CommandTipc(261)]
-        [CommandTipc(104)]
-        [CommandTipc(105)]
         public ResultCode SucceedQuietly(ServiceCtx context)
         {
+            return ResultCode.Success;
+        }
+
+        // 103(name): u32 refresh rate in Hz then a bool; the SDK accepts only 60 or 120.
+        [CommandTipc(103)]
+        public ResultCode QueryDisplayRefreshRate(ServiceCtx context)
+        {
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(60u);
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
+        // 104(name): u64 output format, u16 peak nits. The SDK takes 1 as SDR and 2 as HDR and
+        // fails the query on anything else; an empty reply left it reading the request's leftovers.
+        [CommandTipc(104)]
+        public ResultCode QueryDisplayHdrStatus(ServiceCtx context)
+        {
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(1u);   // SDR
+            context.ResponseData.Write(0u);
+            context.ResponseData.Write(400u); // paper white, nits
+
+            return ResultCode.Success;
+        }
+
+        // 105(name): u16 paper white in nits (BT.2408 reference white).
+        [CommandTipc(105)]
+        public ResultCode QueryDisplayHdrPaperWhite(ServiceCtx context)
+        {
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(203u);
+
+            return ResultCode.Success;
+        }
+
+        // 106(name): u64 highest buffer resolution mode of the display. 1 -> 720p, 2 -> 1080p,
+        // 4 and 8 -> 1440p; 0 (an empty reply) falls back to 720p. Docked reports 4, handheld 2.
+        [CommandTipc(106)]
+        public ResultCode GetBufferMaxResolution(ServiceCtx context)
+        {
+            ulong mode = context.Device.System.State.DockedMode ? 4UL : 2UL;
+
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write((uint)mode);
+            context.ResponseData.Write((uint)(mode >> 32));
+
+            return ResultCode.Success;
+        }
+
+        // 212(layer): u64 bits of the layer's buffer slots that are ready. The client polls it
+        // once a second until some are set; an empty reply left it on zero forever.
+        [CommandTipc(212)]
+        public ResultCode GetLayerBufferBits(ServiceCtx context)
+        {
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(0x7FFFu);
+            context.ResponseData.Write(0u);
+
             return ResultCode.Success;
         }
 

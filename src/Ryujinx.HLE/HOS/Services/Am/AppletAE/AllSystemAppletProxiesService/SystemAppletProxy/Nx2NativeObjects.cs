@@ -6,6 +6,21 @@ using System.Collections.Generic;
 namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy
 {
     // Progress counters for the NX2 diagnostics (submits/presents per minute).
+    static class Nx2EventNames
+    {
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> Names = new();
+
+        public static void Register(object evt, string name)
+        {
+            Names[System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(evt)] = name;
+        }
+
+        public static string Lookup(object obj)
+        {
+            return obj != null && Names.TryGetValue(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj), out string name) ? name : null;
+        }
+    }
+
     static class Nx2Counters
     {
         public static int Submits;

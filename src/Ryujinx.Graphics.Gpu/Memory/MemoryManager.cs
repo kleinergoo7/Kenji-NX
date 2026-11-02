@@ -1013,6 +1013,35 @@ namespace Ryujinx.Graphics.Gpu.Memory
         public static ReadOnlySpan<ulong> SemaphoreRegions => _semaphoreSnapshot;
 
         /// <summary>
+        /// Gets the first-page address a semaphore release in the second half of a queue region
+        /// mirrors to. The GPU queues release progress to P + 0x1000 while the guest CPU polls the
+        /// same offset in P, so the write has to be visible there too.
+        /// </summary>
+        /// <param name="address">Address the release was written to</param>
+        /// <param name="mirror">Address to mirror the released value to</param>
+        /// <returns>True if the address belongs to a semaphore region's second half</returns>
+        public static bool TryGetSemaphoreMirror(ulong address, out ulong mirror)
+        {
+            mirror = 0;
+
+            ReadOnlySpan<ulong> regions = _semaphoreSnapshot;
+
+            for (int i = 0; i < regions.Length; i++)
+            {
+                ulong start = regions[i];
+
+                if (address >= start + SemaphoreRegionSize / 2 && address < start + SemaphoreRegionSize)
+                {
+                    mirror = address - SemaphoreRegionSize / 2;
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Registers a GPU accessible memory range (nx2:gpu 101).
         /// </summary>
         /// <param name="start">Start of the range (CPU and GPU address)</param>

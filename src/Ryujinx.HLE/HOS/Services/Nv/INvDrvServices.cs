@@ -265,7 +265,20 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                 string path = MemoryHelper.ReadAsciiString(context.Memory, pathPtr, (long)pathSize);
 
+                if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+                {
+                    var nvCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 nvopen caller={nvCaller?.Owner.Pid} tid={nvCaller?.ThreadUid} owner={_owner} path={path}");
+                }
+
                 errorCode = Open(context, path, out fd);
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                var oc = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+                Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv,
+                    $"NX2 nvopen result caller={oc?.Owner.Pid} fd={fd} err={errorCode}");
             }
 
             context.ResponseData.Write(fd);

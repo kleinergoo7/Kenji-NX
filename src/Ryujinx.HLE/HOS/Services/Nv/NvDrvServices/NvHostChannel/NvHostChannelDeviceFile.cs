@@ -473,6 +473,12 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             Ryujinx.HLE.HOS.Kernel.Threading.KThread caller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
             ulong callerPc = caller?.Context.Pc ?? 0;
 
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv,
+                    $"NX2 submit caller={caller?.Owner.Pid} tid={caller?.ThreadUid}");
+            }
+
             if (System.Threading.Interlocked.Increment(ref ProcLogCount) == 1)
             {
                 foreach (System.Collections.Generic.KeyValuePair<ulong, Ryujinx.HLE.HOS.Kernel.Process.KProcess> entry in _device.System.KernelContext.Processes)

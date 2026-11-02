@@ -212,6 +212,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             if (operation == SemaphoredOperation.Release)
             {
                 _parent.MemoryManager.Write(address, value);
+
+                if (Nx2GpuMemory.TryGetSemaphoreMirror(address, out ulong mirror))
+                {
+                    _parent.MemoryManager.Write(mirror, value);
+                }
             }
             else if (operation == SemaphoredOperation.Reduction)
             {

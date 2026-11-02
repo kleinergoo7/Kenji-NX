@@ -20,6 +20,8 @@ namespace Ryujinx.HLE.HOS.SystemState
         {
             Messages = new ConcurrentQueue<AppletMessage>();
             MessageEvent = new KEvent(system.KernelContext);
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2EventNames.Register(
+                MessageEvent.ReadableEvent, "appmsg");
 
             AppletResourceUserIds = new IdDictionary();
             IndirectLayerHandles = new IdDictionary();

@@ -46,6 +46,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 {
                     evt = new KEvent(context.Device.System.KernelContext);
                     _events[id] = evt;
+                    Nx2EventNames.Register(evt.ReadableEvent, $"gpuid{id}");
                     _allEvents.Add(evt);
                 }
 
@@ -124,13 +125,38 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         public ResultCode GetGsvPartition(ServiceCtx context)
         {
             context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
-            context.ResponseData.Write(0u);
-            context.ResponseData.Write(0u);
+            // An empty partition is min = ~0, max = 0 (min > max). (0, 0) reads as a one-byte
+            // partition at address 0, which aborts nn::gpu::sdk setup.
+            context.ResponseData.Write(uint.MaxValue);
+            context.ResponseData.Write(uint.MaxValue);
             context.ResponseData.Write(0u);
             context.ResponseData.Write(0u);
 
             return ResultCode.Success;
         }
+
+        // 41(name u64, flags u64, debug label u64): returns a graphics device id that later calls
+        // name; 0 is not a valid id.
+        [CommandTipc(41)]
+        public ResultCode CreateGraphicsDevice(ServiceCtx context)
+        {
+            uint id = (uint)System.Threading.Interlocked.Increment(ref _nextDeviceId);
+
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(id);
+
+            return ResultCode.Success;
+        }
+
+        [CommandTipc(42)]
+        public ResultCode DestroyGraphicsDevice(ServiceCtx context)
+        {
+            context.RequestData.ReadUInt32();
+
+            return ResultCode.Success;
+        }
+
+        private static int _nextDeviceId;
 
         [CommandTipc(203)]
         public ResultCode GetVaRange(ServiceCtx context)
@@ -286,8 +312,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             uint slot = context.RequestData.ReadUInt32();
 
             // Flag 0x200 marks mostly-empty terrain/pool regions, backed lazily as the GPU
-            // writes them; the rest the console backs with real memory up front.
-            bool eager = (flags & 0x200) == 0;
+            // writes them; the rest the console backs with real memory up front. Regions of
+            // hundreds of MiB up to several GiB are sparse on the console too (a title asks for
+            // two 6 GiB pools): committing those up front runs the budget out, the later regions
+            // get no backing at all and every GPU write into them is lost.
+            const ulong EagerRegionLimit = 256UL << 20;
+            ulong size = last >= start ? last - start + 1 : 0;
+            bool eager = (flags & 0x200) == 0 && size <= EagerRegionLimit;
 
             if (last >= start && Nx2GpuMemory.CreateRegion(start, last - start + 1, eager))
             {
@@ -303,6 +334,75 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             CompleteJobs(context, slot);
+
+            return ResultCode.Success;
+        }
+
+        // Sub 216 (ExecuteSparseMapRequests, behind nvnMemoryPoolMapVirtual and NvRm's remap): an A
+        // buffer of 40-byte requests and a B buffer that gets the kind applied to each. This is how
+        // a game commits and releases its sparse texture tiles; without it the tiles never map.
+        // Word 14 is the job slot, the reply is the number of requests done.
+        [CommandTipc(216)]
+        public ResultCode ExecuteSparseMapRequests(ServiceCtx context)
+        {
+            // The request is 12-15 words depending on the SDK version: the job slot follows the
+            // constant/address-space/request-size words. Read it when present.
+            uint slot = 0;
+            long requestWords = context.RequestData.BaseStream.Length / sizeof(uint);
+
+            if (requestWords > 12)
+            {
+                context.RequestData.BaseStream.Seek(12 * sizeof(uint), System.IO.SeekOrigin.Begin);
+                slot = context.RequestData.ReadUInt32();
+            }
+
+            int count = 0;
+
+            try
+            {
+                if (context.Request.SendBuff.Count > 0)
+                {
+                    ulong ptr = context.Request.SendBuff[0].Position;
+                    ulong length = context.Request.SendBuff[0].Size;
+
+                    count = (int)(length / 40);
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        ulong baseAddr = ptr + (ulong)i * 40;
+
+                        ulong gpuAddress = context.Memory.Read<ulong>(baseAddr);
+                        ulong size = context.Memory.Read<ulong>(baseAddr + 8);
+                        uint handle = context.Memory.Read<uint>(baseAddr + 24);
+                        ulong offset = context.Memory.Read<ulong>(baseAddr + 32);
+
+                        if (size == 0)
+                        {
+                            continue;
+                        }
+
+                        // A zero handle unmaps the range; anything else maps it at the request's
+                        // GPU address. Kinds do not matter to the emulated GPU.
+                        if (handle == 0)
+                        {
+                            Nx2GpuMemory.Unmap(gpuAddress, size);
+                        }
+                        else
+                        {
+                            Nx2GpuMemory.Map(gpuAddress, size, handle, offset);
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.KernelIpc, $"nx2:gpu 216 sparse map failed: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            CompleteJobs(context, slot);
+
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write((uint)count);
 
             return ResultCode.Success;
         }

@@ -322,8 +322,88 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(402)]
         [CommandTipc(1101)]
         [CommandTipc(1102)]
+        [CommandTipc(601)]
         public ResultCode Stub(ServiceCtx context)
         {
+            return ResultCode.Success;
+        }
+
+        // 991: nn::codec::CalculateDecoderImagePoolBuffer. The preference holds an output layout
+        // code at word 1 and (width - 1) | (height - 1) << 16 at word 2. Auto-stubbed, the game
+        // read the request's leftover words as the frame size and aborted with nn::diag::Abort.
+        // Reply: u64 size, u64 alignment.
+        [CommandTipc(991)]
+        public ResultCode CalculateDecoderImagePoolBuffer(ServiceCtx context)
+        {
+            uint code = context.RequestData.ReadUInt32();
+            uint packed = context.RequestData.ReadUInt32();
+
+            ulong width = (packed & 0xFFFF) + 1;
+            ulong height = (packed >> 16) + 1;
+
+            // 1/4 NV12, 2/5 BGRA, 3/6 RGBA; the HDR codes are written as RGBA.
+            bool nv12 = code is 1 or 4;
+            ulong bytesPerPixel = nv12 ? 1UL : 4UL;
+            const ulong BlockRows = 128;
+
+            ulong pitch = ((width * bytesPerPixel) + 63UL) & ~63UL;
+            ulong luma = pitch * ((height + BlockRows - 1) / BlockRows * BlockRows);
+            ulong size = luma;
+
+            if (nv12)
+            {
+                size += pitch * ((((height + 1) / 2) + BlockRows - 1) / BlockRows * BlockRows);
+            }
+
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(size);
+            context.ResponseData.Write(4096UL);
+
+            return ResultCode.Success;
+        }
+
+        // 902/906/1002: nn::codec::video::detail::ipc::Initialize expects a decoder session
+        // handle; without one InitializeVp9Decoder fails with 2001-0114 and the title aborts when
+        // a movie starts.
+        [CommandTipc(901)]
+        [CommandTipc(905)]
+        [CommandTipc(1001)]
+        public ResultCode StubVideoInit(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandTipc(902)]
+        [CommandTipc(906)]
+        [CommandTipc(1002)]
+        public ResultCode OpenVideoSession(ServiceCtx context)
+        {
+            MakeSessionObject(context, new DummyService("nx2:vdec"));
+
+            return ResultCode.Success;
+        }
+
+        // 602: nn::camera::sdk::CreateCameraContext expects the camera context session.
+        [CommandTipc(602)]
+        public ResultCode OpenCameraSession(ServiceCtx context)
+        {
+            MakeSessionObject(context, new DummyService("nx2:camera"));
+
+            return ResultCode.Success;
+        }
+
+        // 1202: nn::chat::gsv expects a session; 1201 is its plain stub.
+        [CommandTipc(1201)]
+        public ResultCode StubChatInit(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandTipc(1202)]
+        public ResultCode OpenChatSession(ServiceCtx context)
+        {
+            MakeSessionObject(context, new DummyService("nx2:chatgsv"));
+
             return ResultCode.Success;
         }
 
@@ -488,6 +568,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(1402)]
         public ResultCode OpenNvsrvSession(ServiceCtx context)
         {
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                var t = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+                Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceAm, $"NX2 gsv1402 caller={t?.Owner.Pid} tid={t?.ThreadUid}");
+            }
             MakeSessionObject(context, new INvDrvServices(context, nvsrv: true));
 
             return ResultCode.Success;

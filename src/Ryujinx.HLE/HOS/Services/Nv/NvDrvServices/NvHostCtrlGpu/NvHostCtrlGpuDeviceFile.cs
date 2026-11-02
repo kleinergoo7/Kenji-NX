@@ -95,6 +95,16 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrlGpu
                         break;
                     case 0x13:
                         result = CallIoctlMethod<VsmsMappingArguments>(VsmsMapping, arguments);
+
+                        // The SDK reads one {gpc_index, tpc_index} byte pair per virtual SM from
+                        // the inline buffer and treats a pair left at its 0xc0c0 sentinel as
+                        // failure, so fill every pair: one GPC, two SMs per TPC.
+                        for (int i = 0; i + 1 < inlineOutBuffer.Length; i += 2)
+                        {
+                            inlineOutBuffer[i] = 0;
+                            inlineOutBuffer[i + 1] = (byte)(i / 4);
+                        }
+
                         break;
                     case 0x1F:
                         if (_nx2Caller)
@@ -299,6 +309,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrlGpu
                 characteristics.Flags          |= 1L << 22;      // SUPPORT_TSG_SUBCONTEXTS: NvRm sizes each TSG's VEID allocator from the +0xb4 u32
                 characteristics.Flags          |= 1L << 34;      // SUPPORT_MAPPING_MODIFY: NvRm switches a compressible pool's mapping to the texture's kind
                 characteristics.Flags          |= 1L << 26;      // SUPPORT_SYNCPOINT_ADDRESS (shim)
+                characteristics.Flags          |= 1L << 35;      // SUPPORT_REMAP: without it NvRm fails every remap before asking the server
+                characteristics.Flags          |= 0x1FL << 40;   // engine support bits: 2D, 3D, compute, inline-to-memory, ZBC; the SDK filters its class enumeration by them
 
                 // Nine s16 interface versions at 0x70..0x80.
                 ref byte raw = ref Unsafe.As<GpuCharacteristics, byte>(ref characteristics);
