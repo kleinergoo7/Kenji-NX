@@ -604,6 +604,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 }
                 image.Name = moduleName;
 
+                Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                    $"NX2 image {moduleName} textBase=0x{textOffset:X} textSize=0x{textSize:X}");
+
                 _images.Add(image);
             }
         }

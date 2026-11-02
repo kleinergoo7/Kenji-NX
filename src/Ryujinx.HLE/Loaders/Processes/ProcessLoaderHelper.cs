@@ -404,7 +404,7 @@ namespace Ryujinx.HLE.Loaders.Processes
 
             for (int index = 0; index < executables.Length; index++)
             {
-                Logger.Info?.Print(LogClass.Loader, $"Loading image {index} at 0x{nsoBase[index]:x16}...");
+                Logger.Info?.Print(LogClass.Loader, $"Loading image {index} ({(executables[index] as NsoExecutable)?.Name}) at 0x{nsoBase[index]:x16}...");
 
                 result = LoadIntoMemory(process, executables[index], nsoBase[index]);
                 if (result != Result.Success)
