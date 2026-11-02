@@ -473,6 +473,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
 
             (Image.Texture texture, Sampler sampler) = _channel.TextureManager.GetGraphicsTextureAndSampler(textureId, samplerId);
 
+            if (texture == null)
+            {
+                // Nothing to sample (unbound or unmapped texture): the draw is a no-op on hardware.
+                return;
+            }
+
             srcX0 *= texture.ScaleFactor;
             srcY0 *= texture.ScaleFactor;
             srcX1 *= texture.ScaleFactor;
