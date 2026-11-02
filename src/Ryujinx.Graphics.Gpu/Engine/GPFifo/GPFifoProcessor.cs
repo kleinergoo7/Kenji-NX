@@ -43,6 +43,203 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         // Object classes the nx2 binder has not seen before, logged once each.
         private readonly System.Collections.Generic.HashSet<int> _unknownClasses = [];
 
+        private sealed class StallException : System.Exception;
+
+        // A channel suspended on an unmet semaphore acquire (Switch 2 NVN2 gates command
+        // buffers this way). The remaining words are re-read fresh from guest memory on resume.
+        private ulong _stallAddress;
+        private uint _stallValue;
+        private int _stallOperation;
+        private ulong _stallBaseVa;
+        private int _stallWordCount;
+        private int _stallIndex;
+        private bool _stalled;
+        private long _stallSince;
+        private bool _stallReported;
+
+        private static readonly System.Collections.Generic.List<GPFifoProcessor> _stalledProcessors = [];
+        private static bool _resuming;
+
+        private readonly System.Collections.Generic.Queue<(ulong Address, int Count)> _stalledQueue = new();
+
+        /// <summary>
+        /// Suspends this channel on an unmet semaphore acquire, aborting the current buffer.
+        /// The remaining words are reprocessed from guest memory once the value is met.
+        /// </summary>
+        /// <param name="address">Semaphore address</param>
+        /// <param name="value">Required value</param>
+        /// <param name="operation">Acquire operation id</param>
+        public void StallOnAcquire(ulong address, int value, int operation)
+        {
+            ulong baseVa = _resumeBaseVa;
+            int count = _resumeWordCount;
+
+            _stallAddress = address;
+            _stallValue = (uint)value;
+            _stallOperation = operation;
+            _stallBaseVa = baseVa;
+            _stallWordCount = count;
+            _stallIndex = _resumeIndex;
+            _stallSince = System.Environment.TickCount64;
+            _stallReported = false;
+
+            lock (_stalledProcessors)
+            {
+                if (!_stalledProcessors.Contains(this))
+                {
+                    _stalledProcessors.Add(this);
+                }
+            }
+
+            _stalled = true;
+
+            throw new StallException();
+        }
+
+        /// <summary>True when this channel is suspended on an acquire that is still unmet.</summary>
+        public bool HasUnmetStall
+        {
+            get
+            {
+                if (!_stalled)
+                {
+                    return false;
+                }
+
+                return !AcquireNowMatches();
+            }
+        }
+
+        private bool AcquireNowMatches()
+        {
+            int current = MemoryManager.Read<int>(_stallAddress);
+
+            return _stallOperation switch
+            {
+                1 => current == (int)_stallValue,
+                4 => (uint)current >= _stallValue,
+                8 => (current & (int)_stallValue) != 0,
+                _ => true,
+            };
+        }
+
+        private void ReportStall()
+        {
+            if (_stallReported || System.Environment.TickCount64 - _stallSince < 2000)
+            {
+                return;
+            }
+
+            _stallReported = true;
+
+            int current = MemoryManager.Read<int>(_stallAddress);
+
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                $"Switch 2 channel waits on semaphore 0x{_stallAddress:X} op {_stallOperation} value {_stallValue} (now {current})");
+        }
+
+        /// <summary>
+        /// Reprocesses a suspended buffer whose acquire is now met. Called from release writes
+        /// and around dispatch; re-reads the remaining words fresh from guest memory.
+        /// </summary>
+        public static void TryResumeAll()
+        {
+            GPFifoProcessor[] stalled;
+
+            lock (_stalledProcessors)
+            {
+                if (_stalledProcessors.Count == 0 || _resuming)
+                {
+                    return;
+                }
+
+                _resuming = true;
+                stalled = [.. _stalledProcessors];
+            }
+
+            try
+            {
+                foreach (GPFifoProcessor processor in stalled)
+                {
+                    processor.TryResume();
+                }
+            }
+            finally
+            {
+                lock (_stalledProcessors)
+                {
+                    _resuming = false;
+                }
+            }
+        }
+
+        private void TryResume()
+        {
+            if (!_stalled)
+            {
+                lock (_stalledProcessors)
+                {
+                    _stalledProcessors.Remove(this);
+                }
+
+                return;
+            }
+
+            if (!AcquireNowMatches())
+            {
+                ReportStall();
+
+                return;
+            }
+
+            _stalled = false;
+
+            lock (_stalledProcessors)
+            {
+                _stalledProcessors.Remove(this);
+            }
+
+            ProcessFresh(_stallBaseVa, _stallWordCount, _stallIndex);
+
+            // The stall is resolved: queued buffers behind it run in order. A nested stall
+            // re-registers this processor and leaves the rest queued.
+            while (!_stalled && _stalledQueue.Count != 0)
+            {
+                (ulong address, int count) = _stalledQueue.Dequeue();
+
+                ProcessFresh(address, count, 0);
+            }
+        }
+
+        private void ProcessFresh(ulong baseVa, int count, int startIndex)
+        {
+            int[] words = new int[count];
+
+            for (int i = 0; i < words.Length; i++)
+            {
+                words[i] = MemoryManager.Read<int>(baseVa + (ulong)i * 4);
+            }
+
+            ProcessFrom(baseVa, words, startIndex);
+        }
+
+        /// <summary>
+        /// Queues a buffer behind a suspended one; it runs once the acquire is met.
+        /// </summary>
+        /// <param name="entryAddress">Buffer GPU address</param>
+        /// <param name="wordCount">Buffer length in words</param>
+        public bool QueueStalled(ulong entryAddress, int wordCount)
+        {
+            if (_stalledQueue.Count >= 512)
+            {
+                return false;
+            }
+
+            _stalledQueue.Enqueue((entryAddress, wordCount));
+
+            return true;
+        }
+
         /// <summary>
         /// Channel memory manager.
         /// </summary>
@@ -125,8 +322,36 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="commandBuffer">Command buffer</param>
         public void Process(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer)
         {
-            for (int index = 0; index < commandBuffer.Length; index++)
+            _resumeBaseVa = baseGpuVa;
+            _resumeWordCount = commandBuffer.Length;
+
+            ProcessFrom(baseGpuVa, commandBuffer, 0);
+        }
+
+        private ulong _resumeBaseVa;
+        private int _resumeWordCount;
+        private int _resumeIndex;
+
+        private void ProcessFrom(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer, int startIndex)
+        {
+            try
             {
+                ProcessLoop(baseGpuVa, commandBuffer, startIndex);
+            }
+            catch (StallException)
+            {
+                // StallOnAcquire recorded the resume point; the remaining words stay queued
+                // until a release write (or the next dispatch) resumes them.
+            }
+
+            _3dClass.FlushUboDirty();
+        }
+
+        private void ProcessLoop(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer, int startIndex)
+        {
+            for (int index = startIndex; index < commandBuffer.Length; index++)
+            {
+                _resumeIndex = index;
                 int command = commandBuffer[index];
 
                 ulong gpuVa = baseGpuVa + (ulong)index * 4;
@@ -179,8 +404,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     }
                 }
             }
-
-            _3dClass.FlushUboDirty();
         }
 
         /// <summary>

@@ -208,7 +208,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 _parent.MemoryManager.Write(address + 8, _context.GetTimestamp());
             }
 
-            // TODO: Acquire operations (Wait), interrupts for invalid combinations.
+            // Switch 2 (NVN2) gates each command buffer with a semaphore acquire the CPU (or
+            // another channel) releases after writing the commands: suspend this channel until the
+            // value is met instead of running ahead on stale commands.
+            if (operation is SemaphoredOperation.Acquire or SemaphoredOperation.AcqGeq or SemaphoredOperation.AcqAnd)
+            {
+                if (_state.State.SemaphoredAcquireSwitch == SemaphoredAcquireSwitch.Enabled &&
+                    !AcquireMatches(operation, _parent.MemoryManager.Read<int>(address), value))
+                {
+                    _parent.StallOnAcquire(address, value, (int)operation);
+                }
+
+                return;
+            }
+
+            // TODO: interrupts for invalid combinations.
             if (operation == SemaphoredOperation.Release)
             {
                 _parent.MemoryManager.Write(address, value);
@@ -249,6 +263,19 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
                 _parent.MemoryManager.Write(address, value);
             }
+
+            GPFifoProcessor.TryResumeAll();
+        }
+
+        private static bool AcquireMatches(SemaphoredOperation operation, int current, int value)
+        {
+            return operation switch
+            {
+                SemaphoredOperation.Acquire => current == value,
+                SemaphoredOperation.AcqGeq => (uint)current >= (uint)value,
+                SemaphoredOperation.AcqAnd => (current & value) != 0,
+                _ => true,
+            };
         }
 
         /// <summary>
