@@ -390,7 +390,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             {
                 lock (PresentLock)
                 {
-                    ITexture texture = context.Device.Gpu.Renderer.CreateTexture(info);
+                    // Reuse a small ring of host textures: the GPU may still be reading
+                    // an earlier frame when the next one is submitted. Creating one per
+                    // present leaked GPU memory until presents failed.
+                    ITexture texture = RentPresentTexture(context, info, (int)width, (int)height);
 
                     texture.SetData(MemoryOwner<byte>.RentCopy(linear));
 
@@ -419,6 +422,35 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         }
 
         private static readonly object PresentLock = new();
+        private static readonly ITexture[] _presentTextures = new ITexture[3];
+        private static int _presentTextureIndex;
+        private static int _presentTextureWidth;
+        private static int _presentTextureHeight;
+
+        // A ring of reusable host textures, sized for the current frame. Must be
+        // called with PresentLock held.
+        private static ITexture RentPresentTexture(ServiceCtx context, TextureCreateInfo info, int width, int height)
+        {
+            if (_presentTextures[_presentTextureIndex] == null || width != _presentTextureWidth || height != _presentTextureHeight)
+            {
+                foreach (ITexture old in _presentTextures)
+                {
+                    (old as System.IDisposable)?.Dispose();
+                }
+
+                Array.Clear(_presentTextures, 0, _presentTextures.Length);
+                _presentTextureIndex = 0;
+                _presentTextureWidth = width;
+                _presentTextureHeight = height;
+            }
+
+            ref ITexture slot = ref _presentTextures[_presentTextureIndex];
+            _presentTextureIndex = (_presentTextureIndex + 1) % _presentTextures.Length;
+
+            slot ??= context.Device.Gpu.Renderer.CreateTexture(info);
+
+            return slot;
+        }
         private static uint _previousFenceId = uint.MaxValue;
         private static int _event11Logs;
         private static uint _previousFenceValue;
