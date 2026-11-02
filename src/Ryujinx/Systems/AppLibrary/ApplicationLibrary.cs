@@ -23,6 +23,7 @@ using Ryujinx.Common.Utilities;
 using Ryujinx.HLE.FileSystem;
 using Ryujinx.HLE.HOS.SystemState;
 using Ryujinx.HLE.Loaders.Npdm;
+using Ryujinx.HLE.Loaders.Processes;
 using Ryujinx.HLE.Loaders.Processes.Extensions;
 using Ryujinx.HLE.Utilities;
 using System;
@@ -358,8 +359,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             // validate the executables exist, Id resolution happens at load.
             if (Directory.Exists(applicationPath))
             {
-                if (File.Exists(Path.Combine(applicationPath, "main")) &&
-                    File.Exists(Path.Combine(applicationPath, "main.npdm")))
+                if (UnpackedTitleLayout.IsUnpackedTitleFolder(applicationPath))
                 {
                     applications.Add(new ApplicationData
                     {
