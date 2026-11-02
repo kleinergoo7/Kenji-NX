@@ -208,7 +208,25 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 _parent.MemoryManager.Write(address + 8, _context.GetTimestamp());
             }
 
-            // TODO: Acquire operations (Wait), interrupts for invalid combinations.
+            // A semaphore acquire gates the rest of the command buffer: the CPU (or another
+            // channel) releases the value once it has written the commands this channel runs
+            // next. Running past an unmet acquire executes stale commands and leaves the guest
+            // waiting for work that never completes.
+            if (operation is SemaphoredOperation.Acquire or SemaphoredOperation.AcqGeq)
+            {
+                int current = _parent.MemoryManager.Read<int>(address);
+
+                bool met = operation == SemaphoredOperation.Acquire
+                    ? current == value
+                    : (uint)current >= (uint)value;
+
+                if (!met && _parent.StallOnAcquire(address, value, operation == SemaphoredOperation.Acquire))
+                {
+                    return;
+                }
+            }
+
+            // TODO: interrupts for invalid combinations.
             if (operation == SemaphoredOperation.Release)
             {
                 _parent.MemoryManager.Write(address, value);

@@ -37,6 +37,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         }
                     }
 
+                    Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.TryResumeAll();
                     Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel.NvHostGpuDeviceFile.SignalAllNx2Events();
                     INx2GpuSession.SignalAllNx2GpuEvents();
 

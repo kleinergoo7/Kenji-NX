@@ -450,8 +450,16 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv, $"NX2G {what}");
         }
 
+        private static int _jobLogs;
+
         private void CompleteJobs(ServiceCtx context, uint slot)
         {
+            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
+                System.Threading.Interlocked.Increment(ref _jobLogs) <= 40)
+            {
+                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 job complete slot={slot} cmd={context.Request.Type}");
+            }
+
             KEvent[] events;
 
             lock (_eventsLock)

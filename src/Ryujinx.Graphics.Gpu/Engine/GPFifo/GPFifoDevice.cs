@@ -205,6 +205,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             // Use this opportunity to also dispose any pending channels that were closed.
             _context.RunDeferredActions();
 
+            // A semaphore release may have landed since the last dispatch: resume those first.
+            GPFifoProcessor.TryResumeAll();
+
             // Process command buffers.
             while (_ibEnable && !_interrupt && _commandBufferQueue.TryDequeue(out CommandBuffer entry))
             {
@@ -228,6 +231,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
                 entry.Processor.Process(entry.EntryAddress, words);
             }
+
+            GPFifoProcessor.TryResumeAll();
 
             _interrupt = false;
         }

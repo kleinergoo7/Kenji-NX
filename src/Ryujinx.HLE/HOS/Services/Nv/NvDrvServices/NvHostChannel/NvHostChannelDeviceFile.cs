@@ -451,6 +451,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             return NvInternalResult.Success;
         }
 
+        private static int _nx2SubmitLogs;
+
         protected NvInternalResult SubmitGpfifo(ref SubmitGpfifoArguments header, Span<ulong> entries)
         {
             bool nx2 = NvHostCtrlGpuDeviceFile.Nx2Driver;
@@ -488,6 +490,24 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             }
 
             Logger.Info?.Print(LogClass.ServiceNv, $"SubmitGpfifo flags={header.Flags} fence=({header.Fence.Id}, {header.Fence.Value}) entries=0x{entries.Length:X} address=0x{header.Address:X} first=0x{(entries.Length > 0 ? entries[0] : 0):X} nx2={nx2} pc=0x{callerPc:X}");
+
+            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
+            {
+                int submitIndex = System.Threading.Interlocked.Increment(ref _nx2SubmitLogs);
+
+                if (submitIndex <= 40)
+                {
+                    System.Text.StringBuilder words = new();
+
+                    for (int i = 0; i < entries.Length && i < 6; i++)
+                    {
+                        words.Append($"{entries[i]:X16} ");
+                    }
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv,
+                        $"NX2 submit #{submitIndex} owner={Owner} chan={Channel?.GetHashCode():X8} tid={caller?.ThreadUid}({caller?.GetThreadName()}) pc=0x{callerPc:X} flags={header.Flags} fence=({header.Fence.Id},{header.Fence.Value}) entries={entries.Length} words=[{words}]");
+                }
+            }
 
             if (header.Flags.HasFlag(SubmitGpfifoFlags.FenceWait) && !_device.System.HostSyncpoint.IsSyncpointExpired(header.Fence.Id, header.Fence.Value))
             {
