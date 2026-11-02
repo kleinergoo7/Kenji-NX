@@ -122,6 +122,62 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             return GetSharedFontInOrderOfPriority(context);
         }
 
+        // Switch 2 built-in font shared memory: the font shared-memory handle
+        // plus the total shared memory size.
+        // Switch 2 built-in font shared memory: the font shared-memory handle
+        // plus the total shared memory size.
+        [CommandCmif(2000)]
+        public ResultCode GetBuiltInFontSharedMemory(ServiceCtx context)
+        {
+            context.Device.System.SharedFontManager.EnsureBuiltInFonts(context.Device.System.ContentManager);
+
+            if (_fontSharedMemHandle == 0 && context.Process.HandleTable.GenerateHandle(context.Device.System.FontSharedMem, out _fontSharedMemHandle) != Ryujinx.Horizon.Common.Result.Success)
+            {
+                throw new System.InvalidOperationException("Out of handles!");
+            }
+
+            context.ResponseData.Write(Horizon.FontSize);
+            context.Response.HandleDesc = IpcHandleDesc.MakeCopy(_fontSharedMemHandle);
+
+            return ResultCode.Success;
+        }
+
+        // Switch 2 built-in font data: takes a font index, returns found plus the
+        // plain-TTF {flags, offset, size} descriptor. Plain TTF copies live in
+        // shared memory after the BFTTF entries.
+        [CommandCmif(2010)]
+        public ResultCode GetBuiltInFontData(ServiceCtx context)
+        {
+            uint type = context.RequestData.ReadUInt32();
+            byte unused = context.RequestData.ReadByte();
+
+            SharedFontManager manager = context.Device.System.SharedFontManager;
+            manager.EnsureBuiltInFonts(context.Device.System.ContentManager);
+
+            int count = manager.GetBuiltInFontsCount();
+            SharedFontType fontType = (SharedFontType)System.Math.Min(type, (uint)System.Math.Max(count - 1, 0));
+
+            uint offset = 0;
+            uint size = 0;
+            SharedFontManager.FontInfo info = default;
+            bool found = count > 0 && manager.TryGetBuiltInFont(fontType, out info);
+
+            if (found)
+            {
+                offset = (uint)info.Offset;
+                size = (uint)info.Size;
+            }
+
+            context.ResponseData.Write(found ? 1u : 0u);
+            context.ResponseData.Write(0u);
+            context.ResponseData.Write(0u);
+            context.ResponseData.Write(offset);
+            context.ResponseData.Write(size);
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
         private bool AddFontToOrderOfPriorityList(ServiceCtx context, SharedFontType fontType, uint offset)
         {
             ulong typesPosition = context.Request.ReceiveBuff[0].Position;

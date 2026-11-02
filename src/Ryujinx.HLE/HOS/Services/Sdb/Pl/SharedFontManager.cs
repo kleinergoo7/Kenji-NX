@@ -6,6 +6,7 @@ using LibHac.Ncm;
 using LibHac.Tools.FsSystem;
 using LibHac.Tools.FsSystem.NcaUtils;
 using Microsoft.IO;
+using Ryujinx.Common.Logging;
 using Ryujinx.Common.Memory;
 using Ryujinx.HLE.Exceptions;
 using Ryujinx.HLE.FileSystem;
@@ -22,11 +23,25 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
     {
         private const uint FontKey = 0x06186249;
         private const uint BFTTFMagic = 0x18029a7f;
+        private const uint TtfSfntTrueType = 0x00010000;
+        private const uint TtfSfntCff = 0x4F54544F; // 'OTTO'
+        private const uint TtfSfntTrue = 0x74727565; // 'true'
+        private const uint TtfSfntTyp1 = 0x74797031; // 'typ1'
+
+        // Host fallback when no system titles are installed (same layout as below).
+        private static readonly string[] FallbackFontPaths =
+        [
+            "/usr/share/fonts/truetype/Carlito-Regular.ttf",
+            "/usr/share/fonts/truetype/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/Roboto-Regular.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        ];
 
         private readonly Switch _device;
         private readonly SharedMemoryStorage _storage;
 
-        private struct FontInfo
+        internal struct FontInfo
         {
             public int Offset;
             public int Size;
@@ -39,6 +54,9 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
         }
 
         private Dictionary<SharedFontType, FontInfo> _fontData;
+
+        // Plain TTF copies after the BFTTF data (Switch 2 GetBuiltInFontData).
+        private Dictionary<SharedFontType, FontInfo> _builtInFontData;
 
         public SharedFontManager(Switch device, SharedMemoryStorage storage)
         {
@@ -141,6 +159,157 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
             _storage.GetRef<int>(offset + 0) = (int)BFTTFMagic;
             _storage.GetRef<int>(offset + 4) = encryptedSize;
+        }
+
+        public void EnsureBuiltInFonts(ContentManager contentManager)
+        {
+            if (_builtInFontData != null)
+            {
+                return;
+            }
+
+            try
+            {
+                EnsureInitialized(contentManager);
+            }
+            catch (Exception ex) when (ex is InvalidSystemResourceException || ex is ArgumentException)
+            {
+                LoadHostFallbackFonts();
+            }
+
+            AppendPlainTtfCopies();
+        }
+
+        public bool TryGetBuiltInFont(SharedFontType type, out FontInfo info)
+        {
+            EnsureBuiltInFonts(_device.System.ContentManager);
+
+            return _builtInFontData.TryGetValue(type, out info);
+        }
+
+        public int GetBuiltInFontsCount()
+        {
+            EnsureBuiltInFonts(_device.System.ContentManager);
+
+            return _builtInFontData.Count;
+        }
+
+        private void AppendPlainTtfCopies()
+        {
+            _builtInFontData = new Dictionary<SharedFontType, FontInfo>();
+
+            ulong offset = 0;
+
+            foreach (KeyValuePair<SharedFontType, FontInfo> entry in _fontData)
+            {
+                offset = Math.Max(offset, (ulong)(entry.Value.Offset + 8 + entry.Value.Size));
+            }
+
+            foreach (SharedFontType type in new[]
+            {
+                SharedFontType.JapanUsEurope,
+                SharedFontType.SimplifiedChinese,
+                SharedFontType.SimplifiedChineseEx,
+                SharedFontType.TraditionalChinese,
+                SharedFontType.Korean,
+                SharedFontType.NintendoEx,
+            })
+            {
+                FontInfo src = _fontData[type];
+
+                offset = (offset + 0xFFF) & ~0xFFFUL;
+
+                if (offset + (ulong)src.Size > (ulong)Horizon.FontSize)
+                {
+                    throw new InvalidSystemResourceException("The sum of all font size exceed the shared memory size.");
+                }
+
+                for (int i = 0; i < src.Size; i++)
+                {
+                    _storage.GetRef<byte>(offset + (ulong)i) = _storage.GetRef<byte>((ulong)(src.Offset + 8 + i));
+                }
+
+                _builtInFontData[type] = new FontInfo((int)offset, src.Size);
+                offset += (ulong)src.Size;
+            }
+        }
+
+        private void LoadHostFallbackFonts()
+        {
+            _storage.ZeroFill();
+
+            byte[] ttf = null;
+            string usedPath = null;
+
+            foreach (string path in FallbackFontPaths)
+            {
+                try
+                {
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    byte[] candidate = File.ReadAllBytes(path);
+
+                    if (candidate.Length > 4)
+                    {
+                        uint magic = BinaryPrimitives.ReadUInt32BigEndian(candidate.AsSpan(0, 4));
+
+                        if (magic == TtfSfntTrueType || magic == TtfSfntCff || magic == TtfSfntTrue || magic == TtfSfntTyp1)
+                        {
+                            ttf = candidate;
+                            usedPath = path;
+
+                            break;
+                        }
+                    }
+                }
+                catch (IOException)
+                {
+                    // Try the next candidate path.
+                }
+            }
+
+            if (ttf == null)
+            {
+                throw new InvalidSystemResourceException("No system fonts and no host fallback font found. Provide the system archive or install a host TTF font.");
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFs, $"Using host fallback font '{usedPath}' for shared fonts.");
+
+            _fontData = new Dictionary<SharedFontType, FontInfo>();
+            ulong fontOffset = 0;
+
+            foreach (SharedFontType type in new[]
+            {
+                SharedFontType.JapanUsEurope,
+                SharedFontType.SimplifiedChinese,
+                SharedFontType.SimplifiedChineseEx,
+                SharedFontType.TraditionalChinese,
+                SharedFontType.Korean,
+                SharedFontType.NintendoEx,
+            })
+            {
+                WriteMagicAndSize(fontOffset, ttf.Length);
+
+                fontOffset += 8;
+
+                for (int i = 0; i < ttf.Length; i++)
+                {
+                    _storage.GetRef<byte>(fontOffset + (ulong)i) = ttf[i];
+                }
+
+                _fontData[type] = new FontInfo((int)fontOffset - 8, ttf.Length);
+                fontOffset += (ulong)ttf.Length;
+
+                if (fontOffset > (ulong)Horizon.FontSize)
+                {
+                    throw new InvalidSystemResourceException("The sum of all font size exceed the shared memory size.");
+                }
+            }
+
+            _builtInFontData = null;
         }
 
         public int GetFontSize(SharedFontType fontType)
