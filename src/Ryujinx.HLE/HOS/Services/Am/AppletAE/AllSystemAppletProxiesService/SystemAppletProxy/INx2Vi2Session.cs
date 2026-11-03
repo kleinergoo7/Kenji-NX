@@ -257,7 +257,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 System.Threading.Interlocked.Increment(ref _methodSamples) % 300 == 0)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
-                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} tol=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Tolerances}] dist=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}]");
+                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} tol=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Tolerances}] fifo=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Fifo}] dist=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}]");
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_PC_SAMPLE") == "1" &&

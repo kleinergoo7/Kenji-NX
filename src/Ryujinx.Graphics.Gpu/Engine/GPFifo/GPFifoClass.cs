@@ -288,15 +288,26 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             {
                 uint threshold = (uint)_state.State.SyncpointaPayload;
 
+                System.Threading.Interlocked.Increment(ref SyncpointWaits);
+
                 _context.Synchronization.WaitOnSyncpoint(syncpointId, threshold, Timeout.InfiniteTimeSpan);
             }
             else if (operation == SyncpointbOperation.Incr)
             {
+                System.Threading.Interlocked.Increment(ref SyncpointIncrs);
+
                 // "Unbind" render targets since a syncpoint increment might indicate future CPU access for the textures.
                 _parent.TextureManager.RefreshModifiedTextures();
 
                 _context.CreateHostSyncIfNeeded(HostSyncFlags.StrictSyncpoint);
-                _context.Synchronization.IncrementSyncpoint(syncpointId);
+                uint after = _context.Synchronization.IncrementSyncpoint(syncpointId);
+
+                if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
+                    System.Threading.Interlocked.Increment(ref SyncpointIncrLogs) <= 10)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                        $"NX2 spincr id={syncpointId} now={after} check={_context.Synchronization.GetSyncpointValue(syncpointId)}");
+                }
             }
 
             _context.AdvanceSequence();
@@ -421,23 +432,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// </summary>
         /// <param name="index">Index of the macro</param>
         /// <param name="state">Current GPU state</param>
-        private static int _nx2SkipLogs;
         private static int _callProbe;
+
+        internal static int SyncpointWaits;
+        internal static int SyncpointIncrs;
+
+        private static int SyncpointIncrLogs;
 
         public void CallMme(int index, IDeviceState state)
         {
-            if (_context.IsNx2Ampere && System.Environment.GetEnvironmentVariable("NX2_RUN_MME") != "1")
+            // Turing MME64 macros are the only path Switch 2 drivers use for 3D state
+            // and draws: skipping them yields zero methods and a black screen (measured:
+            // 890 methods emitted, 0 failures with them on). NX2_RUN_MME=0 keeps the
+            // old skip as a kill-switch.
+            if (_context.IsNx2Ampere && System.Environment.GetEnvironmentVariable("NX2_RUN_MME") == "0")
             {
-                // Switch 2 drivers upload Turing+ (MME64) macros, which this interpreter does not
-                // describe: it faults on them (uninitialised registers, unknown output selectors)
-                // and the half-executed macro leaves the 3D state torn. The Eglantine nx2 line
-                // skips them the same way and renders, so do that until MME64 is described.
-                if (System.Threading.Interlocked.Increment(ref _nx2SkipLogs) == 1)
-                {
-                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
-                        "nx2: skipping Turing MME macros (MME64 not implemented)");
-                }
-
                 return;
             }
 

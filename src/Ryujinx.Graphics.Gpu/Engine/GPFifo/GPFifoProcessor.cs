@@ -30,6 +30,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
         public static string Tolerances => $"U={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolUninitReg} F={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolFifoUnderflow} S={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolBadSelector} O={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolOobEnd}";
 
+        public static string Fifo => $"bufs={GPFifoProcessor.BuffersProcessed} words={GPFifoProcessor.WordsProcessed} spwait={GPFifoClass.SyncpointWaits} spincr={GPFifoClass.SyncpointIncrs}";
+
         /// <summary>Full distribution of macro-emitted method addresses.</summary>
         public static string DescribeEmitted()
         {
@@ -99,6 +101,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
         internal static int Method3DTotal => _method3DTotal;
         internal static readonly System.Collections.Generic.Dictionary<int, int> MethodHistogram = [];
+        internal static long WordsProcessed;
+        internal static long BuffersProcessed;
 
         private static int _method3DTotal;
 
@@ -321,6 +325,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             _bufferBaseVa = baseGpuVa;
             _bufferWords = commandBuffer.Length;
+
+            System.Threading.Interlocked.Add(ref WordsProcessed, commandBuffer.Length);
+            System.Threading.Interlocked.Increment(ref BuffersProcessed);
 
             try
             {
