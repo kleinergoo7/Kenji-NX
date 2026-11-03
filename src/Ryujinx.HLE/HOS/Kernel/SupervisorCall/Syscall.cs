@@ -11,6 +11,7 @@ using Ryujinx.Horizon.Common;
 using Ryujinx.Memory;
 using System;
 using System.Buffers;
+using System.Text;
 using System.Threading;
 
 namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
@@ -250,13 +251,19 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             clientSession.DecrementReferenceCount();
 
+            if (System.Environment.GetEnvironmentVariable("NX2_SEND_LOG") == "1" && currentProcess.Pid == 109)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
+                    $"NX2 port pid=109 port={name} handle=0x{handle:X}");
+            }
+
             return result;
         }
 
         // Diagnostic: guest call-site histogram for SendSyncRequest (pid 109 only).
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<(ulong Pid, ulong Pc), int> GuestCallSites = [];
 
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> SendLogged = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> SendCounts = new();
 
         [Svc(0x21)]
         public Result SendSyncRequest(int handle)
@@ -272,20 +279,17 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             KThread caller = KernelStatic.GetCurrentThread();
 
+            uint w0 = 0;
+            bool trace = false;
+
             if (caller != null)
             {
                 GuestCallSites.AddOrUpdate((caller.Owner.Pid, caller.Context.Pc), 1, (_, v) => v + 1);
 
                 if (System.Environment.GetEnvironmentVariable("NX2_SEND_LOG") == "1" && caller.Owner.Pid == 109)
                 {
-                    uint w0 = caller.Owner.CpuMemory.Read<uint>(caller.TlsAddress + 0x0);
-                    string key = $"{caller.ThreadUid}:{handle:X}:{w0:X8}";
-
-                    if (SendLogged.TryAdd(key, 0))
-                    {
-                        Logger.Warning?.Print(LogClass.KernelSvc,
-                            $"NX2 send tid={caller.ThreadUid}({caller.GetThreadName()}) handle=0x{handle:X} type=0x{w0:X8}");
-                    }
+                    w0 = caller.Owner.CpuMemory.Read<uint>(caller.TlsAddress + 0x0);
+                    trace = true;
                 }
             }
             else
@@ -293,7 +297,61 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 Logger.Warning?.Print(LogClass.KernelSvc, "NX2 send-sync with no current thread; caller untracked");
             }
 
-            return session.SendSyncRequest();
+            if (session == null)
+            {
+                if (trace)
+                {
+                    Logger.Warning?.Print(LogClass.KernelSvc,
+                        $"NX2 send tid={caller.ThreadUid}({caller.GetThreadName()}) handle=0x{handle:X} type=0x{w0:X8} result=InvalidHandle");
+                }
+
+                return KernelResult.InvalidHandle;
+            }
+
+            Result result = session.SendSyncRequest();
+
+            if (trace)
+            {
+                string key = $"{caller.ThreadUid}:{handle:X}:{w0:X8}";
+                int n = SendCounts.AddOrUpdate(key, 1, (_, v) => v + 1);
+
+                if (n == 1 || n % 500 == 0)
+                {
+                    Logger.Warning?.Print(LogClass.KernelSvc,
+                        $"NX2 send tid={caller.ThreadUid}({caller.GetThreadName()}) handle=0x{handle:X} type=0x{w0:X8} result={result} n={n}");
+                }
+
+                if ((handle == 0xE8019 || handle == 0xC8015) && n == 1)
+                {
+                    System.Text.StringBuilder waiters = new();
+
+                    foreach (System.Collections.Generic.KeyValuePair<ulong, KProcess> proc in _context.Processes)
+                    {
+                        foreach (KThread thread in proc.Value.DebugThreads)
+                        {
+                            KSynchronizationObject[] waited = thread.WaitSyncObjects;
+
+                            if (waited == null)
+                            {
+                                continue;
+                            }
+
+                            foreach (KSynchronizationObject obj in waited)
+                            {
+                                if (ReferenceEquals(obj, session.ParentSession.ServerSession))
+                                {
+                                    waiters.Append($" {proc.Key}:{thread.ThreadUid}({thread.GetThreadName()})");
+                                }
+                            }
+                        }
+                    }
+
+                    Logger.Warning?.Print(LogClass.KernelSvc,
+                        $"NX2 waiter handle=0x{handle:X} waiters=[{waiters}]");
+                }
+            }
+
+            return result;
         }
 
         [Svc(0x22)]

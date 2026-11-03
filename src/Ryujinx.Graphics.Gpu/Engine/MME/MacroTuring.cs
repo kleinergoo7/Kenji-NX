@@ -67,6 +67,17 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         private Decoded[] _decoded = Array.Empty<Decoded>();
 
         public static int EmittedMethods;
+
+        internal static int TolUninitReg;
+        internal static int TolFifoUnderflow;
+        internal static int TolBadSelector;
+        internal static int TolOobEnd;
+
+        private static int _selLogs;
+
+        internal static readonly System.Collections.Generic.Dictionary<uint, int> EmittedHistogram = new();
+
+        private static int _failProbe;
         public static int MacrosRun;
 
         private bool _readRegisters;
@@ -203,6 +214,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
             void Fail(string message)
             {
+                if (error == null && _failProbe++ < 24)
+                {
+                    Decoded dd = _decoded[pc];
+                    string raw = $"{dd.W0:X8}:{dd.W1:X8}:{dd.W2:X8}";
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                        $"NX2 mfail {message} pc={pc} raw={raw} op=({dd.Op[0]},{dd.Op[1]}) dst=({dd.Dst[0]},{dd.Dst[1]}) srca=({dd.SrcA[0]},{dd.SrcA[1]}) srcb=({dd.SrcB[0]},{dd.SrcB[1]}) selM=({dd.OutMethod[0]},{dd.OutMethod[1]}) selE=({dd.OutEmit[0]},{dd.OutEmit[1]}) imm=({dd.Imm[0]:X},{dd.Imm[1]:X}) alu=({alu[0]:X},{alu[1]:X})");
+                }
+
                 error ??= message;
             }
 
@@ -217,9 +236,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                         w.Append($"{code[i * InstructionWordCount]:X8}{code[i * InstructionWordCount + 1]:X8}{code[i * InstructionWordCount + 2]:X8} ");
                     }
 
-                    // Running past the last instruction of its buffer is how these programs end:
-                    // the macro RAM after a body is zero, and a body's own end marker is not one
-                    // of the bits this decoder knows.
+                    // WORKAROUND: running past the last instruction of its buffer is how
+                    // these programs end (the macro RAM after a body is zero, and the body's
+                    // own end bit is not one the decoder knows). Counted in TolOobEnd.
+                    System.Threading.Interlocked.Increment(ref TolOobEnd);
                     return null;
                 }
 
@@ -231,7 +251,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
                 if (!d.Valid || d.W0 != w0 || d.W1 != w1 || d.W2 != w2)
                 {
-                    d = Decode(w0, w1, w2);
+                    // Words are decoded low-to-high as words[2..0]: this matches the
+                    // proven Eglantine Turing decoder (adapted from Mesa mme_tu104).
+                    d = Decode(w2, w1, w0);
                     _decoded[pc] = d;
                 }
 
@@ -244,6 +266,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     {
                         if (consumed >= parameters.Count)
                         {
+                            // WORKAROUND: the console reads zero past the FIFO end; failing
+                            // here aborted whole macros. Counted in TolFifoUnderflow.
+                            System.Threading.Interlocked.Increment(ref TolFifoUnderflow);
                             load[lane] = 0;
 
                             continue;
@@ -264,8 +289,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     {
                         if ((initialized & (1u << (int)reg)) == 0)
                         {
-                            // These programs read registers they never wrote; the console reads
-                            // whatever the register file holds (zero on a fresh channel).
+                            // WORKAROUND: these programs read registers they never wrote; the
+                            // console reads whatever the register file holds (zero on a fresh
+                            // channel). Failing here aborted every macro. Counted below.
+                            System.Threading.Interlocked.Increment(ref TolUninitReg);
                         }
 
                         return regs[reg];
@@ -531,6 +558,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                         case 10:
                             return (d.Imm[0] << 16) | d.Imm[1];
                         default:
+                            // WORKAROUND: Mesa defines output selectors 0-10 only, but these
+                            // macros address selectors 7 and 11-15. Emitting nothing keeps the
+                            // macro alive; every trigger is logged by the mfail probe.
+                            System.Threading.Interlocked.Increment(ref TolBadSelector);
                             return 0;
                     }
                 }
@@ -558,6 +589,17 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     if (d.OutEmit[lane] != 0)
                     {
                         uint value = Output(d.OutEmit[lane], alu, load);
+
+                        if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1")
+                        {
+                            int n = System.Threading.Interlocked.Increment(ref _selLogs);
+
+                            if (n <= 40)
+                            {
+                                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                                    $"NX2 sel pc={pc} lane={lane} selM={d.OutMethod[lane]} selE={d.OutEmit[lane]} addr=0x{method:X} val=0x{value:X8} alu=({alu[0]:X},{alu[1]:X}) load=({load[0]:X},{load[1]:X}) imm=({d.Imm[0]:X},{d.Imm[1]:X})");
+                            }
+                        }
 
                         if (!Emit(state, method, value, parameters))
                         {
@@ -618,6 +660,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             }
 
             int emitIndex = System.Threading.Interlocked.Increment(ref EmittedMethods);
+
+            lock (EmittedHistogram)
+            {
+                EmittedHistogram.TryGetValue(address, out int seen);
+                EmittedHistogram[address] = seen + 1;
+            }
 
             if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1" && emitIndex <= 30)
             {

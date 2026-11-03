@@ -264,6 +264,12 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
 
             void CleanUpForError()
             {
+                if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                        $"NX2 cleanuperr server={serverProcess.Pid} client={clientProcess.Pid}:{clientThread.ThreadUid}({clientThread.GetThreadName()}) result={clientResult}");
+                }
+
                 if (request.BufferDescriptorTable.UnmapServerBuffers(serverProcess.MemoryManager) == Result.Success)
                 {
                     request.BufferDescriptorTable.RestoreClientBuffers(clientProcess.MemoryManager);

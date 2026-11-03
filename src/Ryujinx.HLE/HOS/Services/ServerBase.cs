@@ -41,6 +41,8 @@ namespace Ryujinx.HLE.HOS.Services
         private KProcess _selfProcess;
         private KThread _selfThread;
         private KEvent _wakeEvent;
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, int> ServerWakeCounts = new();
         private int _wakeHandle = 0;
 
         private readonly ReaderWriterLockSlim _handleLock = new();
@@ -258,6 +260,17 @@ namespace Ryujinx.HLE.HOS.Services
                     // We got a IPC request, process it, pass to the appropriate service if needed.
                     int signaledHandle = handles[signaledIndex];
 
+                    if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+                    {
+                        int n = ServerWakeCounts.AddOrUpdate(signaledHandle, 1, (_, v) => v + 1);
+
+                        if (n == 1 || n % 500 == 0)
+                        {
+                            Logger.Warning?.Print(LogClass.KernelIpc,
+                                $"NX2 srvwake server={_selfProcess.Pid} shandle=0x{signaledHandle:X} n={n}");
+                        }
+                    }
+
                     if (Process(signaledHandle, heapAddr))
                     {
                         replyTargetHandle = signaledHandle;
@@ -387,6 +400,23 @@ namespace Ryujinx.HLE.HOS.Services
                 uint magic = (uint)_requestDataReader.ReadUInt64();
 #pragma warning restore IDE0059
                 uint cmdId = (uint)_requestDataReader.ReadUInt64();
+
+                switch (cmdId)
+                {
+                    case 0:
+                    case 2:
+                    case 3:
+                    case 4:
+                        if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+                        {
+                            ulong ctlClient = request.HandleDesc is { HasPId: true } ? request.HandleDesc.PId : 0;
+
+                            Logger.Warning?.Print(LogClass.KernelIpc,
+                                $"NX2 ctl {GetSessionObj(serverSessionHandle)?.GetType().Name}:{cmdId} client={ctlClient} server={_selfProcess.Pid}");
+                        }
+
+                        break;
+                }
 
                 switch (cmdId)
                 {

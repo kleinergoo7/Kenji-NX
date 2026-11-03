@@ -16,7 +16,7 @@ namespace Ryujinx.HLE.HOS.Services
         // Diagnostic: per-service-command call counts, printed with the NX2 progress line.
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> CallCounts = [];
 
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> TipcSeen = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> TipcSeen = new();
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> UnimplementedLogged = [];
 
@@ -146,6 +146,25 @@ namespace Ryujinx.HLE.HOS.Services
 
             CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
 
+            if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+            {
+                var cmifCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+
+                if (cmifCaller != null)
+                {
+                    string cmifKey = $"{GetType().Name}:{commandId}";
+                    int n = TipcSeen.AddOrUpdate(cmifKey, 1, (_, v) => v + 1);
+
+                    if (n == 1 || n % 500 == 0)
+                    {
+                        ulong clientPid = context.Request.HandleDesc is { HasPId: true } ? context.Request.HandleDesc.PId : 0;
+
+                        Logger.Warning?.Print(LogClass.KernelIpc,
+                            $"NX2 tipc {cmifKey} client={clientPid} server={context.Process.Pid} thread={cmifCaller.Owner.Pid}:{cmifCaller.ThreadUid}({cmifCaller.GetThreadName()}) n={n}");
+                    }
+                }
+            }
+
             if (System.Environment.GetEnvironmentVariable("NX2_GSV_LOG") == "1" &&
                 GetType().Name == "INx2GraphicsSystemSession")
             {
@@ -238,14 +257,15 @@ namespace Ryujinx.HLE.HOS.Services
             {
                 var tipcCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
 
-                if (tipcCaller != null && tipcCaller.Owner.Pid == 109)
+                if (tipcCaller != null)
                 {
                     string tipcKey = $"{GetType().Name}:{commandId}";
+                    int n = TipcSeen.AddOrUpdate(tipcKey, 1, (_, v) => v + 1);
 
-                    if (TipcSeen.TryAdd(tipcKey, 0))
+                    if (n == 1 || n % 500 == 0)
                     {
                         Logger.Warning?.Print(LogClass.KernelIpc,
-                            $"NX2 tipc {tipcKey} tid={tipcCaller.ThreadUid}({tipcCaller.GetThreadName()})");
+                            $"NX2 tipc {tipcKey} server={context.Process.Pid} thread={tipcCaller.Owner.Pid}:{tipcCaller.ThreadUid}({tipcCaller.GetThreadName()}) n={n}");
                     }
                 }
             }

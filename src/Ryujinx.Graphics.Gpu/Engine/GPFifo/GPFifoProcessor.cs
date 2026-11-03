@@ -28,6 +28,25 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public static int EmittedMethods => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedMethods;
         public static int Draws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.DrawCount;
 
+        public static string Tolerances => $"U={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolUninitReg} F={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolFifoUnderflow} S={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolBadSelector} O={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolOobEnd}";
+
+        /// <summary>Full distribution of macro-emitted method addresses.</summary>
+        public static string DescribeEmitted()
+        {
+            System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<uint, int>> list = new(Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedHistogram);
+
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            System.Text.StringBuilder sb = new();
+
+            foreach (System.Collections.Generic.KeyValuePair<uint, int> kv in list)
+            {
+                sb.Append($"0x{kv.Key:X}={kv.Value} ");
+            }
+
+            return sb.ToString();
+        }
+
         /// <summary>Total 3D methods dispatched and the most frequent method offsets.</summary>
         public static string Describe3DMethods()
         {

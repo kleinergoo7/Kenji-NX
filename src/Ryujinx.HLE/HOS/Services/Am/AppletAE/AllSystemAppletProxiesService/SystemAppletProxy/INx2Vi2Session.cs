@@ -257,7 +257,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 System.Threading.Interlocked.Increment(ref _methodSamples) % 300 == 0)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
-                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws}");
+                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} tol=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Tolerances}] dist=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}]");
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_PC_SAMPLE") == "1" &&
@@ -268,8 +268,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
             {
-                // The calling guest thread, not the serving process: HLE services run on the
-                // client's thread, and context.Process is the server.
+                // The executing thread here is the HLE server thread (ServerBase.ServerLoop),
+                // not the guest caller: attribute presents by client only where the message
+                // carries a caller pid (CMIF), never by thread owner.
                 var caller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
 
                 if (caller != null)
@@ -625,8 +626,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         }
 
         private static int _fenceTimeouts;
-
-        private static int _presentWho;
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> PresentSeen = new();
 

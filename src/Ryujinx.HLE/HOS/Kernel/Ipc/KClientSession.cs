@@ -12,6 +12,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
 
         private readonly KSession _parent;
 
+        internal KSession ParentSession => _parent;
+
         public ChannelState State { get; set; }
 
         public KClientPort ParentPort { get; }

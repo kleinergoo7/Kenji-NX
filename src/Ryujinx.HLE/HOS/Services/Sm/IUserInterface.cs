@@ -84,6 +84,12 @@ namespace Ryujinx.HLE.HOS.Services.Sm
                     throw new InvalidOperationException("Out of handles!");
                 }
 
+                if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                        $"NX2 smget name={name} client={context.ClientProcessId} handle=0x{handle:X}");
+                }
+
                 session.ClientSession.DecrementReferenceCount();
 
                 context.Response.HandleDesc = IpcHandleDesc.MakeMove(handle);

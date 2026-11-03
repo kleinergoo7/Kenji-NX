@@ -24,6 +24,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private readonly Dictionary<uint, KEvent> _events = [];
         private readonly Dictionary<uint, SlotRequest> _requests = [];
         private static int _dualLogs;
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, byte> SyncptSeen = new();
         private readonly object _lock = new();
 
         public INx2SyncptSession() : base(registerTipc: true) { }
@@ -111,6 +113,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 uint gpuValue = context.Device.Gpu.Synchronization.GetSyncpointValue(syncpoint);
 
                 value = hostValue;
+
+                if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1" &&
+                    SyncptSeen.TryAdd(syncpoint, 0) && SyncptSeen.Count <= 20)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 syncpt103 sp={syncpoint} ctr=0x{counter:X} host={hostValue} gpu={gpuValue}");
+                }
 
                 if (_dualLogs < 40 && (hostValue != 0 || gpuValue != 0))
                 {

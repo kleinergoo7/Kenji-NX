@@ -331,10 +331,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="argument">Method call argument</param>
         public void LoadMmeInstructionRam(int argument)
         {
-            if (_context.IsNx2Ampere && System.Environment.GetEnvironmentVariable("NX2_RUN_MME") != "1")
+            if (_context.IsNx2Ampere)
             {
-                // Turing+ instructions are 96 bits (three words). The SDK addresses code by
-                // instruction index, so a sequence of three writes stores one instruction.
+                // Turing+ instructions are 96 bits (three words). The driver names the
+                // start method in LoadMmeInstructionRamPointer and streams words after
+                // it; code for method M lives at word offset M * 3, matching Mesa's
+                // mme_tu104 layout ("the words are reversed in the actual encoding").
                 if ((uint)_mmeCodeWriteOffset < (uint)_macroCode.Length)
                 {
                     _macroCode[_mmeCodeWriteOffset++] = argument;
