@@ -255,6 +255,12 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrlGpu
 
             arguments.Header.BufferSize = nx2 ? 0xD0 : 0xa0;
 
+            if (nx2)
+            {
+                // NvRm treats a zero buffer address as "no characteristics were written".
+                arguments.Header.BufferAddress = 0xdeadbeef;
+            }
+
 #pragma warning disable IDE0055 // Disable formatting
             characteristics.Arch                   = 0x120;
             characteristics.Impl                   = 0xb;

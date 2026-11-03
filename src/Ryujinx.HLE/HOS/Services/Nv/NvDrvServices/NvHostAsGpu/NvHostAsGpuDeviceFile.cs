@@ -8,13 +8,17 @@ using Ryujinx.Memory;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostAsGpu
 {
     class NvHostAsGpuDeviceFile : NvDeviceFile
     {
         private const uint SmallPageSize = 0x1000;
-        private const uint BigPageSize = 0x10000;
+
+        // The Switch 2 characteristics block advertises BigPageSize 0x20000; reporting a
+        // different big-page size here makes NvRm reject the big-page VA region.
+        private const uint BigPageSize = 0x20000;
 
         private static readonly uint[] _pageSizes = [SmallPageSize, BigPageSize];
 
@@ -114,8 +118,20 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostAsGpu
                 switch (command.Number)
                 {
                     case 0x08:
-                        // This is the same as the one in ioctl as inlineOutBuffer is empty.
+                        // The SDK queries the size through Ioctl and then receives the region
+                        // array through this inline buffer. Filling only the argument struct left
+                        // the guest reading zeros, which reads as "no usable GPU VA".
                         result = CallIoctlMethod<GetVaRegionsArguments>(GetVaRegions, arguments);
+
+                        if (result == NvInternalResult.Success)
+                        {
+                            GetVaRegionsArguments vaRegions = MemoryMarshal.Cast<byte, GetVaRegionsArguments>(arguments)[0];
+                            Span<VaRegion> regions = vaRegions.Regions.AsSpan();
+                            int bytes = Math.Min(regions.Length * Unsafe.SizeOf<VaRegion>(), inlineOutBuffer.Length);
+
+                            MemoryMarshal.AsBytes(regions)[..bytes].CopyTo(inlineOutBuffer);
+                        }
+
                         break;
                 }
             }
@@ -345,7 +361,6 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostAsGpu
         private NvInternalResult GetVaRegions(ref GetVaRegionsArguments arguments)
         {
             int vaRegionStructSize = Unsafe.SizeOf<VaRegion>();
-
             Debug.Assert(vaRegionStructSize == 0x18);
             Debug.Assert(_pageSizes.Length == 2);
 

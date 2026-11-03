@@ -24,6 +24,11 @@ Placeholders in `<angle brackets>` are filled in per project (see §0).
   (`Fehler:` instead of `error:`), so a text match can report zero errors on a failed build.
 - After a risky build, confirm the artifact actually changed (mtime or hash). A stale
   artifact reads exactly like a successful build.
+- **A run is only evidence if its build stamp is HEAD.** Build and run are one unit:
+  capture `dotnet build`'s exit code directly (never through a pipe), and skip the run
+  when it is nonzero. Before trusting a measurement, compare the log's
+  `Ryujinx Version: ...+<commit>` against `git rev-parse HEAD`; a mismatch means the
+  run used a stale artifact, so discard the whole run instead of reasoning from it.
 - No "done", "fixed", or "works" without the command and its output.
 - A new native or third-party dependency is stated in the change.
 
@@ -111,7 +116,16 @@ Guest memory, IPC payloads, and file headers are untrusted input.
 - A workaround is labelled `WORKAROUND`, states why, and logs every trigger.
   Silent workarounds are bugs.
 
-## 9. When unsure
+## 9. Diagnose in batches, not cycles
+
+- One emulator run answers many questions: batch every independent diagnostic
+  probe into a single run (env-gated, capped, one log). Never sequence
+  one-probe-per-run cycles; each costs a full build plus a full boot.
+- A probe that needs a new run must name the exact question the current logs
+  cannot answer.
+- Probes are env-gated and capped by default; a probe left always-on is churn.
+
+## 10. When unsure
 
 - If an API, offset, or hardware fact cannot be verified, stop and say so.
   Do not guess a field or a signature.

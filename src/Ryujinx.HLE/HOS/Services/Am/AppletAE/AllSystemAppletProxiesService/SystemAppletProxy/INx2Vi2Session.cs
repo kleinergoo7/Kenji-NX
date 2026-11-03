@@ -3,6 +3,7 @@
 using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.GAL;
 using Ryujinx.HLE.HOS.Ipc;
+using Ryujinx.HLE.HOS.Kernel.Common;
 using Ryujinx.HLE.HOS.Kernel.Threading;
 using System;
 using System.Collections.Generic;
@@ -74,8 +75,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     Ryujinx.HLE.HOS.Kernel.SupervisorCall.Syscall.GuestCallSites, kv => kv.Value), 8),
                 kv => $"pid{kv.Key.Pid}:0x{kv.Key.Pc:X}={kv.Value}"));
 
+            string missing = string.Join(' ', System.Linq.Enumerable.Select(
+                System.Linq.Enumerable.Take(System.Linq.Enumerable.OrderByDescending(
+                    Ryujinx.HLE.HOS.Services.IpcService.MissingCalls, kv => kv.Value), 12),
+                kv => $"{kv.Key}={kv.Value}"));
+
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                $"NX2 progress t={_progressTicks / 60}s submits={Nx2Counters.Submits} presents={Nx2Counters.Presents} sparseCommit={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseCommitted >> 20}MiB dropped={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseDropped >> 20}MiB sites=[{sites}] gpu=[{gpu}]");
+                $"NX2 progress t={_progressTicks / 60}s submits={Nx2Counters.Submits} presents={Nx2Counters.Presents} sparseCommit={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseCommitted >> 20}MiB dropped={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseDropped >> 20}MiB hot=[{HotPcs()}]");
         }
 
         private KEvent EventFor(ServiceCtx context, uint slot)
@@ -257,13 +263,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 System.Threading.Interlocked.Increment(ref _methodSamples) % 300 == 0)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
-                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} tol=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Tolerances}] fifo=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Fifo}] dist=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}]");
+                    $"NX2 3dmethods {Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} macros={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun} emitted={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} tol=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Tolerances}] fifo=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Fifo}] compute=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.ComputeMethods()}]");
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_PC_SAMPLE") == "1" &&
                 System.Threading.Interlocked.Increment(ref _pcSamples) % 120 == 0)
             {
                 SampleGuestPcs(context.Device);
+                SampleGuestWaits(context.Device);
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
@@ -285,8 +292,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 }
             }
 
-            if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" &&
-                System.Threading.Interlocked.Increment(ref _threadDumps) == 1200)
+            // Guest stacks of every application thread, once, at a choosable present count:
+            // NX2_THREAD_DUMP=<present number>. Prints the call path each parked thread is in.
+            if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") is string dumpAt &&
+                int.TryParse(dumpAt, out int dumpPresent) &&
+                Nx2Counters.Presents == dumpPresent)
             {
                 foreach (System.Collections.Generic.KeyValuePair<ulong, Ryujinx.HLE.HOS.Kernel.Process.KProcess> proc in context.Device.System.KernelContext.Processes)
                 {
@@ -298,7 +308,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     foreach (Ryujinx.HLE.HOS.Kernel.Threading.KThread thread in proc.Value.DebugThreads)
                     {
                         Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                            $"NX2 td uid={thread.ThreadUid} name={thread.GetThreadName()}");
+                            $"NX2 td uid={thread.ThreadUid} name={thread.GetThreadName()} pc=0x{thread.Context?.Pc:X}");
 
                         try
                         {
@@ -379,6 +389,22 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             Composite(context, imageId);
+
+            // The display consumed the frame: advance the display syncpoint the guest waits on
+            // after Present. INx2SyncptSession.GetSlot hands out slot 0, and the guest polls
+            // QueryCounter(0) in a loop; nvhost channel fences use their own ids (1..n), so
+            // without this advance that poll never changes and the render loop never restarts.
+            if (DisplaySyncpoint < MaxSyncpoints)
+            {
+                uint now = context.Device.Gpu.Synchronization.IncrementSyncpoint(DisplaySyncpoint);
+
+                if (System.Environment.GetEnvironmentVariable("NX2_ARB_LOG") == "1" &&
+                    System.Threading.Interlocked.Increment(ref _displaySyncLogs) <= 8)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                        $"NX2 display syncpoint {DisplaySyncpoint} -> {now} (present #{Nx2Counters.Presents})");
+                }
+            }
 
             // Oracle: reply is a u64 mask of buffer slots the client may acquire next
             // (all free = AllSlotsFreeMask) plus four zero words. A zero mask stalls the producer.
@@ -620,16 +646,92 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 }
 
                 sb.Append($"{thread.ThreadUid}:{thread.GetThreadName()}=0x{thread.Context.Pc:X} ");
+
+                // Track how many distinct PCs each thread visits: a parked thread scores 1,
+                // a running loop scores many. That separates "sleeping" from "executing".
+                string tid = $"{thread.ThreadUid}:{thread.GetThreadName()}";
+
+                ThreadPcs.GetOrAdd(tid, _ => new System.Collections.Concurrent.ConcurrentDictionary<ulong, int>())
+                    .AddOrUpdate(thread.Context.Pc, 1, (_, v) => v + 1);
             }
 
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 pcs {sb}");
         }
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentDictionary<ulong, int>> ThreadPcs = new();
+
+        /// <summary>Threads ranked by how many distinct PCs they visit, with their hottest PC.</summary>
+        public static string HotPcs()
+        {
+            System.Text.StringBuilder sb = new();
+
+            var ranked = new System.Collections.Generic.List<(string Tid, int Distinct, ulong Hot, int HotCount)>();
+
+            foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Concurrent.ConcurrentDictionary<ulong, int>> kv in ThreadPcs)
+            {
+                ulong hot = 0;
+                int hotCount = 0;
+
+                foreach (System.Collections.Generic.KeyValuePair<ulong, int> pc in kv.Value)
+                {
+                    if (pc.Value > hotCount)
+                    {
+                        hotCount = pc.Value;
+                        hot = pc.Key;
+                    }
+                }
+
+                ranked.Add((kv.Key, kv.Value.Count, hot, hotCount));
+            }
+
+            ranked.Sort((a, b) => b.Distinct.CompareTo(a.Distinct));
+
+            for (int i = 0; i < ranked.Count && i < 14; i++)
+            {
+                sb.Append($"{ranked[i].Tid}[pc={ranked[i].Distinct},hot=0x{ranked[i].Hot:X}x{ranked[i].HotCount}] ");
+            }
+
+            return sb.ToString();
+        }
+
+        // Dumps what every application thread waits on (object type + server/waiter info).
+        // Names the futex/event/session a parked loader or render thread is stuck on.
+        private static void SampleGuestWaits(Ryujinx.HLE.Switch device)
+        {
+            ulong pid = device.Processes.ActiveApplication?.ProcessId ?? 0;
+
+            if (pid == 0 || !device.System.KernelContext.Processes.TryGetValue(pid, out Ryujinx.HLE.HOS.Kernel.Process.KProcess process))
+            {
+                return;
+            }
+
+            foreach (Ryujinx.HLE.HOS.Kernel.Threading.KThread thread in process.DebugThreads)
+            {
+                Ryujinx.HLE.HOS.Kernel.Common.KSynchronizationObject[] waited = thread.WaitSyncObjects;
+
+                if (waited == null || waited.Length == 0)
+                {
+                    continue;
+                }
+
+                System.Text.StringBuilder sb = new();
+
+                foreach (Ryujinx.HLE.HOS.Kernel.Common.KSynchronizationObject obj in waited)
+                {
+                    sb.Append($"{obj?.GetType().Name ?? "null"} ");
+                }
+
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2 wait tid={thread.ThreadUid}({thread.GetThreadName()}) pc=0x{thread.Context?.Pc:X} objs=[{sb}]");
+            }
+        }
+
+        private static int _waitSamples;
+
         private static int _fenceTimeouts;
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> PresentSeen = new();
 
-        private static int _threadDumps;
         private static int _compositeLogs;
         private static int _fenceLogs;
         private static int _presentLogs;
@@ -644,6 +746,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
         // Hardware syncpoint count; fence ids at or above it are not real syncpoints.
         private const uint MaxSyncpoints = 192u;
+
+        // Syncpoint the display advances once per presented frame (the slot GetSlot hands out).
+        private const uint DisplaySyncpoint = 0u;
+
+        private static int _displaySyncLogs;
 
         private static byte[] RentBuffer(ref byte[] buffer, int size)
         {

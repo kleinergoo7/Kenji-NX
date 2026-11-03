@@ -18,6 +18,9 @@ namespace Ryujinx.HLE.HOS.Services
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> TipcSeen = new();
 
+        /// <summary>Commands answered by a fake success because no handler exists.</summary>
+        public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> MissingCalls = new();
+
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> UnimplementedLogged = [];
 
         public IReadOnlyDictionary<int, MethodInfo> CmifCommands { get; }
@@ -304,6 +307,11 @@ namespace Ryujinx.HLE.HOS.Services
                     serviceName = (this is not DummyService dummyService) ? GetType().FullName : dummyService.ServiceName;
 
                     Logger.Debug?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
+
+                    // Silently answered correctly-looking is indistinguishable from working:
+                    // count every command the emulator fakes, so a missing submission path is
+                    // visible instead of looking like a guest that simply sends nothing.
+                    MissingCalls.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
                 }
 
                 context.ResponseData.BaseStream.Seek(0, SeekOrigin.Begin);

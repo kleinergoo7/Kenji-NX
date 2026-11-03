@@ -80,6 +80,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         private static int _failProbe;
         public static int MacrosRun;
 
+        /// <summary>Reads one MME data-RAM word (diagnostics: the QMD ring base lives at 0x27).</summary>
+        public int DataRamWord(int address)
+        {
+            return (uint)address < (uint)_dataRam.Length ? _dataRam[address] : 0;
+        }
+
         private bool _readRegisters;
         private bool _rereadDataRam;
         private bool _readMemory;

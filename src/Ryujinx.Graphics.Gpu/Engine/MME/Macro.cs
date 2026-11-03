@@ -100,8 +100,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
                 if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1" && _turing)
                 {
+                    // Word 0x27 holds the QMD ring base on Switch 2 drivers; it must differ
+                    // per channel (shared RAM drove every channel at the same ring on Eden).
+                    int ringBase = _executionEngine is MacroTuring turing ? turing.DataRamWord(0x27) : 0;
+
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
-                        $"NX2 mme exec pos={Position}");
+                        $"NX2 mme exec pos={Position} dram27=0x{ringBase:X8}");
                 }
 
                 if (_turing)

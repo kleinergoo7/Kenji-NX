@@ -29,6 +29,9 @@ namespace Ryujinx.HLE.HOS.Services.Nv
         // Diagnostic: per-ioctl counts, printed with the NX2 progress line.
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> IoctlCounts = [];
 
+        // Unknown Switch 2 ioctls answered with success and an echoed input, like the oracle.
+        internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> Nx2IoctlStubs = new();
+
         private static readonly List<string> _deviceFileDebugRegistry =
         [
             "/dev/nvhost-dbg-gpu",
@@ -313,7 +316,25 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
-                            throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            // Eglantine (the working Switch 2 oracle) answers unknown Switch 2
+                            // nvhost ioctls with success, echoing the input back, and renders.
+                            // Rejecting them makes the guest treat the node as unsupported and
+                            // skip later work: it calls 0x48/0x16 and 0x48/0x17, which this tree
+                            // does not implement. Switch 1 titles keep failing loudly.
+                            if (NvHostCtrlGpuDeviceFile.Nx2Driver)
+                            {
+                                string stubKey = $"{deviceFile.GetType().Name}:{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}";
+
+                                if (Nx2IoctlStubs.AddOrUpdate(stubKey, 1, (_, v) => v + 1) == 1)
+                                {
+                                    Logger.Warning?.Print(LogClass.ServiceNv,
+                                        $"nx2: stubbed unknown ioctl {stubKey} size=0x{ioctlCommand.Size:X} (input echoed back)");
+                                }
+                            }
+                            else
+                            {
+                                throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            }
                         }
 
                         errorCode = ConvertInternalErrorCode(internalResult);
@@ -549,7 +570,25 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
-                            throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            // Eglantine (the working Switch 2 oracle) answers unknown Switch 2
+                            // nvhost ioctls with success, echoing the input back, and renders.
+                            // Rejecting them makes the guest treat the node as unsupported and
+                            // skip later work: it calls 0x48/0x16 and 0x48/0x17, which this tree
+                            // does not implement. Switch 1 titles keep failing loudly.
+                            if (NvHostCtrlGpuDeviceFile.Nx2Driver)
+                            {
+                                string stubKey = $"{deviceFile.GetType().Name}:{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}";
+
+                                if (Nx2IoctlStubs.AddOrUpdate(stubKey, 1, (_, v) => v + 1) == 1)
+                                {
+                                    Logger.Warning?.Print(LogClass.ServiceNv,
+                                        $"nx2: stubbed unknown ioctl {stubKey} size=0x{ioctlCommand.Size:X} (input echoed back)");
+                                }
+                            }
+                            else
+                            {
+                                throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            }
                         }
 
                         errorCode = ConvertInternalErrorCode(internalResult);
@@ -611,7 +650,25 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
-                            throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            // Eglantine (the working Switch 2 oracle) answers unknown Switch 2
+                            // nvhost ioctls with success, echoing the input back, and renders.
+                            // Rejecting them makes the guest treat the node as unsupported and
+                            // skip later work: it calls 0x48/0x16 and 0x48/0x17, which this tree
+                            // does not implement. Switch 1 titles keep failing loudly.
+                            if (NvHostCtrlGpuDeviceFile.Nx2Driver)
+                            {
+                                string stubKey = $"{deviceFile.GetType().Name}:{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}";
+
+                                if (Nx2IoctlStubs.AddOrUpdate(stubKey, 1, (_, v) => v + 1) == 1)
+                                {
+                                    Logger.Warning?.Print(LogClass.ServiceNv,
+                                        $"nx2: stubbed unknown ioctl {stubKey} size=0x{ioctlCommand.Size:X} (input echoed back)");
+                                }
+                            }
+                            else
+                            {
+                                throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            }
                         }
 
                         errorCode = ConvertInternalErrorCode(internalResult);

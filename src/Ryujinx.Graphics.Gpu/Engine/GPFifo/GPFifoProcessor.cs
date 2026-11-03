@@ -30,7 +30,28 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
         public static string Tolerances => $"U={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolUninitReg} F={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolFifoUnderflow} S={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolBadSelector} O={Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.TolOobEnd}";
 
-        public static string Fifo => $"bufs={GPFifoProcessor.BuffersProcessed} words={GPFifoProcessor.WordsProcessed} spwait={GPFifoClass.SyncpointWaits} spincr={GPFifoClass.SyncpointIncrs}";
+        public static string Fifo => $"bufs={GPFifoProcessor.BuffersProcessed} words={GPFifoProcessor.WordsProcessed} spwait={GPFifoClass.SyncpointWaits} spincr={GPFifoClass.SyncpointIncrs} eng=[{string.Join(",", GPFifoProcessor.EngineCounts)}]";
+
+        public static string ComputeMethods()
+        {
+            System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<int, int>> list;
+
+            lock (GPFifoProcessor.ComputeHistogram)
+            {
+                list = [.. GPFifoProcessor.ComputeHistogram];
+            }
+
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            System.Text.StringBuilder sb = new();
+
+            for (int i = 0; i < list.Count && i < 16; i++)
+            {
+                sb.Append($"0x{list[i].Key:X}={list[i].Value} ");
+            }
+
+            return sb.ToString();
+        }
 
         /// <summary>Full distribution of macro-emitted method addresses.</summary>
         public static string DescribeEmitted()
@@ -103,6 +124,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         internal static readonly System.Collections.Generic.Dictionary<int, int> MethodHistogram = [];
         internal static long WordsProcessed;
         internal static long BuffersProcessed;
+        internal static readonly long[] EngineCounts = new long[6];
+        internal static readonly System.Collections.Generic.Dictionary<int, int> ComputeHistogram = [];
 
         private static int _method3DTotal;
 
@@ -515,6 +538,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             else
             {
                 int engine = SubChannelEngine(subChannel);
+
+                // An unbound subchannel yields an engine id outside the counted set.
+                if ((uint)engine < (uint)EngineCounts.Length)
+                {
+                    System.Threading.Interlocked.Increment(ref EngineCounts[engine]);
+                }
+
+                if (engine == EngineCompute)
+                {
+                    lock (ComputeHistogram)
+                    {
+                        ComputeHistogram.TryGetValue(offset, out int seen);
+                        ComputeHistogram[offset] = seen + 1;
+                    }
+                }
 
                 if (engine == Engine3D)
                 {

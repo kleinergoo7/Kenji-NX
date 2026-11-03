@@ -265,6 +265,49 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> SendCounts = new();
 
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> ArbLogs = new();
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, int> SignalCounts = new();
+
+        // Address -> thread uid that holds the guest mutex there, for deadlock reporting.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, int> MutexOwners = new();
+
+        private static void LogArbitration(KProcess process, string kind, ulong address, int value, int current, int ownerHandle, int requesterHandle)
+        {
+            KThread thread = KernelStatic.GetCurrentThread();
+
+            if (thread == null)
+            {
+                return;
+            }
+
+            string key = $"{kind}:{thread.ThreadUid}:{address:X}";
+
+            if (ArbLogs.AddOrUpdate(key, 1, (_, v) => v + 1) != 1)
+            {
+                return;
+            }
+
+            int holder = MutexOwners.TryGetValue(address, out int h) ? h : -1;
+            string holderName = holder >= 0 ? LookupThreadName(process, holder) : "-";
+
+            Logger.Warning?.Print(LogClass.KernelSvc,
+                $"NX2 arb {kind} tid={thread.ThreadUid}({thread.GetThreadName()}) addr=0x{address:X} owner={holder}({holderName}) want=0x{value:X} mem=0x{current:X} oh=0x{ownerHandle:X} rh=0x{requesterHandle:X}");
+        }
+
+        private static string LookupThreadName(KProcess process, int uid)
+        {
+            foreach (KThread thread in process.DebugThreads)
+            {
+                if (thread.ThreadUid == (ulong)uid)
+                {
+                    return thread.GetThreadName();
+                }
+            }
+
+            return "-";
+        }
+
         [Svc(0x21)]
         public Result SendSyncRequest(int handle)
         {
@@ -3128,6 +3171,17 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             KProcess currentProcess = KernelStatic.GetCurrentProcess();
 
+            if (System.Environment.GetEnvironmentVariable("NX2_ARB_LOG") == "1" && currentProcess.Pid == 109)
+            {
+                LogArbitration(currentProcess, "lock", mutexAddress, 0, 0, ownerHandle, requesterHandle);
+                KThread lockOwner = KernelStatic.GetCurrentThread();
+
+                if (lockOwner != null)
+                {
+                    MutexOwners[mutexAddress] = (int)lockOwner.ThreadUid;
+                }
+            }
+
             return currentProcess.AddressArbiter.ArbitrateLock(ownerHandle, mutexAddress, requesterHandle);
         }
 
@@ -3145,6 +3199,11 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             }
 
             KProcess currentProcess = KernelStatic.GetCurrentProcess();
+
+            if (System.Environment.GetEnvironmentVariable("NX2_ARB_LOG") == "1" && currentProcess.Pid == 109)
+            {
+                MutexOwners.TryRemove(mutexAddress, out _);
+            }
 
             return currentProcess.AddressArbiter.ArbitrateUnlock(mutexAddress);
         }
@@ -3210,6 +3269,40 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
             }
 
+            if (System.Environment.GetEnvironmentVariable("NX2_ARB_LOG") == "1" && currentProcess.Pid == 109)
+            {
+                KThread waiter = KernelStatic.GetCurrentThread();
+
+                // Waits with an infinite timeout on a guest mutex/condvar never return unless
+                // something signals that exact address. Log the address, the expected value and
+                // what memory currently holds, so the stuck lock can be named.
+                if (timeout < 0 && waiter != null)
+                {
+                    string key = $"{waiter.ThreadUid}:{address:X}";
+                    int n = ArbLogs.AddOrUpdate(key, 1, (_, v) => v + 1);
+
+                    if (n == 1)
+                    {
+                        int current = 0;
+
+                        try
+                        {
+                            current = currentProcess.CpuMemory.Read<int>(address);
+                        }
+                        catch (System.Exception)
+                        {
+                            current = int.MinValue;
+                        }
+
+                        int holder = MutexOwners.TryGetValue(address, out int h) ? h : -1;
+                        string holderName = holder >= 0 ? LookupThreadName(currentProcess, holder) : "-";
+
+                        Logger.Warning?.Print(LogClass.KernelSvc,
+                            $"NX2 arb wait tid={waiter.ThreadUid}({waiter.GetThreadName()}) pc=0x{waiter.Context.Pc:X} addr=0x{address:X} type={type} want=0x{value:X} mem=0x{current:X} owner={holder}({holderName})");
+                    }
+                }
+            }
+
             return type switch
             {
                 ArbitrationType.WaitIfLessThan
@@ -3236,6 +3329,19 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             }
 
             KProcess currentProcess = KernelStatic.GetCurrentProcess();
+
+            if (System.Environment.GetEnvironmentVariable("NX2_ARB_LOG") == "1" && currentProcess.Pid == 109)
+            {
+                int n = SignalCounts.AddOrUpdate(address, 1, (_, v) => v + 1);
+
+                if (n == 1 || n % 2000 == 0)
+                {
+                    KThread signaller = KernelStatic.GetCurrentThread();
+
+                    Logger.Warning?.Print(LogClass.KernelSvc,
+                        $"NX2 sig addr=0x{address:X} n={n} by={signaller?.ThreadUid}:{signaller?.GetThreadName()} type={type} val=0x{value:X}");
+                }
+            }
 
             return type switch
             {
