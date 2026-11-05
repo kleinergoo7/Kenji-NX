@@ -97,7 +97,7 @@ namespace Ryujinx.HLE
             AudioDeviceDriver = new CompatLayerHardwareDeviceDriver(Configuration.AudioDeviceDriver);
             Memory            = new MemoryBlock(Configuration.MemoryConfiguration.DramSize, memoryAllocationFlags);
             CpuCoresCount     = CpuCoresOverride ?? 8; // T239 has 8 cores; e.g. Mario Kart World requests cores 0-5 in its NPDM kernel caps
-            Gpu               = new GpuContext(Configuration.GpuRenderer, DirtyHacks);
+            Gpu               = new GpuContext(Configuration.GpuRenderer);
             Debugger          = Configuration.EnableGdbStub ? new Debugger.Debugger(this, Configuration.GdbStubPort) : null;
             System            = new HOS.Horizon(this);
             Statistics        = new PerformanceStatistics(this);

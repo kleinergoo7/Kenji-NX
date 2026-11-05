@@ -263,12 +263,12 @@ namespace Ryujinx.Headless
 
         private void SetAntiAliasing()
         {
-            Renderer?.Window.SetAntiAliasing(AntiAliasing);
+            Renderer?.Window.SetAntiAliasing((Ryujinx.Graphics.GAL.AntiAliasing)(int)(Ryujinx.Common.Configuration.AntiAliasing)AntiAliasing);
         }
 
         private void SetScalingFilter()
         {
-            Renderer?.Window.SetScalingFilter(ScalingFilter);
+            Renderer?.Window.SetScalingFilter((Ryujinx.Graphics.GAL.ScalingFilter)(int)(Ryujinx.Common.Configuration.ScalingFilter)ScalingFilter);
             Renderer?.Window.SetScalingFilterLevel(ScalingFilterLevel);
         }
 

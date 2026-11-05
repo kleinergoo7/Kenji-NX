@@ -291,13 +291,13 @@ namespace Ryujinx.Ava.Systems
 
         private void UpdateScalingFilterLevel(object sender, ReactiveEventArgs<int> e)
         {
-            _renderer.Window?.SetScalingFilter(ConfigurationState.Instance.Graphics.ScalingFilter);
+            _renderer.Window?.SetScalingFilter((Ryujinx.Graphics.GAL.ScalingFilter)(int)(Ryujinx.Common.Configuration.ScalingFilter)ConfigurationState.Instance.Graphics.ScalingFilter);
             _renderer.Window?.SetScalingFilterLevel(ConfigurationState.Instance.Graphics.ScalingFilterLevel);
         }
 
         private void UpdateScalingFilter(object sender, ReactiveEventArgs<ScalingFilter> e)
         {
-            _renderer.Window?.SetScalingFilter(ConfigurationState.Instance.Graphics.ScalingFilter);
+            _renderer.Window?.SetScalingFilter((Ryujinx.Graphics.GAL.ScalingFilter)(int)(Ryujinx.Common.Configuration.ScalingFilter)ConfigurationState.Instance.Graphics.ScalingFilter);
             _renderer.Window?.SetScalingFilterLevel(ConfigurationState.Instance.Graphics.ScalingFilterLevel);
         }
 
@@ -314,7 +314,7 @@ namespace Ryujinx.Ava.Systems
                 Device.UpdateVSyncInterval();
             }
 
-            _renderer.Window?.ChangeVSyncMode(e.NewValue);
+            _renderer.Window?.ChangeVSyncMode((Ryujinx.Graphics.GAL.VSyncMode)(int)(Ryujinx.Common.Configuration.VSyncMode)e.NewValue);
 
             _viewModel.UpdateVSyncIntervalPicker();
         }
@@ -514,7 +514,7 @@ namespace Ryujinx.Ava.Systems
 
         private void UpdateAntiAliasing(object sender, ReactiveEventArgs<AntiAliasing> e)
         {
-            _renderer?.Window?.SetAntiAliasing(e.NewValue);
+            _renderer?.Window?.SetAntiAliasing((Ryujinx.Graphics.GAL.AntiAliasing)(int)(Ryujinx.Common.Configuration.AntiAliasing)e.NewValue);
         }
 
         private void UpdateDockedModeState(object sender, ReactiveEventArgs<bool> e)
@@ -1127,8 +1127,8 @@ namespace Ryujinx.Ava.Systems
 
             Device.Gpu.Renderer.Initialize(_glLogLevel);
 
-            _renderer?.Window?.SetAntiAliasing(ConfigurationState.Instance.Graphics.AntiAliasing);
-            _renderer?.Window?.SetScalingFilter(ConfigurationState.Instance.Graphics.ScalingFilter);
+            _renderer?.Window?.SetAntiAliasing((Ryujinx.Graphics.GAL.AntiAliasing)(int)(Ryujinx.Common.Configuration.AntiAliasing)ConfigurationState.Instance.Graphics.AntiAliasing);
+            _renderer?.Window?.SetScalingFilter((Ryujinx.Graphics.GAL.ScalingFilter)(int)(Ryujinx.Common.Configuration.ScalingFilter)ConfigurationState.Instance.Graphics.ScalingFilter);
             _renderer?.Window?.SetScalingFilterLevel(ConfigurationState.Instance.Graphics.ScalingFilterLevel);
             _renderer?.Window?.SetColorSpacePassthrough(ConfigurationState.Instance.Graphics.EnableColorSpacePassthrough);
 
@@ -1148,7 +1148,7 @@ namespace Ryujinx.Ava.Systems
                     Device.Gpu.SetGpuThread();
                     Device.Gpu.InitializeShaderCache(_gpuCancellationTokenSource.Token);
 
-                    _renderer.Window.ChangeVSyncMode(Device.VSyncMode);
+                    _renderer.Window.ChangeVSyncMode((Ryujinx.Graphics.GAL.VSyncMode)(int)(Ryujinx.Common.Configuration.VSyncMode)Device.VSyncMode);
 
                     while (_isActive)
                     {

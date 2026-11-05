@@ -21,6 +21,12 @@ namespace Ryujinx.Graphics.Vulkan
 {
     public sealed class VulkanRenderer : IRenderer
     {
+        public static VulkanRenderer Create(
+            string preferredGpuId,
+            Func<Instance, Vk, SurfaceKHR> getSurface,
+            Func<string[]> getRequiredExtensions
+        ) => new(Vk.GetApi(), getSurface, getRequiredExtensions, preferredGpuId);
+
         private VulkanInstance _instance;
         private SurfaceKHR _surface;
         private VulkanPhysicalDevice _physicalDevice;

@@ -372,7 +372,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
                 if (acquireStatus == Status.Success)
                 {
-                    if (_device.VSyncMode == VSyncMode.Unbounded)
+                    if (_device.VSyncMode == Ryujinx.Common.Configuration.VSyncMode.Unbounded)
                     {
                         if (_swapInterval != 0)
                         {
@@ -382,7 +382,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                     }
                     else if (_device.VSyncMode != _vSyncMode)
                     {
-                        UpdateSwapInterval(_device.VSyncMode == VSyncMode.Unbounded ? 0 : item.SwapInterval);
+                        UpdateSwapInterval(_device.VSyncMode == Ryujinx.Common.Configuration.VSyncMode.Unbounded ? 0 : item.SwapInterval);
                         _vSyncMode = _device.VSyncMode;
                     }
                     else if (item.SwapInterval != _swapInterval || _device.TargetVSyncInterval != _targetVSyncInterval)

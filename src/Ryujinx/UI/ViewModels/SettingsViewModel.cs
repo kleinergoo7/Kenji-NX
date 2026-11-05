@@ -57,7 +57,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         private int _scalingFilter;
         private int _customVSyncInterval;
         private int _customVSyncIntervalPercentageProxy;
-        private VSyncMode _vSyncMode;
+        private Ryujinx.Common.Configuration.VSyncMode _vSyncMode;
 
         public event Action CloseWindow;
         public event Action SaveSettingsEvent;
@@ -198,12 +198,12 @@ namespace Ryujinx.Ava.UI.ViewModels
 
         public double InputPanelOpacity => UseGlobalInputConfig ? 0.5 : 1;
 
-        public VSyncMode VSyncMode
+        public Ryujinx.Common.Configuration.VSyncMode VSyncMode
         {
             get => _vSyncMode;
             set
             {
-                if (value is VSyncMode.Custom or VSyncMode.Switch or VSyncMode.Unbounded)
+                if (value is Ryujinx.Common.Configuration.VSyncMode.Custom or Ryujinx.Common.Configuration.VSyncMode.Switch or Ryujinx.Common.Configuration.VSyncMode.Unbounded)
                 {
                     _vSyncMode = value;
                     OnPropertyChanged();
@@ -233,13 +233,13 @@ namespace Ryujinx.Ava.UI.ViewModels
             set
             {
                 field = value;
-                if (_vSyncMode == VSyncMode.Custom && !value)
+                if (_vSyncMode == Ryujinx.Common.Configuration.VSyncMode.Custom && !value)
                 {
-                    VSyncMode = VSyncMode.Switch;
+                    VSyncMode = Ryujinx.Common.Configuration.VSyncMode.Switch;
                 }
                 else if (value)
                 {
-                    VSyncMode = VSyncMode.Custom;
+                    VSyncMode = Ryujinx.Common.Configuration.VSyncMode.Custom;
                 }
 
                 OnPropertyChanged();
@@ -847,8 +847,8 @@ namespace Ryujinx.Ava.UI.ViewModels
             config.Graphics.ResScaleCustom.Value = CustomResolutionScale;
             config.Graphics.MaxAnisotropy.Value = MaxAnisotropy == 0 ? -1 : MathF.Pow(2, MaxAnisotropy);
             config.Graphics.AspectRatio.Value = (AspectRatio)AspectRatio;
-            config.Graphics.AntiAliasing.Value = (AntiAliasing)AntiAliasingEffect;
-            config.Graphics.ScalingFilter.Value = (ScalingFilter)ScalingFilter;
+            config.Graphics.AntiAliasing.Value = (Ryujinx.Common.Configuration.AntiAliasing)AntiAliasingEffect;
+            config.Graphics.ScalingFilter.Value = (Ryujinx.Common.Configuration.ScalingFilter)ScalingFilter;
             config.Graphics.ScalingFilterLevel.Value = ScalingFilterLevel;
 
             if (ConfigurationState.Instance.Graphics.BackendThreading != (BackendThreading)GraphicsBackendMultithreadingIndex)
