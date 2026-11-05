@@ -104,7 +104,7 @@ namespace Ryujinx.Graphics.Gpu
         /// v1.1 (Switch 2 enablement): latched when a channel binds engine class
         /// 51095 (0xC797), 51136 (0xC7C0) or 51125 (0xC7B5).
         /// </summary>
-        public bool IsAmpere { get; internal set; }
+        public bool IsAmpere { get; set; }
 
         /// <summary>
         /// Event for signalling shader cache loading progress.
