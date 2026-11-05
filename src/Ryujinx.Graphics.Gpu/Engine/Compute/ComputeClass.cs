@@ -1,4 +1,5 @@
 using Ryujinx.Graphics.Device;
+using Ryujinx.Graphics.Gpu.Engine.GPFifo;
 using Ryujinx.Graphics.Gpu.Engine.InlineToMemory;
 using Ryujinx.Graphics.Gpu.Engine.Threed;
 using Ryujinx.Graphics.Gpu.Engine.Types;
@@ -16,9 +17,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
     /// </summary>
     class ComputeClass : IDeviceState
     {
+        private const int KeepMmeCodeMethodOffset = 0x45 * 4;
+        private const int AddMmeCodeMethodOffset = 0x46 * 4;
+        private const int SetMmeBindPointerMethodOffset = 0x47 * 4;
+        private const int BindMmeStartMethodOffset = 0x48 * 4;
+
         private readonly GpuContext _context;
         private readonly GpuChannel _channel;
         private readonly ThreedClass _3dEngine;
+        private readonly GPFifoClass _fifoClass;
         private readonly DeviceState<ComputeClassState> _state;
 
         private readonly InlineToMemoryClass _i2mClass;
@@ -41,11 +48,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// <param name="context">GPU context</param>
         /// <param name="channel">GPU channel</param>
         /// <param name="threedEngine">3D engine</param>
-        public ComputeClass(GpuContext context, GpuChannel channel, ThreedClass threedEngine)
+        /// <param name="fifoClass">GP FIFO class that owns the macro code banks</param>
+        public ComputeClass(GpuContext context, GpuChannel channel, ThreedClass threedEngine, GPFifoClass fifoClass)
         {
             _context = context;
             _channel = channel;
             _3dEngine = threedEngine;
+            _fifoClass = fifoClass;
             _state = new DeviceState<ComputeClassState>(new Dictionary<string, RwCallback>
             {
                 { nameof(ComputeClassState.LaunchDma), new RwCallback(LaunchDma, null) },
@@ -68,7 +77,28 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// </summary>
         /// <param name="offset">Register byte offset</param>
         /// <param name="data">Data to be written</param>
-        public void Write(int offset, int data) => _state.Write(offset, data);
+        public void Write(int offset, int data)
+        {
+            _state.Write(offset, data);
+
+            // Switch 2 compute streams upload their macro code through methods
+            // 0x45-0x48; delegate those to the FIFO class macro banks.
+            switch (offset)
+            {
+                case KeepMmeCodeMethodOffset:
+                    _fifoClass.KeepComputeMmeCode(data);
+                    break;
+                case AddMmeCodeMethodOffset:
+                    _fifoClass.AddComputeMmeCode(data);
+                    break;
+                case SetMmeBindPointerMethodOffset:
+                    _fifoClass.SetComputeMmeBindPointer(data);
+                    break;
+                case BindMmeStartMethodOffset:
+                    _fifoClass.BindComputeMmeStart(data);
+                    break;
+            }
+        }
 
         /// <summary>
         /// Launches the Inline-to-Memory DMA copy operation.

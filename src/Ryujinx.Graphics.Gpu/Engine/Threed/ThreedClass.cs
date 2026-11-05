@@ -833,6 +833,16 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             _drawManager.Clear(this, argument, layerCount);
         }
 
+        public static int DrawCount;
+
+        /// <summary>
+        /// Counts one dispatched draw, blit or clear.
+        /// </summary>
+        internal static int NotifyDraw()
+        {
+            return System.Threading.Interlocked.Increment(ref DrawCount);
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (disposing)

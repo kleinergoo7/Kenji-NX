@@ -1,6 +1,7 @@
 using Ryujinx.Graphics.Device;
 using Ryujinx.Graphics.Gpu.Engine.GPFifo;
 using System;
+using System.Collections.Generic;
 
 namespace Ryujinx.Graphics.Gpu.Engine.MME
 {
@@ -16,8 +17,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
         private IMacroEE _executionEngine;
         private bool _executionPending;
+        private bool _turing;
         private int _argument;
         private MacroHLEFunctionName _hleFunction;
+        // Args pushed before StartExecution created the engine (the guest pushes
+        // them on odd method offsets, then starts on the even offset). Buffer them
+        // here so they are not dropped by a null engine.
+        private readonly List<FifoWord> _pendingArgs = new();
 
         /// <summary>
         /// Creates a new instance of the GPU cached macro program.
@@ -29,6 +35,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
             _executionEngine = null;
             _executionPending = false;
+            _turing = false;
             _argument = 0;
             _hleFunction = MacroHLEFunctionName.None;
         }
@@ -40,7 +47,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         /// <param name="processor">GPU GP FIFO command processor</param>
         /// <param name="code">Code to be executed</param>
         /// <param name="argument">First argument</param>
-        public void StartExecution(GpuContext context, GPFifoProcessor processor, ReadOnlySpan<int> code, int argument)
+        /// <param name="compute">True for the compute engine's own macro code bank</param>
+        public void StartExecution(GpuContext context, GPFifoProcessor processor, ReadOnlySpan<int> code, int argument, bool compute = false)
         {
             _argument = argument;
 
@@ -48,7 +56,17 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
             if (_executionEngine == null)
             {
-                if (GraphicsConfig.EnableMacroHLE && MacroHLETable.TryGetMacroHLEFunction(code[Position..], context.Capabilities, out _hleFunction))
+                if (context.IsAmpere)
+                {
+                    // Switch 2 drivers upload the Turing+ (MME64) instruction set, which the
+                    // Maxwell interpreters and HLE tables do not describe.
+                    _executionEngine = new MacroTuring(
+                        processor.MemoryManager,
+                        processor.MmeDataRam,
+                        compute ? () => processor.ComputeMmeCodeGeneration : () => processor.MmeCodeGeneration);
+                    _turing = true;
+                }
+                else if (GraphicsConfig.EnableMacroHLE && MacroHLETable.TryGetMacroHLEFunction(code[Position..], context.Capabilities, out _hleFunction))
                 {
                     _executionEngine = new MacroHLE(processor, _hleFunction);
                 }
@@ -59,6 +77,19 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                 else
                 {
                     _executionEngine = new MacroInterpreter();
+                }
+
+                // Flush args that were pushed before the engine existed.
+                // NOTE: Macro is a struct stored in arrays: default-initialized
+                // entries never ran a constructor, so _pendingArgs can be null.
+                if (_pendingArgs != null)
+                {
+                    foreach (FifoWord pending in _pendingArgs)
+                    {
+                        _executionEngine.Fifo.Enqueue(pending);
+                    }
+
+                    _pendingArgs.Clear();
                 }
             }
 
@@ -84,7 +115,32 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             if (_executionPending)
             {
                 _executionPending = false;
-                _executionEngine?.Execute(code[Position..], state, _argument);
+
+                if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1" && _turing)
+                {
+                    // Word 0x27 holds the QMD ring base on Switch 2 drivers; it must differ
+                    // per channel (shared RAM drove every channel at the same ring on Eden).
+                    int ringBase = _executionEngine is MacroTuring turing ? turing.DataRamWord(0x27) : 0;
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                        $"NX2 mme exec pos={Position} dram27=0x{ringBase:X8}");
+                }
+
+                if (_turing)
+                {
+                    // Turing positions are instruction indices; the code array stores three
+                    // words per instruction.
+                    int wordOffset = Position * 3;
+
+                    _executionEngine?.Execute(
+                        (uint)wordOffset <= (uint)code.Length ? code[wordOffset..] : ReadOnlySpan<int>.Empty,
+                        state,
+                        _argument);
+                }
+                else
+                {
+                    _executionEngine?.Execute(code[Position..], state, _argument);
+                }
             }
         }
 
@@ -95,7 +151,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         /// <param name="argument">Argument to be pushed</param>
         public readonly void PushArgument(ulong gpuVa, int argument)
         {
-            _executionEngine?.Fifo.Enqueue(new FifoWord(gpuVa, argument));
+            if (_executionEngine == null)
+            {
+                _pendingArgs?.Add(new FifoWord(gpuVa, argument));
+            }
+            else
+            {
+                _executionEngine.Fifo.Enqueue(new FifoWord(gpuVa, argument));
+            }
         }
     }
 }
