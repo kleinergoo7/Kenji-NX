@@ -23,6 +23,44 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
         // Our GPU completes work synchronously, so id events are also signalled periodically;
         // a wait issued after the last job call would otherwise block forever.
+        private static readonly int[] SignalCounts = new int[NumIds];
+        private static int _slotSignalLogs;
+        private static int _rawSlotLogs;
+
+        private static long _mapTicks;
+        private static long _mapCalls;
+
+        public static void AddMapTime(long ticks)
+        {
+            System.Threading.Interlocked.Add(ref _mapTicks, ticks);
+            System.Threading.Interlocked.Increment(ref _mapCalls);
+        }
+
+        public static string DescribeMapTiming()
+        {
+            long calls = System.Threading.Interlocked.Read(ref _mapCalls);
+            long ticks = System.Threading.Interlocked.Read(ref _mapTicks);
+            double ms = calls > 0 ? ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency / calls : 0;
+            return $"calls={calls} hle={ms:F2}ms/call";
+        }
+
+        public static string DescribeSignals()
+        {
+            System.Text.StringBuilder sb = new();
+
+            for (int i = 0; i < SignalCounts.Length; i++)
+            {
+                int n = System.Threading.Volatile.Read(ref SignalCounts[i]);
+
+                if (n != 0)
+                {
+                    sb.Append($" gpuid{i}={n}");
+                }
+            }
+
+            return sb.ToString();
+        }
+
         public static void SignalAllNx2GpuEvents()
         {
             lock (_eventsLock)
@@ -30,6 +68,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 for (int i = 0; i < _allEvents.Count; i++)
                 {
                     _allEvents[i].ReadableEvent.Signal();
+                }
+
+                foreach (uint id in _events.Keys)
+                {
+                    System.Threading.Interlocked.Increment(ref SignalCounts[id]);
                 }
             }
         }
@@ -52,6 +95,17 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
                 return evt;
             }
+        }
+
+        [CommandTipc(0)]
+        public ResultCode Handshake(ServiceCtx context)
+        {
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            ulong token = context.RequestData.ReadUInt64();
+
+            context.ResponseData.Write(token);
+
+            return ResultCode.Success;
         }
 
         [CommandTipc(11)]
@@ -233,7 +287,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             context.RequestData.BaseStream.Seek(7 * sizeof(uint), System.IO.SeekOrigin.Current);
             uint slot = context.RequestData.ReadUInt32();
 
-            if (last < first || !Nx2GpuMemory.Map(first, last - first + 1, handle, offset))
+            long mapStart211 = System.Diagnostics.Stopwatch.GetTimestamp();
+            bool mapped211 = last >= first && Nx2GpuMemory.Map(first, last - first + 1, handle, offset);
+            AddMapTime(System.Diagnostics.Stopwatch.GetTimestamp() - mapStart211);
+
+            if (!mapped211)
             {
                 Logger.Warning?.Print(LogClass.KernelIpc,
                     $"nx2:gpu 211 map [0x{first:X}, 0x{last:X}] handle={handle} offset=0x{offset:X} failed");
@@ -366,6 +424,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             int count = 0;
+            long mapStart = System.Diagnostics.Stopwatch.GetTimestamp();
 
             try
             {
@@ -407,6 +466,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             {
                 Logger.Warning?.Print(LogClass.KernelIpc, $"nx2:gpu 216 sparse map failed: {ex.GetType().Name}: {ex.Message}");
             }
+
+            AddMapTime(System.Diagnostics.Stopwatch.GetTimestamp() - mapStart);
 
             SignalSlotAfterGpu(context, slot);
 
@@ -452,9 +513,17 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // event (as the first boot pass did) plus the named slot.
         private static int _traceCount;
 
+        // Off by default: a title makes thousands of map/register calls during boot, and
+        // logging each one dominates the run (and the log). Enable with NX2_GPU_TRACE=1.
+        private static readonly bool TraceEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_GPU_TRACE") == "1";
+
+        private static readonly bool SubmitLogEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1";
+
         private static void Trace(string what)
         {
-            if (System.Threading.Interlocked.Increment(ref _traceCount) > 20000)
+            if (!TraceEnabled || System.Threading.Interlocked.Increment(ref _traceCount) > 20000)
             {
                 return;
             }
@@ -472,21 +541,38 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // far, so in-flight reads keep their backing.
         private void SignalSlotNow(ServiceCtx context, uint slot)
         {
-            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
-                System.Threading.Interlocked.Increment(ref _jobLogs) <= 40)
+            uint id = slot % NumIds;
+
+            System.Threading.Interlocked.Increment(ref SignalCounts[id]);
+
+            if (SubmitLogEnabled && System.Threading.Interlocked.Increment(ref _jobLogs) <= 40)
             {
-                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 job complete slot={slot} cmd={context.Request.Type}");
+                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 job complete slot={slot} id={id} cmd={context.Request.Type}");
+            }
+
+            if (System.Threading.Interlocked.Increment(ref _slotSignalLogs) <= 30)
+            {
+                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 signal-now rawSlot={slot} id={id} cmd={context.Request.Type}");
             }
 
             EventFor(context, slot).ReadableEvent.Signal();
+
         }
 
         private void SignalSlotAfterGpu(ServiceCtx context, uint slot)
         {
-            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
-                System.Threading.Interlocked.Increment(ref _jobLogs) <= 40)
+            uint id = slot % NumIds;
+
+            System.Threading.Interlocked.Increment(ref SignalCounts[id]);
+
+            if (SubmitLogEnabled && System.Threading.Interlocked.Increment(ref _jobLogs) <= 40)
             {
-                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 job complete slot={slot} cmd={context.Request.Type}");
+                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 job complete slot={slot} id={id} cmd={context.Request.Type}");
+            }
+
+            if (System.Threading.Interlocked.Increment(ref _rawSlotLogs) <= 30)
+            {
+                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 signal-after rawSlot={slot} id={id} cmd={context.Request.Type}");
             }
 
             KEvent evt = EventFor(context, slot);

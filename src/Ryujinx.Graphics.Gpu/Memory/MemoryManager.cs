@@ -98,6 +98,17 @@ namespace Ryujinx.Graphics.Gpu.Memory
         }
 
         /// <summary>
+        /// True when a GPU virtual address is covered by a sparse/GPU-only region and has no
+        /// explicit mapping on top of it. An explicit mapping (nx2:gpu 211/216) always wins over
+        /// the sparse backing: the reference maps the game's own memory over a sparse region for
+        /// its tiles, and reading the sparse backing instead returned zeros.
+        /// </summary>
+        private static bool IsSparseUnmapped(ulong va)
+        {
+            return Nx2GpuMemory.IsSparse(va) && !Nx2GpuMemory.TryResolveMapping(va, out _);
+        }
+
+        /// <summary>
         /// Reads data from GPU mapped memory.
         /// </summary>
         /// <typeparam name="T">Type of the data</typeparam>
@@ -120,7 +131,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 }
             }
 
-            if (Nx2IdentityMapping && Nx2GpuMemory.IsSparse(va) && Nx2GpuMemory.TryReadSparse(va, out T sparseValue))
+            if (Nx2IdentityMapping && IsSparseUnmapped(va) && Nx2GpuMemory.TryReadSparse(va, out T sparseValue))
             {
                 return sparseValue;
             }
@@ -157,7 +168,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
         /// <returns>The span of the data at the specified memory location</returns>
         public ReadOnlySpan<byte> GetSpan(ulong va, int size, bool tracked = false)
         {
-            if (Nx2IdentityMapping && Nx2GpuMemory.IsSparse(va))
+            if (Nx2IdentityMapping && IsSparseUnmapped(va))
             {
                 Span<byte> sparse = new byte[size];
 
@@ -190,7 +201,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
         /// <returns>The span of the data at the specified memory location</returns>
         public ReadOnlySpan<byte> GetSpanMapped(ulong va, int size, bool tracked = false)
         {
-            if (Nx2IdentityMapping && Nx2GpuMemory.IsSparse(va))
+            if (Nx2IdentityMapping && IsSparseUnmapped(va))
             {
                 return GetSpan(va, size, tracked);
             }
@@ -297,7 +308,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
         /// <returns>A writable region with the data at the specified memory location</returns>
         public WritableRegion GetWritableRegion(ulong va, int size, bool tracked = false)
         {
-            if (Nx2IdentityMapping && Nx2GpuMemory.IsSparse(va))
+            if (Nx2IdentityMapping && IsSparseUnmapped(va))
             {
                 MemoryOwner<byte> sparseOwner = MemoryOwner<byte>.Rent(size);
 
@@ -373,7 +384,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
         {
             if (Nx2IdentityMapping)
             {
-                if (Nx2GpuMemory.IsSparse(va) && Nx2GpuMemory.TryWriteSparse(va, data))
+                if (IsSparseUnmapped(va) && Nx2GpuMemory.TryWriteSparse(va, data))
                 {
                     return;
                 }
@@ -734,16 +745,17 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 return PteUnmapped;
             }
 
+            // An explicit nx2:gpu mapping wins over the sparse region it may lie in.
+            if (Nx2GpuMemory.TryResolveMapping(va, out ulong mapped))
+            {
+                return mapped + (va & PageMask);
+            }
+
             // Sparse regions are host allocations, not guest memory: the direct read/write paths
             // in this class handle them, and everything else sees them as unmapped.
             if (Nx2GpuMemory.IsSparse(va))
             {
                 return PteUnmapped;
-            }
-
-            if (Nx2GpuMemory.TryResolveMapping(va, out ulong mapped))
-            {
-                return mapped + (va & PageMask);
             }
 
             // Identity fallback only holds while the guest really has this page mapped. Switch 2
@@ -776,7 +788,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 return true;
             }
 
-            if (!Nx2IdentityMapping || Nx2GpuMemory.IsSparse(va))
+            if (!Nx2IdentityMapping)
             {
                 return false;
             }
@@ -784,6 +796,11 @@ namespace Ryujinx.Graphics.Gpu.Memory
             if (Nx2GpuMemory.TryResolveMapping(va, out ulong mapped))
             {
                 return Physical.IsMapped(mapped);
+            }
+
+            if (Nx2GpuMemory.IsSparse(va))
+            {
+                return false;
             }
 
             return Physical.IsMapped(va);

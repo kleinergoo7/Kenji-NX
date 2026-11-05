@@ -32,6 +32,8 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             using WritableRegion region = context.Memory.GetWritableRegion(bufferAddress, (int)bufferLen, true);
             Result result = _baseFile.Get.Read(out long bytesRead, offset, new OutBuffer(region.Memory.Span), size, readOption);
 
+            FsLoaderProgress.OnRead(bytesRead);
+
             context.ResponseData.Write(bytesRead);
 
             return (ResultCode)result.Value;

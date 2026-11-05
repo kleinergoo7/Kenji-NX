@@ -156,6 +156,20 @@ namespace Ryujinx.Memory
                     }
                 }
             }
+            else if (OperatingSystem.IsLinux())
+            {
+                // memfd_create instead of a /dev/shm file: /dev/shm is a fixed-size tmpfs
+                // (often ~half of RAM, 12 GiB here) and writing a full guest DRAM block
+                // into it raised SIGBUS. A memfd is not bound by the /dev/shm mount limit
+                // and can be backed by swap.
+                const uint MfdCloexec = 0x0001;
+
+                fd = memfd_create("Ryujinx", MfdCloexec);
+                if (fd == -1)
+                {
+                    throw new SystemException(Marshal.GetLastPInvokeErrorMessage());
+                }
+            }
             else
             {
                 byte[] fileName = "/dev/shm/Ryujinx-XXXXXX"u8.ToArray();

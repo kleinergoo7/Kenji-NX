@@ -1423,6 +1423,37 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             return ResultCode.Success;
         }
 
+        private static int _npad214Count;
+
+        [CommandCmif(214)] // Switch 2 HID revision
+        // 214(npad id, applet resource user id): input poll added with the Switch 2 HID
+        // revision. The reference Switch 2 emulator (NX Infinity v1.1) adds no IHidServer
+        // handler for it either — it is auto-stubbed there too — and the guest keeps
+        // running, so an empty success is the correct parity behavior, not a missing path.
+        public ResultCode GetNpadState214(ServiceCtx context)
+        {
+            int npadId = context.RequestData.ReadInt32();
+            long appletResourceUserId = context.RequestData.ReadInt64();
+
+            Logger.Stub?.PrintStub(LogClass.ServiceHid, new { npadId, appletResourceUserId });
+
+            // One-shot steady-loop snapshot: NX2_HID_DUMP=<call number>. Triggered from a
+            // 60 Hz poll so the dump lands while a frame should be submitted, not at present.
+            int n = System.Threading.Interlocked.Increment(ref _npad214Count);
+
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.WatchState(context);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_HID_DUMP") is string dumpAt &&
+                int.TryParse(dumpAt, out int dumpCall) &&
+                n == dumpCall)
+            {
+                Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.Dump(
+                    context, $"hid214#{n}");
+            }
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(300)]
         // ActivateConsoleSixAxisSensor(nn::applet::AppletResourceUserId)
         public ResultCode ActivateConsoleSixAxisSensor(ServiceCtx context)

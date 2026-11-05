@@ -67,10 +67,16 @@ namespace Ryujinx.HLE
         public bool RequiresArm64InstructionCompatibility => Generation == ConsoleGeneration.Switch2;
 
         /// <summary>
-        /// Guest arch-timer frequency. Both generations currently use 19.2 MHz;
-        /// the reference design branches per profile (31.25 MHz alternative), but
-        /// the Switch 2 value is unverified — do not change without hardware proof.
+        /// Guest arch-timer frequency (CNTFRQ_EL0 and the SVC GetSystemTick domain).
+        /// Switch 1 runs at 19.2 MHz. Switch 2 / T239 runs at 31.25 MHz: its SDK reads
+        /// this value and converts ticks with it (nn::os::GetSystemTickFrequency,
+        /// TickManager::ConvertToTimeSpan/ConvertToTick). The working Eglantine
+        /// reference uses 31.25 MHz for Switch 2 titles; at 19.2 MHz every tick-based
+        /// time in Mario Kart World was off by 1.63x and frame deadlines in ticks
+        /// waited ~27 ms, stalling renderer init.
         /// </summary>
-        public ulong TickFrequency => 19200000;
+        public ulong TickFrequency => Generation == ConsoleGeneration.Switch2
+            ? 31_250_000UL
+            : 19_200_000UL;
     }
 }

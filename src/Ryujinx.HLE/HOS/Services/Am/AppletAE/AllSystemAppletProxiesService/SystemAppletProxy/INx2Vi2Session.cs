@@ -43,9 +43,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.TryResumeAll();
                     Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel.NvHostGpuDeviceFile.SignalAllNx2Events();
                     INx2GpuSession.SignalAllNx2GpuEvents();
+                    Nx2Diagnostics.WatchQueues(System.Threading.Volatile.Read(ref _device));
 
                     LogProgress();
                 }, null, 16, 16);
+
             }
         }
 
@@ -150,9 +152,20 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 kv => $"{kv.Key}={kv.Value}"));
 
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                $"NX2 progress t={_progressTicks / 60}s submits={Nx2Counters.Submits} presents={Nx2Counters.Presents} sparseCommit={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseCommitted >> 20}MiB dropped={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseDropped >> 20}MiB draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} unbound={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.UnboundDrops} mme={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoHits}+{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoMisses} 3d={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} emitted=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}] sp=[{SpValues()}] hot=[{HotPcs()}]");
+                $"NX2 progress t={_progressTicks / 60}s submits={Nx2Counters.Submits} presents={Nx2Counters.Presents} sparseCommit={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseCommitted >> 20}MiB dropped={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseDropped >> 20}MiB draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} unbound={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.UnboundDrops} mme={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoHits}+{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoMisses} 3d={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} emitted=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}] sp=[{SpValues()}] hot=[{HotPcs()}] gpuid=[{INx2GpuSession.DescribeSignals()}] fs=[{Ryujinx.HLE.HOS.Services.Fs.FsLoaderProgress.Describe()}] gsvmap=[{INx2GpuSession.DescribeMapTiming()}]");
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                 $"NX2 calls {calls} ioctls=[{ioctls}] gpu=[{gpu}] sites=[{sites}] missing=[{missing}]");
+        }
+
+        [CommandTipc(0)]
+        public ResultCode Handshake(ServiceCtx context)
+        {
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            ulong token = context.RequestData.ReadUInt64();
+
+            context.ResponseData.Write(token);
+
+            return ResultCode.Success;
         }
 
         [CommandTipc(11)]
@@ -394,6 +407,28 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(229)]
         public ResultCode Present(ServiceCtx context)
         {
+            // Probe: the NX2 present request carries a GPU fence; the reference
+            // emulator reports it as (id=1, value=109+3n). Dump the raw words once
+            // to correct the offsets instead of guessing.
+            if (System.Environment.GetEnvironmentVariable("NX2_PRESENT_WORDS") == "1" &&
+                System.Threading.Interlocked.Increment(ref _presentWordLogs) <= 3)
+            {
+                try
+                {
+                    System.IO.Stream ws = context.RequestData.BaseStream;
+                    long save = ws.Position;
+                    System.Text.StringBuilder wb = new();
+                    for (int wi = 0; wi < 32 && ws.Position + 4 <= ws.Length; wi++)
+                    {
+                        wb.Append($" {wi}=0x{context.RequestData.ReadUInt32():X8}");
+                    }
+                    ws.Position = save;
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                        $"NX2 present words len=0x{ws.Length:X}:{wb}");
+                }
+                catch { }
+            }
+
             // 229(u64 client token, u32 slot, u32 image, ...fences): word 5 after the
             // TIPC header is the presented image id; RequestData starts at word 2.
             context.RequestData.ReadUInt64();  // token
@@ -443,17 +478,34 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 int.TryParse(dumpAt, out int dumpPresent) &&
                 Nx2Counters.Presents == dumpPresent)
             {
+                // Dump every process, not just the title: Switch 2 renders through the
+                // "Common" system process, and the GPU submit thread lives there.
                 foreach (System.Collections.Generic.KeyValuePair<ulong, Ryujinx.HLE.HOS.Kernel.Process.KProcess> proc in context.Device.System.KernelContext.Processes)
                 {
-                    if (proc.Key != 109)
-                    {
-                        continue;
-                    }
-
                     foreach (Ryujinx.HLE.HOS.Kernel.Threading.KThread thread in proc.Value.DebugThreads)
                     {
+                        // Kernel wait state: a thread at pc=0 is parked in an SVC wait, and
+                        // the sync objects name exactly what it is blocked on.
+                        System.Text.StringBuilder waitInfo = new();
+
+                        for (int wi = 0; wi < thread.WaitSyncObjects.Length; wi++)
+                        {
+                            Ryujinx.HLE.HOS.Kernel.Common.KSynchronizationObject obj = thread.WaitSyncObjects[wi];
+
+                            if (obj != null)
+                            {
+                                string evName = Nx2EventNames.Lookup(obj);
+                                waitInfo.Append($" w{wi}=H{thread.WaitSyncHandles[wi]}:{obj.GetType().Name}{(evName != null ? ":" + evName : "")}");
+                            }
+                        }
+
+                        if (thread.SignaledObj != null)
+                        {
+                            waitInfo.Append($" signaled={thread.SignaledObj.GetType().Name}");
+                        }
+
                         Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                            $"NX2 td uid={thread.ThreadUid} name={thread.GetThreadName()} pc=0x{thread.Context?.Pc:X}");
+                            $"NX2 td pid={proc.Key} pname={proc.Value.Name} uid={thread.ThreadUid} name={thread.GetThreadName()} pc=0x{thread.Context?.Pc:X} wait={thread.WaitingSync} sched={thread.SchedFlags}{waitInfo}");
 
                         try
                         {
@@ -470,7 +522,24 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             if (System.Threading.Interlocked.Increment(ref _presentLogs) <= 8)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                    $"NX2 present #{Nx2Counters.Presents} image={imageId}");
+                    $"NX2 present #{Nx2Counters.Presents} image={imageId} draws=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DrawBreakdown}] 3d=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()}]");
+            }
+
+            // One-shot GPU method trace at a chosen present. Answers whether the scene
+            // produces real draws and, if not, which 3D/compute method stream led there.
+            if (System.Environment.GetEnvironmentVariable("NX2_DRAW_DUMP") is string dumpDrawAt &&
+                int.TryParse(dumpDrawAt, out int dumpDrawPresent) &&
+                Nx2Counters.Presents == dumpDrawPresent)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2 draw-dump present={dumpDrawPresent} draws=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DrawBreakdown}] " +
+                    $"mme={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods} " +
+                    $"3d=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()}]");
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2 draw-dump methods=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeRecentMethods(256)}]");
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2 draw-dump emitted=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}] " +
+                    $"compute=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.ComputeMethods()}]");
             }
 
             if (System.Threading.Interlocked.Increment(ref _lenLogs) <= 6)
@@ -917,6 +986,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static int _fenceLogs;
         private static int _presentLogs;
         private static int _lenLogs;
+        private static int _presentWordLogs;
 
         // MKW draws into the top-left corner of its present images; crop to the drawn area.
         private const uint MkwCropWidth = 2560u;

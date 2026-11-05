@@ -740,7 +740,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             if (timeout > 0)
             {
-                timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
+                timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
             }
 
             return ReplyAndReceive(out handleIndex, handles, replyTargetHandle, timeout);
@@ -793,7 +793,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             {
                 if (timeout > 0)
                 {
-                    timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
+                    timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
                 }
 
                 while ((result = _context.Synchronization.WaitFor(syncObjs, timeout, out handleIndex)) == Result.Success)
@@ -898,7 +898,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             {
                 if (timeout > 0)
                 {
-                    timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
+                    timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
                 }
 
                 while ((result = _context.Synchronization.WaitFor(syncObjs, timeout, out handleIndex)) == Result.Success)
@@ -2065,6 +2065,8 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         [Svc(0x1e)]
         public ulong GetSystemTick()
         {
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.WatchCurrentThread();
+
             return _context.TickSource.Counter;
         }
 
@@ -2361,7 +2363,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                             return KernelResult.InvalidCombination;
                         }
 
-                        value = (ulong)KTimeManager.ConvertHostTicksToTicks(_context.Schedulers[currentCore].TotalIdleTimeTicks);
+                        value = (ulong)KTimeManager.ConvertHostTicksToTicks(_context.Schedulers[currentCore].TotalIdleTimeTicks, _context.TickSource.Frequency);
                         break;
                     }
 
@@ -2412,7 +2414,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
                         if (subId != -1)
                         {
-                            value = (ulong)KTimeManager.ConvertHostTicksToTicks(timeDelta);
+                            value = (ulong)KTimeManager.ConvertHostTicksToTicks(timeDelta, _context.TickSource.Frequency);
                         }
                         else
                         {
@@ -2423,7 +2425,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                                 totalTimeRunning += timeDelta;
                             }
 
-                            value = (ulong)KTimeManager.ConvertHostTicksToTicks(totalTimeRunning);
+                            value = (ulong)KTimeManager.ConvertHostTicksToTicks(totalTimeRunning, _context.TickSource.Frequency);
                         }
 
                         break;
@@ -2875,7 +2877,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             }
             else
             {
-                KernelStatic.GetCurrentThread().Sleep(timeout + KTimeManager.DefaultTimeIncrementNanoseconds);
+                KernelStatic.GetCurrentThread().Sleep(timeout + _context.TimeManager.DefaultTimeIncrementNanoseconds);
             }
         }
 
@@ -3211,7 +3213,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             if (timeout > 0)
             {
-                timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
+                timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
             }
 
             Result result = _context.Synchronization.WaitFor(syncObjs, timeout, out handleIndex);
@@ -3249,6 +3251,8 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         [Svc(0x1a)]
         public Result ArbitrateLock(int ownerHandle, [PointerSized] ulong mutexAddress, int requesterHandle)
         {
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.WatchCurrentThread();
+
             if (IsPointingInsideKernel(mutexAddress))
             {
                 return KernelResult.InvalidMemState;
@@ -3319,7 +3323,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             if (timeout > 0)
             {
-                timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
+                timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
             }
 
             return currentProcess.AddressArbiter.WaitProcessWideKeyAtomic(
@@ -3356,7 +3360,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             if (timeout > 0)
             {
-                timeout += KTimeManager.DefaultTimeIncrementNanoseconds;
+                timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_ARB_LOG") == "1" && currentProcess.Pid == 109)

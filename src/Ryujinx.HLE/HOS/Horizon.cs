@@ -119,10 +119,16 @@ namespace Ryujinx.HLE.HOS
 
         public Horizon(Switch device)
         {
-            // Guest arch-timer rate comes from the console profile (both Switch
-            // generations use 19.2 MHz today; the Switch 2 value is unverified,
-            // so the profile keeps a single constant until hardware says otherwise).
+            // Guest arch-timer rate comes from the console profile: Switch 1 19.2 MHz,
+            // Switch 2 (T239) 31.25 MHz as used by the working Eglantine reference. The
+            // TickSource feeds CNTFRQ_EL0/CNTPCT_EL0 and SVC GetSystemTick from one domain.
             TickSource = new TickSource(device.CompatibilityProfile.TickFrequency);
+
+            if (Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_TICK_LOG"))
+            {
+                Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
+                    $"Guest counter: CNTFRQ=0x{TickSource.Frequency:X} ({TickSource.Frequency} Hz) profile={device.CompatibilityProfile.Generation}");
+            }
 
             KernelContext = new KernelContext(
                 TickSource,

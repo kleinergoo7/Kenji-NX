@@ -80,6 +80,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         private static int _failProbe;
         public static int MacrosRun;
 
+        // Per-macro emit trace (NX2_MACRO_LOG=1): hash, length, and the exact
+        // (register, value) stream each macro produces. This is how we tell
+        // whether a draw macro is missing, misdecoded, or emitting the wrong register.
+        private static readonly bool MacroLogEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1";
+        private static int _macroTraceLogs;
+        private ulong _currentMacroHash;
+        private List<(uint Addr, uint Val)> _currentEmits;
+
         /// <summary>
         /// Memoized macro-call replays vs full reinterpretations (Eglantine reports ~97%
         /// replay on title traffic; a low hit rate here means the interpreter burns the
@@ -152,6 +161,24 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         {
             System.Threading.Interlocked.Increment(ref MacrosRun);
 
+            if (MacroLogEnabled && System.Threading.Interlocked.Increment(ref _macroTraceLogs) <= 80)
+            {
+                ulong h = 1469598103934665603UL;
+
+                foreach (int w in code)
+                {
+                    h ^= (uint)w;
+                    h *= 1099511628211UL;
+                }
+
+                _currentMacroHash = h;
+                _currentEmits = new List<(uint, uint)>();
+            }
+            else
+            {
+                _currentEmits = null;
+            }
+
             List<int> parameters = new(Fifo.Count + 1) { arg0 };
 
             foreach (FifoWord word in Fifo)
@@ -178,6 +205,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             _writes.Clear();
 
             string error = Run(code, state, parameters);
+
+            if (_currentEmits != null)
+            {
+                System.Text.StringBuilder eb = new();
+
+                for (int i = 0; i < _currentEmits.Count && i < 40; i++)
+                {
+                    eb.Append($" {_currentEmits[i].Addr:X2}={_currentEmits[i].Val:X8}");
+                }
+
+                Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.Gpu,
+                    $"NX2 macro hash=0x{_currentMacroHash:X16} words={code.Length} instr={code.Length / InstructionWordCount} arg0=0x{(uint)arg0:X8} err={error ?? "ok"} emits={(_currentEmits != null ? _currentEmits.Count : 0)}:[{eb}]");
+
+                _currentEmits = null;
+            }
 
             if (!string.IsNullOrEmpty(error))
             {
@@ -677,6 +719,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             if (address >= 0xe00)
             {
                 return false;
+            }
+
+            if (_currentEmits != null)
+            {
+                _currentEmits.Add((address, value));
             }
 
             int emitIndex = System.Threading.Interlocked.Increment(ref EmittedMethods);

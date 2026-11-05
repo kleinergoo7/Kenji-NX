@@ -834,13 +834,43 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         }
 
         public static int DrawCount;
+        public static int DirectDrawCount;
+        public static int IndirectDrawCount;
+        public static int ClearCount;
+        public static int TextureDrawCount;
 
         /// <summary>
-        /// Counts one dispatched draw, blit or clear.
+        /// Counts one dispatched draw, blit or clear. Kept even when the host
+        /// pipeline call is a no-op so the count stays truthful: the draw
+        /// reached the engine, not necessarily a visible pixel.
         /// </summary>
         internal static int NotifyDraw()
         {
             return System.Threading.Interlocked.Increment(ref DrawCount);
+        }
+
+        internal static int NotifyDirectDraw()
+        {
+            System.Threading.Interlocked.Increment(ref DirectDrawCount);
+            return NotifyDraw();
+        }
+
+        internal static int NotifyIndirectDraw()
+        {
+            System.Threading.Interlocked.Increment(ref IndirectDrawCount);
+            return NotifyDraw();
+        }
+
+        internal static int NotifyTextureDraw()
+        {
+            System.Threading.Interlocked.Increment(ref TextureDrawCount);
+            return NotifyDraw();
+        }
+
+        internal static int NotifyClear()
+        {
+            System.Threading.Interlocked.Increment(ref ClearCount);
+            return NotifyDraw();
         }
 
         protected virtual void Dispose(bool disposing)

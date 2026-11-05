@@ -71,6 +71,9 @@ namespace Ryujinx.Memory
         [LibraryImport("libc", SetLastError = true)]
         public static partial int madvise(nint address, ulong size, int advice);
 
+        [LibraryImport("libc", EntryPoint = "memfd_create", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial int memfd_create(string name, uint flags);
+
         [LibraryImport("libc", SetLastError = true)]
         public static partial int mkstemp(nint template);
 

@@ -16,6 +16,12 @@ namespace Ryujinx.HLE.HOS.Services
         // Diagnostic: per-service-command call counts, printed with the NX2 progress line.
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> CallCounts = [];
 
+        // Gated TIPC request/response word dump (NX2_TIPC_DUMP=1) for the NX2 services.
+        // Used to compare our handshake replies with the working oracle's.
+        private static readonly bool TipcDumpEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_TIPC_DUMP") == "1";
+        private static int _tipcDumpCount;
+
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> TipcSeen = new();
 
         /// <summary>Commands answered by a fake success because no handler exists.</summary>
@@ -223,7 +229,9 @@ namespace Ryujinx.HLE.HOS.Services
                             System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(raw.AsSpan(0, length & ~3)).ToArray(),
                             w => w.ToString("X8")));
 
-                        Logger.Warning?.Print(LogClass.KernelIpc, $"UNIMPLEMENTED {key} words=[{words}]");
+                        ulong missPc = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread()?.Context.Pc ?? 0;
+
+                        Logger.Warning?.Print(LogClass.KernelIpc, $"UNIMPLEMENTED {key} pc=0x{missPc:X} words=[{words}]");
                     }
                 }
 
@@ -257,6 +265,38 @@ namespace Ryujinx.HLE.HOS.Services
             int commandId = (int)context.Request.Type - 0x10;
 
             CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
+
+            bool tipcDump = false;
+            string tipcReq = string.Empty;
+
+            string tipcType = GetType().Name;
+
+            if (TipcDumpEnabled &&
+                (tipcType == "INx2Vi2Session" || tipcType == "INx2GraphicsSystemSession") &&
+                System.Threading.Interlocked.Increment(ref _tipcDumpCount) <= 6000)
+            {
+                tipcDump = true;
+
+                try
+                {
+                    System.IO.Stream rs = context.RequestData.BaseStream;
+                    long save = rs.Position;
+                    rs.Seek(0, System.IO.SeekOrigin.Begin);
+                    System.Text.StringBuilder sb = new();
+
+                    for (int i = 0; i < 16 && rs.Position + 4 <= rs.Length; i++)
+                    {
+                        sb.Append($"{context.RequestData.ReadUInt32():X8} ");
+                    }
+
+                    rs.Position = save;
+                    tipcReq = sb.ToString();
+                }
+                catch
+                {
+                    tipcReq = "<unreadable>";
+                }
+            }
 
             if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
             {
@@ -342,6 +382,37 @@ namespace Ryujinx.HLE.HOS.Services
                                 $"NX2 missing {GetType().Name}:{commandId} unreadable: {ex.GetType().Name}");
                         }
                     }
+                }
+
+                if (tipcDump)
+                {
+                    try
+                    {
+                        System.IO.Stream ws = context.ResponseData.BaseStream;
+                        long end = ws.Position;
+                        long save = ws.Position;
+                        System.Text.StringBuilder sb = new();
+
+                        if (end > 4)
+                        {
+                            ws.Seek(4, System.IO.SeekOrigin.Begin);
+
+                            long count = System.Math.Min(64, end - 4);
+                            byte[] bytes = new byte[count];
+                            int read = ws.Read(bytes, 0, (int)count);
+
+                            for (int i = 0; i + 4 <= read; i += 4)
+                            {
+                                sb.Append($"{System.BitConverter.ToUInt32(bytes, i):X8} ");
+                            }
+                        }
+
+                        ws.Position = save;
+
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                            $"NX2DUMP {GetType().Name}:{commandId} req=[{tipcReq.TrimEnd()}] resp=[{sb.ToString().TrimEnd()}]");
+                    }
+                    catch { }
                 }
 
                 context.ResponseData.BaseStream.Seek(0, SeekOrigin.Begin);

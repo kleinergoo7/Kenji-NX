@@ -29,6 +29,87 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public static int MacroMemoMisses => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoMisses;
         public static int EmittedMethods => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedMethods;
         public static int Draws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.DrawCount;
+        public static int DirectDraws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.DirectDrawCount;
+        public static int IndirectDraws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.IndirectDrawCount;
+        public static int Clears => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.ClearCount;
+        public static int TextureDraws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.TextureDrawCount;
+
+        public static string DrawBreakdown =>
+            $"total={Draws} direct={DirectDraws} indirect={IndirectDraws} clear={Clears} texture={TextureDraws}";
+
+        public readonly struct MethodEntry
+        {
+            public readonly int Engine;
+            public readonly int Offset;
+            public readonly int Argument;
+
+            public MethodEntry(int engine, int offset, int argument)
+            {
+                Engine = engine;
+                Offset = offset;
+                Argument = argument;
+            }
+        }
+
+        private const int MethodRingSize = 512;
+        private static readonly MethodEntry[] MethodRing = new MethodEntry[MethodRingSize];
+        private static long _methodRingSeq;
+        private static readonly object MethodRingLock = new();
+
+        // Last methods seen by the FIFO processor, oldest to newest. Written on the
+        // GPU thread, read by the HLE present handler; the lock is short and cold.
+        public static void RecordMethod(int engine, int offset, int argument)
+        {
+            lock (MethodRingLock)
+            {
+                MethodRing[_methodRingSeq & (MethodRingSize - 1)] = new MethodEntry(engine, offset, argument);
+                _methodRingSeq++;
+            }
+        }
+
+        public static System.Collections.Generic.List<MethodEntry> RecentMethods(int count)
+        {
+            lock (MethodRingLock)
+            {
+                long available = _methodRingSeq < MethodRingSize ? _methodRingSeq : MethodRingSize;
+                if (count > available)
+                {
+                    count = (int)available;
+                }
+
+                System.Collections.Generic.List<MethodEntry> list = new(count);
+                for (long i = _methodRingSeq - count; i < _methodRingSeq; i++)
+                {
+                    list.Add(MethodRing[i & (MethodRingSize - 1)]);
+                }
+
+                return list;
+            }
+        }
+
+        public static string DescribeRecentMethods(int count)
+        {
+            System.Text.StringBuilder sb = new();
+            System.Collections.Generic.List<MethodEntry> list = RecentMethods(count);
+
+            foreach (MethodEntry e in list)
+            {
+                sb.Append($"{(e.Engine == 0 ? "3D" : "C")}:0x{e.Offset:X}={e.Argument:X8} ");
+            }
+
+            return sb.ToString();
+        }
+
+        public static long MethodSeq
+        {
+            get
+            {
+                lock (MethodRingLock)
+                {
+                    return _methodRingSeq;
+                }
+            }
+        }
 
         public static long UnboundDrops => GPFifoProcessor.UnboundDrops;
 
@@ -573,6 +654,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
                 if (engine == EngineCompute)
                 {
+                    Nx2GpuStall.RecordMethod(engine, offset, argument);
                     lock (ComputeHistogram)
                     {
                         ComputeHistogram.TryGetValue(offset, out int seen);
@@ -583,6 +665,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 if (engine == Engine3D)
                 {
                     System.Threading.Interlocked.Increment(ref _method3DTotal);
+                    Nx2GpuStall.RecordMethod(engine, offset, argument);
                     lock (MethodHistogram)
                     {
                         MethodHistogram.TryGetValue(offset, out int seen);
@@ -689,16 +772,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
             int engineField = (argument >> 16) & 0x1f;
 
+            // Full class table (Eglantine puller.cpp ProcessBindMethod): Switch 2 binds Ampere
+            // classes; the console's NVN also binds the Maxwell/Kepler classes. Ampere shares the
+            // Maxwell method layout, so they run on the same engines.
             _subChannelEngine[subChannel] = classId switch
             {
-                0xc797 => Engine3D,        // AMPERE_B
-                0xc7c0 => EngineCompute,   // AMPERE_COMPUTE_B
-                0xc7b5 => EngineDma,       // AMPERE_DMA_COPY_B
-                0xc56f => EngineFifo,      // AMPERE_CHANNEL_GPFIFO_A
-                _ => subChannel,           // unknown class: keep the legacy mapping
+                0xc797 or 0xc697 or 0xc597 or 0xb197 => Engine3D,          // AMPERE_B / MAXWELL_B
+                0xc7c0 or 0xc6c0 or 0xc5c0 or 0xb1c0 => EngineCompute,     // AMPERE_COMPUTE_B / KEPLER_COMPUTE_B
+                0xc7b5 or 0xc6b5 or 0xc5b5 or 0xb0b5 => EngineDma,         // AMPERE_DMA_COPY_B / MAXWELL_DMA_COPY_A
+                0xc56f or 0xc76f or 0xb06f => EngineFifo,                  // AMPERE_CHANNEL_GPFIFO_A / MAXWELL_CHANNEL_GPFIFO_A
+                0x902d => Engine2D,                                        // FERMI_TWOD_A
+                0xa140 => EngineInlineToMemory,                            // KEPLER_INLINE_TO_MEMORY_B
+                _ => subChannel,                                           // unknown class: legacy mapping
             };
 
-            if (classId is not (0xc797 or 0xc7c0 or 0xc7b5 or 0xc56f) && _unknownClasses.Add(classId))
+            if (classId is not (0xc797 or 0xc697 or 0xc597 or 0xb197 or 0xc7c0 or 0xc6c0 or 0xc5c0 or 0xb1c0 or 0xc7b5 or 0xc6b5 or 0xc5b5 or 0xb0b5 or 0xc56f or 0xc76f or 0xb06f or 0x902d or 0xa140) && _unknownClasses.Add(classId))
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
                     $"Switch 2 unknown object class 0x{classId:X4} (engine {engineField}) on subchannel {subChannel}");
@@ -706,7 +794,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
             if (GpuClassLogEnabled)
             {
-                bool known = classId == 0 || classId is 0xc797 or 0xc7c0 or 0xc7b5 or 0xc56f;
+                bool known = classId == 0 || classId is 0xc797 or 0xc697 or 0xc597 or 0xb197 or 0xc7c0 or 0xc6c0 or 0xc5c0 or 0xb1c0 or 0xc7b5 or 0xc6b5 or 0xc5b5 or 0xb0b5 or 0xc56f or 0xc76f or 0xb06f or 0x902d or 0xa140;
 
                 Ryujinx.Common.Nx2ProbeLog.Append("nx2-gpu-class.log",
                     $"sub={subChannel} class=0x{classId:X4} engineField={engineField} known={known} engine={_subChannelEngine[subChannel]}");

@@ -29,6 +29,23 @@ namespace Ryujinx.HLE.HOS.Services.Nv
         // Diagnostic: per-ioctl counts, printed with the NX2 progress line.
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> IoctlCounts = [];
 
+        // Gated per-call ioctl trace for the Switch 2 differential (NX2_IOCTL_LOG=1).
+        private static readonly bool IoctlLogEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_IOCTL_LOG") == "1";
+
+        private static void LogIoctl(string what, int fd, NvDeviceFile deviceFile, NvIoctl cmd, Span<byte> args)
+        {
+            if (!IoctlLogEnabled)
+            {
+                return;
+            }
+
+            ulong arg0 = args.Length >= 4 ? (uint)(args[0] | (args[1] << 8) | (args[2] << 16) | (args[3] << 24)) : 0;
+
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
+                $"NX2I {what} fd={fd} dev={deviceFile.GetType().Name} grp={cmd.Type:X2} cmd={cmd.Number:X2} size=0x{cmd.Size:X} dir={(int)cmd.DirectionValue} ioctl=0x{(uint)((int)cmd.DirectionValue | (cmd.Size << 16) | (cmd.Type << 8) | cmd.Number):X8} arg0=0x{arg0:X}");
+        }
+
         // Unknown Switch 2 ioctls answered with success and an echoed input, like the oracle.
         internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> Nx2IoctlStubs = new();
 
@@ -314,6 +331,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                     if (errorCode == NvResult.Success)
                     {
+                        LogIoctl("Ioctl", fd, deviceFile, ioctlCommand, arguments);
+
                         NvInternalResult internalResult = deviceFile.Ioctl(ioctlCommand, arguments);
 
                         if (internalResult == NvInternalResult.NotImplemented)
@@ -568,6 +587,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                     if (errorCode == NvResult.Success)
                     {
+                        LogIoctl("Ioctl2", fd, deviceFile, ioctlCommand, arguments);
+
                         NvInternalResult internalResult = deviceFile.Ioctl2(ioctlCommand, arguments, inlineInBufferSpan);
 
                         if (internalResult == NvInternalResult.NotImplemented)
@@ -648,6 +669,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                     if (errorCode == NvResult.Success)
                     {
+                        LogIoctl("Ioctl3", fd, deviceFile, ioctlCommand, arguments);
+
                         NvInternalResult internalResult = deviceFile.Ioctl3(ioctlCommand, arguments, inlineOutBufferSpan);
 
                         if (internalResult == NvInternalResult.NotImplemented)
