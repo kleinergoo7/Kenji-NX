@@ -80,11 +80,17 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                 }
 
                 // Flush args that were pushed before the engine existed.
-                foreach (FifoWord pending in _pendingArgs)
+                // NOTE: Macro is a struct stored in arrays: default-initialized
+                // entries never ran a constructor, so _pendingArgs can be null.
+                if (_pendingArgs != null)
                 {
-                    _executionEngine.Fifo.Enqueue(pending);
+                    foreach (FifoWord pending in _pendingArgs)
+                    {
+                        _executionEngine.Fifo.Enqueue(pending);
+                    }
+
+                    _pendingArgs.Clear();
                 }
-                _pendingArgs.Clear();
             }
 
             // We don't consume the parameter buffer value, so we don't need to flush it.
@@ -147,7 +153,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         {
             if (_executionEngine == null)
             {
-                _pendingArgs.Add(new FifoWord(gpuVa, argument));
+                _pendingArgs?.Add(new FifoWord(gpuVa, argument));
             }
             else
             {
