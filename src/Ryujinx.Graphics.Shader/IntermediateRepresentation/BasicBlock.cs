@@ -63,7 +63,7 @@ namespace Ryujinx.Graphics.Shader.IntermediateRepresentation
         {
             INode lastOp = GetLastOp();
 
-            if (lastOp is Operation operation && IsControlFlowInst(operation.Inst))
+            if (lastOp is Operation operation && IsControlFlowInst(operation.Inst) && Operations.Last != null)
             {
                 Operations.AddBefore(Operations.Last, node);
             }

@@ -470,5 +470,6 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             return oldValue;
         }
+
     }
 }

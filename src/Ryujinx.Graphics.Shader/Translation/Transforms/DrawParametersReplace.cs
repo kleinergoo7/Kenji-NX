@@ -36,7 +36,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
             Operand GenerateLoad(IoVariable ioVariable)
             {
                 Operand value = Local();
-                node.List.AddBefore(node, new Operation(Instruction.Load, StorageKind.Input, value, Const((int)ioVariable)));
+                node.List?.AddBefore(node, new Operation(Instruction.Load, StorageKind.Input, value, Const((int)ioVariable)));
                 return value;
             }
 

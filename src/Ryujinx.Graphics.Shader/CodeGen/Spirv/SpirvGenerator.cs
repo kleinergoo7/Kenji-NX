@@ -55,6 +55,11 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
             context.AddCapability(Capability.ImageQuery);
             context.AddCapability(Capability.SampledBuffer);
 
+            if (parameters.HostCapabilities.StorageImageExtendedFormats)
+            {
+                context.AddCapability(Capability.StorageImageExtendedFormats);
+            }
+            
             if (parameters.HostCapabilities.SupportsShaderFloat64)
             {
                 context.AddCapability(Capability.Float64);
@@ -89,8 +94,8 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                     context.AddCapability(Capability.GeometryShaderPassthroughNV);
                 }
             }
-            else if (parameters.Definitions.Stage is ShaderStage.TessellationControl or
-                     ShaderStage.TessellationEvaluation)
+            else if (parameters.Definitions.Stage is ShaderStage.TessellationControl
+                     or ShaderStage.TessellationEvaluation)
             {
                 context.AddCapability(Capability.Tessellation);
             }
@@ -311,7 +316,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
 
             context.LoopTargets = loopTargets;
 
-            visitor.BlockEntered += (sender, e) =>
+            visitor.BlockEntered += (_, e) =>
             {
                 AstBlock mergeBlock = e.Block.Parent;
 
@@ -347,7 +352,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 context.EnterBlock(e.Block);
             };
 
-            visitor.BlockLeft += (sender, e) =>
+            visitor.BlockLeft += (_, e) =>
             {
                 if (e.Block.Parent != null)
                 {
@@ -371,10 +376,10 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                         // We only need a branch if the last instruction didn't
                         // already cause the program to exit or jump elsewhere.
                         bool lastIsCf = e.Block.Last is AstOperation lastOp &&
-                            (lastOp.Inst == Instruction.Discard ||
-                             lastOp.Inst == Instruction.LoopBreak ||
-                             lastOp.Inst == Instruction.LoopContinue ||
-                             lastOp.Inst == Instruction.Return);
+                            lastOp.Inst is Instruction.Discard
+                                or Instruction.LoopBreak
+                                or Instruction.LoopContinue
+                                or Instruction.Return;
 
                         if (!lastIsCf)
                         {
@@ -383,8 +388,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                     }
 
                     bool hasElse = AstHelper.Next(e.Block) is AstBlock nextBlock &&
-                        (nextBlock.Type == AstBlockType.Else ||
-                         nextBlock.Type == AstBlockType.ElseIf);
+                        nextBlock.Type is AstBlockType.Else or AstBlockType.ElseIf;
 
                     // Re-enter the parent block.
                     if (e.Block.Parent != null && !hasElse)

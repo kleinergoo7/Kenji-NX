@@ -98,7 +98,7 @@ namespace Ryujinx.Graphics.OpenGL
         public IProgram CreateProgram(ShaderSource[] shaders, ShaderInfo info)
         {
             ProgramCount++;
-
+            
             return new Program(shaders, info.FragmentOutputMap);
         }
 
@@ -174,6 +174,7 @@ namespace Ryujinx.Graphics.OpenGL
                 supportsGeometryShader: true,
                 supportsGeometryShaderPassthrough: HwCapabilities.SupportsGeometryShaderPassthrough,
                 supportsTransformFeedback: true,
+                supportsImageBufferPixelAlignment: false,
                 supportsImageLoadFormatted: HwCapabilities.SupportsImageLoadFormatted,
                 supportsLayerVertexTessellation: HwCapabilities.SupportsShaderViewportLayerArray,
                 supportsMismatchingViewFormat: HwCapabilities.SupportsMismatchingViewFormat,
@@ -185,6 +186,7 @@ namespace Ryujinx.Graphics.OpenGL
                 supportsShaderBarrierDivergence: !(intelWindows || intelUnix),
                 supportsShaderFloat64: true,
                 supportsShaderNonUniformIndexing: false,
+                supportsTextureBufferPixelAlignment: false,
                 supportsTextureGatherOffsets: true,
                 supportsTextureShadowLod: HwCapabilities.SupportsTextureShadowLod,
                 supportsVertexStoreAndAtomics: true,
@@ -193,6 +195,10 @@ namespace Ryujinx.Graphics.OpenGL
                 supportsViewportSwizzle: HwCapabilities.SupportsViewportSwizzle,
                 supportsIndirectParameters: HwCapabilities.SupportsIndirectParameters,
                 supportsDepthClipControl: true,
+                supportsExtendedDynamicState: false,
+                supportsExtendedDynamicState2: false,
+                supportsLogicOpDynamicState: false,
+                supportsPatchControlPointsDynamicState: false,
                 uniformBufferSetIndex: 0,
                 storageBufferSetIndex: 1,
                 textureSetIndex: 2,
@@ -249,7 +255,7 @@ namespace Ryujinx.Graphics.OpenGL
             // This is required to disable [0, 1] clamping for SNorm outputs on compatibility profiles.
             // This call is expected to fail if we're running with a core profile,
             // as this clamp target was deprecated, but that's fine as a core profile
-            // should already have the desired behaviour where outputs are not clamped.
+            // should already have the desired behaviour were outputs are not clamped.
             GL.ClampColor(ClampColorTarget.ClampFragmentColor, ClampColorMode.False);
         }
 

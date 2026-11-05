@@ -54,7 +54,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
             texCallBuilder.Append('(');
             texCallBuilder.Append(imageName);
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
 
             int pCount = coordsCount + (isArray ? 1 : 0);
 
@@ -162,7 +162,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
         {
             AstTextureOperation texOp = (AstTextureOperation)operation;
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
             int coordsIndex = 0;
 
             string samplerName = GetSamplerName(context, texOp, ref coordsIndex);
@@ -264,7 +264,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
 
             texCall += "(" + samplerName;
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
 
             int pCount = coordsCount;
 
@@ -432,7 +432,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
 
             bool colorIsVector = isGather || !isShadow;
 
-            texCall += ")" + (colorIsVector ? GetMaskMultiDest(texOp.Index) : string.Empty);
+            texCall += ")" + (colorIsVector ? GetMaskMultiDest(texOp.Index) : "");
 
             return texCall;
         }
@@ -595,7 +595,6 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
                             varName = $"gl_out[{expr}].{varName}";
                         }
                     }
-
                     break;
 
                 default:
@@ -658,7 +657,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
                     samplerName = $"{samplerName}[{GetSourceExpr(context, texOp.GetSource(srcIndex++), AggregateType.S32)}]";
                 }
 
-                name = $"{texOp.Type.GlslSamplerTypeName}({name}, {samplerName})";
+                name = $"{texOp.Type.ToGlslSamplerType()}({name}, {samplerName})";
             }
 
             return name;

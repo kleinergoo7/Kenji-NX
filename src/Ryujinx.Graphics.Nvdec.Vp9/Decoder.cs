@@ -11,9 +11,6 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         public bool IsHardwareAccelerated => false;
 
         private readonly MemoryAllocator _allocator = new();
-        private byte[] _lastSegmentMap = [];
-        private int _lastSegmentMapMiRows;
-        private int _lastSegmentMapMiCols;
 
         public ISurface CreateSurface(int width, int height)
         {
@@ -32,52 +29,48 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             ReadOnlySpan<Vp9MvRef> mvsIn,
             Span<Vp9MvRef> mvsOut)
         {
-            Vp9Common cm = new()
-            {
-                FrameType = pictureInfo.IsKeyFrame ? FrameType.KeyFrame : FrameType.InterFrame,
-                IntraOnly = pictureInfo.IntraOnly,
+            Vp9Common cm = new();
 
-                Width = output.Width,
-                Height = output.Height,
-                SubsamplingX = 1,
-                SubsamplingY = 1,
+            cm.FrameType = pictureInfo.IsKeyFrame ? FrameType.KeyFrame : FrameType.InterFrame;
+            cm.IntraOnly = pictureInfo.IntraOnly;
 
-                UsePrevFrameMvs = pictureInfo.UsePrevInFindMvRefs,
+            cm.Width = output.Width;
+            cm.Height = output.Height;
+            cm.SubsamplingX = 1;
+            cm.SubsamplingY = 1;
 
-                RefFrameSignBias = pictureInfo.RefFrameSignBias,
+            cm.UsePrevFrameMvs = pictureInfo.UsePrevInFindMvRefs;
 
-                BaseQindex = pictureInfo.BaseQIndex,
-                YDcDeltaQ = pictureInfo.YDcDeltaQ,
-                UvAcDeltaQ = pictureInfo.UvAcDeltaQ,
-                UvDcDeltaQ = pictureInfo.UvDcDeltaQ,
+            cm.RefFrameSignBias = pictureInfo.RefFrameSignBias;
 
-                TxMode = (TxMode)pictureInfo.TransformMode,
-
-                AllowHighPrecisionMv = pictureInfo.AllowHighPrecisionMv,
-
-                InterpFilter = (byte)pictureInfo.InterpFilter,
-
-                ReferenceMode = (ReferenceMode)pictureInfo.ReferenceMode,
-
-                CompFixedRef = pictureInfo.CompFixedRef,
-                CompVarRef = pictureInfo.CompVarRef,
-
-                BitDepth = BitDepth.Bits8,
-
-                Log2TileCols = pictureInfo.Log2TileCols,
-                Log2TileRows = pictureInfo.Log2TileRows,
-
-                Fc = new Ptr<Vp9EntropyProbs>(ref pictureInfo.Entropy),
-                Counts = new Ptr<Vp9BackwardUpdates>(ref pictureInfo.BackwardUpdateCounts)
-            };
+            cm.BaseQindex = pictureInfo.BaseQIndex;
+            cm.YDcDeltaQ = pictureInfo.YDcDeltaQ;
+            cm.UvAcDeltaQ = pictureInfo.UvAcDeltaQ;
+            cm.UvDcDeltaQ = pictureInfo.UvDcDeltaQ;
 
             cm.Mb.Lossless = pictureInfo.Lossless;
             cm.Mb.Bd = 8;
+
+            cm.TxMode = (TxMode)pictureInfo.TransformMode;
+
+            cm.AllowHighPrecisionMv = pictureInfo.AllowHighPrecisionMv;
+
+            cm.InterpFilter = (byte)pictureInfo.InterpFilter;
 
             if (cm.InterpFilter != Constants.Switchable)
             {
                 cm.InterpFilter = LiteralToFilter[cm.InterpFilter];
             }
+
+            cm.ReferenceMode = (ReferenceMode)pictureInfo.ReferenceMode;
+
+            cm.CompFixedRef = pictureInfo.CompFixedRef;
+            cm.CompVarRef = pictureInfo.CompVarRef;
+
+            cm.BitDepth = BitDepth.Bits8;
+
+            cm.Log2TileCols = pictureInfo.Log2TileCols;
+            cm.Log2TileRows = pictureInfo.Log2TileRows;
 
             cm.Seg.Enabled = pictureInfo.SegmentEnabled;
             cm.Seg.UpdateMap = pictureInfo.SegmentMapUpdate;
@@ -91,6 +84,9 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             cm.Lf.ModeRefDeltaEnabled = pictureInfo.ModeRefDeltaEnabled;
             cm.Lf.RefDeltas = pictureInfo.RefDeltas;
             cm.Lf.ModeDeltas = pictureInfo.ModeDeltas;
+
+            cm.Fc = new Ptr<Vp9EntropyProbs>(ref pictureInfo.Entropy);
+            cm.Counts = new Ptr<Vp9BackwardUpdates>(ref pictureInfo.BackwardUpdateCounts);
 
             Span<RefBuffer> frameRefsSpan = cm.FrameRefs.AsSpan();
             frameRefsSpan[0].Buf = (Surface)pictureInfo.LastReference;
@@ -109,9 +105,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
             cm.AllocTileWorkerData(_allocator, tileCols, tileRows, maxThreads);
             cm.AllocContextBuffers(_allocator, output.Width, output.Height);
-
             cm.InitContextBuffers();
-            LoadSegmentMap(ref cm, ref pictureInfo);
             cm.SetupSegmentationDequant();
             cm.SetupScaleFactors();
 
@@ -158,59 +152,12 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 }
             }
 
-            SaveSegmentMap(ref cm);
             cm.GetMvs(mvsOut);
 
             cm.FreeTileWorkerData(_allocator);
             cm.FreeContextBuffers(_allocator);
 
             return true;
-        }
-
-        private void LoadSegmentMap(ref Vp9Common cm, ref Vp9PictureInfo pictureInfo)
-        {
-            int mapLength = cm.MiRows * cm.MiCols;
-            if (mapLength == 0 || cm.LastFrameSegMap.IsNull)
-            {
-                return;
-            }
-
-            bool reset =
-                pictureInfo.IsKeyFrame ||
-                pictureInfo.IntraOnly ||
-                _lastSegmentMapMiRows != cm.MiRows ||
-                _lastSegmentMapMiCols != cm.MiCols;
-
-            if (_lastSegmentMap.Length != mapLength)
-            {
-                _lastSegmentMap = new byte[mapLength];
-            }
-            else if (reset)
-            {
-                Array.Clear(_lastSegmentMap);
-            }
-
-            _lastSegmentMapMiRows = cm.MiRows;
-            _lastSegmentMapMiCols = cm.MiCols;
-            _lastSegmentMap.CopyTo(cm.LastFrameSegMap.AsSpan());
-        }
-
-        private void SaveSegmentMap(ref Vp9Common cm)
-        {
-            int mapLength = cm.MiRows * cm.MiCols;
-            if (!cm.Seg.Enabled || mapLength == 0 || cm.CurrentFrameSegMap.IsNull)
-            {
-                return;
-            }
-
-            if (_lastSegmentMap.Length != mapLength)
-            {
-                _lastSegmentMap = new byte[mapLength];
-            }
-
-            cm.CurrentFrameSegMap.AsSpan()[..mapLength].CopyTo(_lastSegmentMap);
-            _lastSegmentMapMiRows = cm.MiRows;
-            _lastSegmentMapMiCols = cm.MiCols;
         }
 
         public void Dispose()

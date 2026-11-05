@@ -42,7 +42,7 @@ namespace Ryujinx.Graphics.OpenGL.Queries
 
             _current = new CounterQueueEvent(this, glType, 0);
 
-            _consumerThread = new Thread(EventConsumer) { Name = "CPU.CounterQueue." + (int)type };
+            _consumerThread = new Thread(EventConsumer);
             _consumerThread.Start();
         }
 
@@ -172,7 +172,6 @@ namespace Ryujinx.Graphics.OpenGL.Queries
                     {
                         return; // If not blocking, then return when we encounter an event that is not ready yet.
                     }
-
                     _events.Dequeue();
                 }
             }

@@ -14,5 +14,10 @@ namespace Ryujinx.Graphics.Shader
         /// Buffer is written to.
         /// </summary>
         Write = 1 << 0,
+
+        /// <summary>
+        /// Buffer is accessed as a pointer (v1.1 addition).
+        /// </summary>
+        PointerOnly = 1 << 1,
     }
 }

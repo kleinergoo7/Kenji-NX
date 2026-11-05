@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Nvdec.Vp9.Common;
 using Ryujinx.Graphics.Nvdec.Vp9.Types;
 using Ryujinx.Graphics.Video;
@@ -160,7 +160,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             [102, 19, 66, 162, 182, 122, 35, 59, 128] // y = tm
         ];
 
-        private static readonly byte[] _defaultIfYProbs =
+        private static readonly byte[] DefaultIfYProbs =
         [
             65, 32, 18, 144, 162, 194, 41, 51, 98, // block_size < 8x8
             132, 68, 18, 165, 217, 196, 45, 40, 78, // block_size < 16x16
@@ -168,7 +168,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             221, 135, 38, 194, 248, 121, 96, 85, 29 // block_size >= 32x32
         ];
 
-        private static readonly byte[] _defaultIfUvProbs =
+        private static readonly byte[] DefaultIfUvProbs =
         [
             120, 7, 76, 176, 208, 126, 28, 54, 103, // y = dc
             48, 12, 154, 155, 139, 90, 34, 117, 119, // y = v
@@ -182,7 +182,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             101, 21, 107, 181, 192, 103, 19, 67, 125 // y = tm
         ];
 
-        private static readonly byte[] _defaultPartitionProbs =
+        private static readonly byte[] DefaultPartitionProbs =
         [
             // 8x8 . 4x4
             199, 122, 141, // a/l both not split
@@ -206,7 +206,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             10, 7, 6 // a/l both split
         ];
 
-        private static readonly byte[] _defaultInterModeProbs =
+        private static readonly byte[] DefaultInterModeProbs =
         [
             2, 173, 34, // 0 = both zero mv
             7, 145, 85, // 1 = one zero mv + one a predicted mv
@@ -246,98 +246,98 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             -Constants.EightTap, 2, -Constants.EightTapSmooth, -Constants.EightTapSharp
         ];
 
-        private static readonly byte[] _defaultIntraInterP = [9, 102, 187, 225];
-        private static readonly byte[] _defaultCompInterP = [239, 183, 119, 96, 41];
-        private static readonly byte[] _defaultCompRefP = [50, 126, 123, 221, 226];
-        private static readonly byte[] _defaultSingleRefP = [33, 16, 77, 74, 142, 142, 172, 170, 238, 247];
-        private static readonly byte[] _defaultTxProbs = [3, 136, 37, 5, 52, 13, 20, 152, 15, 101, 100, 66];
+        private static readonly byte[] DefaultIntraInterP = [9, 102, 187, 225];
+        private static readonly byte[] DefaultCompInterP = [239, 183, 119, 96, 41];
+        private static readonly byte[] DefaultCompRefP = [50, 126, 123, 221, 226];
+        private static readonly byte[] DefaultSingleRefP = [33, 16, 77, 74, 142, 142, 172, 170, 238, 247];
+        private static readonly byte[] DefaultTxProbs = [3, 136, 37, 5, 52, 13, 20, 152, 15, 101, 100, 66];
 
-        //static EntropyMode()
-        //{
-        //    byte[][] kfPartitionProbs =
-        //    [
-        //        // 8x8 . 4x4
-        //        [158, 97, 94], // a/l both not split
-        //        [93, 24, 99], // a split, l not split
-        //        [85, 119, 44], // l split, a not split
-        //        [62, 59, 67], // a/l both split
+        static EntropyMode()
+        {
+            byte[][] KfPartitionProbs =
+            [
+                // 8x8 . 4x4
+                [158, 97, 94], // a/l both not split
+                [93, 24, 99], // a split, l not split
+                [85, 119, 44], // l split, a not split
+                [62, 59, 67], // a/l both split
 
-        //        // 16x16 . 8x8
-        //        [149, 53, 53], // a/l both not split
-        //        [94, 20, 48], // a split, l not split
-        //        [83, 53, 24], // l split, a not split
-        //        [52, 18, 18], // a/l both split
+                // 16x16 . 8x8
+                [149, 53, 53], // a/l both not split
+                [94, 20, 48], // a split, l not split
+                [83, 53, 24], // l split, a not split
+                [52, 18, 18], // a/l both split
 
-        //        // 32x32 . 16x16
-        //        [150, 40, 39], // a/l both not split
-        //        [78, 12, 26], // a split, l not split
-        //        [67, 33, 11], // l split, a not split
-        //        [24, 7, 5], // a/l both split
+                // 32x32 . 16x16
+                [150, 40, 39], // a/l both not split
+                [78, 12, 26], // a split, l not split
+                [67, 33, 11], // l split, a not split
+                [24, 7, 5], // a/l both split
 
-        //        // 64x64 . 32x32
-        //        [174, 35, 49], // a/l both not split
-        //        [68, 11, 27], // a split, l not split
-        //        [57, 15, 9], // l split, a not split
-        //        [12, 3, 3] // a/l both split
-        //    ];
-        //}
+                // 64x64 . 32x32
+                [174, 35, 49], // a/l both not split
+                [68, 11, 27], // a split, l not split
+                [57, 15, 9], // l split, a not split
+                [12, 3, 3] // a/l both split
+            ];
+        }
 
-        private static readonly byte[] _defaultSkipProbs = [192, 128, 64];
+        private static readonly byte[] DefaultSkipProbs = [192, 128, 64];
 
-        private static readonly byte[] _defaultSwitchableInterpProb = [235, 162, 36, 255, 34, 3, 149, 144];
+        private static readonly byte[] DefaultSwitchableInterpProb = [235, 162, 36, 255, 34, 3, 149, 144];
 
         private static void InitModeProbs(ref Vp9EntropyProbs fc)
         {
-            Entropy.CopyProbs(ref fc.UvModeProb, _defaultIfUvProbs);
-            Entropy.CopyProbs(ref fc.YModeProb, _defaultIfYProbs);
-            Entropy.CopyProbs(ref fc.SwitchableInterpProb, _defaultSwitchableInterpProb);
-            Entropy.CopyProbs(ref fc.PartitionProb, _defaultPartitionProbs);
-            Entropy.CopyProbs(ref fc.IntraInterProb, _defaultIntraInterP);
-            Entropy.CopyProbs(ref fc.CompInterProb, _defaultCompInterP);
-            Entropy.CopyProbs(ref fc.CompRefProb, _defaultCompRefP);
-            Entropy.CopyProbs(ref fc.SingleRefProb, _defaultSingleRefP);
-            Entropy.CopyProbs(ref fc.Tx32x32Prob, _defaultTxProbs.AsSpan()[..6]);
-            Entropy.CopyProbs(ref fc.Tx16x16Prob, _defaultTxProbs.AsSpan().Slice(6, 4));
-            Entropy.CopyProbs(ref fc.Tx8x8Prob, _defaultTxProbs.AsSpan().Slice(10, 2));
-            Entropy.CopyProbs(ref fc.SkipProb, _defaultSkipProbs);
-            Entropy.CopyProbs(ref fc.InterModeProb, _defaultInterModeProbs);
+            Entropy.CopyProbs(ref fc.UvModeProb, DefaultIfUvProbs);
+            Entropy.CopyProbs(ref fc.YModeProb, DefaultIfYProbs);
+            Entropy.CopyProbs(ref fc.SwitchableInterpProb, DefaultSwitchableInterpProb);
+            Entropy.CopyProbs(ref fc.PartitionProb, DefaultPartitionProbs);
+            Entropy.CopyProbs(ref fc.IntraInterProb, DefaultIntraInterP);
+            Entropy.CopyProbs(ref fc.CompInterProb, DefaultCompInterP);
+            Entropy.CopyProbs(ref fc.CompRefProb, DefaultCompRefP);
+            Entropy.CopyProbs(ref fc.SingleRefProb, DefaultSingleRefP);
+            Entropy.CopyProbs(ref fc.Tx32x32Prob, DefaultTxProbs.AsSpan().Slice(0, 6));
+            Entropy.CopyProbs(ref fc.Tx16x16Prob, DefaultTxProbs.AsSpan().Slice(6, 4));
+            Entropy.CopyProbs(ref fc.Tx8x8Prob, DefaultTxProbs.AsSpan().Slice(10, 2));
+            Entropy.CopyProbs(ref fc.SkipProb, DefaultSkipProbs);
+            Entropy.CopyProbs(ref fc.InterModeProb, DefaultInterModeProbs);
         }
 
-        internal static void TxCountsToBranchCounts32X32(ReadOnlySpan<uint> txCount32X32P,
-            ReadOnlySpan<Array2<uint>> ct32X32P)
+        internal static void TxCountsToBranchCounts32x32(ReadOnlySpan<uint> txCount32x32P,
+            ReadOnlySpan<Array2<uint>> ct32x32P)
         {
-            Span<uint> ct32X32PSpan0 = ct32X32P[0].AsSpan();
-            Span<uint> ct32X32PSpan1 = ct32X32P[1].AsSpan();
-            Span<uint> ct32X32PSpan2 = ct32X32P[2].AsSpan();
-
-            ct32X32PSpan0[0] = txCount32X32P[(int)TxSize.Tx4X4];
-            ct32X32PSpan0[1] = txCount32X32P[(int)TxSize.Tx8X8] + txCount32X32P[(int)TxSize.Tx16X16] +
-                             txCount32X32P[(int)TxSize.Tx32X32];
-            ct32X32PSpan1[0] = txCount32X32P[(int)TxSize.Tx8X8];
-            ct32X32PSpan1[1] = txCount32X32P[(int)TxSize.Tx16X16] + txCount32X32P[(int)TxSize.Tx32X32];
-            ct32X32PSpan2[0] = txCount32X32P[(int)TxSize.Tx16X16];
-            ct32X32PSpan2[1] = txCount32X32P[(int)TxSize.Tx32X32];
+            Span<uint> ct32x32PSpan0 = ct32x32P[0].AsSpan();
+            Span<uint> ct32x32PSpan1 = ct32x32P[1].AsSpan();
+            Span<uint> ct32x32PSpan2 = ct32x32P[2].AsSpan();
+            
+            ct32x32PSpan0[0] = txCount32x32P[(int)TxSize.Tx4x4];
+            ct32x32PSpan0[1] = txCount32x32P[(int)TxSize.Tx8x8] + txCount32x32P[(int)TxSize.Tx16x16] +
+                               txCount32x32P[(int)TxSize.Tx32x32];
+            ct32x32PSpan1[0] = txCount32x32P[(int)TxSize.Tx8x8];
+            ct32x32PSpan1[1] = txCount32x32P[(int)TxSize.Tx16x16] + txCount32x32P[(int)TxSize.Tx32x32];
+            ct32x32PSpan2[0] = txCount32x32P[(int)TxSize.Tx16x16];
+            ct32x32PSpan2[1] = txCount32x32P[(int)TxSize.Tx32x32];
         }
 
-        internal static void TxCountsToBranchCounts16X16(ReadOnlySpan<uint> txCount16X16P,
-            ReadOnlySpan<Array2<uint>> ct16X16P)
+        internal static void TxCountsToBranchCounts16x16(ReadOnlySpan<uint> txCount16x16P,
+            ReadOnlySpan<Array2<uint>> ct16x16P)
         {
-            Span<uint> ct16X16PSpan0 = ct16X16P[0].AsSpan();
-            Span<uint> ct16X16PSpan1 = ct16X16P[1].AsSpan();
-
-            ct16X16PSpan0[0] = txCount16X16P[(int)TxSize.Tx4X4];
-            ct16X16PSpan0[1] = txCount16X16P[(int)TxSize.Tx8X8] + txCount16X16P[(int)TxSize.Tx16X16];
-            ct16X16PSpan1[0] = txCount16X16P[(int)TxSize.Tx8X8];
-            ct16X16PSpan1[1] = txCount16X16P[(int)TxSize.Tx16X16];
+            Span<uint> ct16x16PSpan0 = ct16x16P[0].AsSpan();
+            Span<uint> ct16x16PSpan1 = ct16x16P[1].AsSpan();
+            
+            ct16x16PSpan0[0] = txCount16x16P[(int)TxSize.Tx4x4];
+            ct16x16PSpan0[1] = txCount16x16P[(int)TxSize.Tx8x8] + txCount16x16P[(int)TxSize.Tx16x16];
+            ct16x16PSpan1[0] = txCount16x16P[(int)TxSize.Tx8x8];
+            ct16x16PSpan1[1] = txCount16x16P[(int)TxSize.Tx16x16];
         }
 
-        internal static void TxCountsToBranchCounts8X8(ReadOnlySpan<uint> txCount8X8P,
-            ReadOnlySpan<Array2<uint>> ct8X8P)
+        internal static void TxCountsToBranchCounts8x8(ReadOnlySpan<uint> txCount8x8P,
+            ReadOnlySpan<Array2<uint>> ct8x8P)
         {
-            Span<uint> ct8X8PSpan = ct8X8P[0].AsSpan();
-
-            ct8X8PSpan[0] = txCount8X8P[(int)TxSize.Tx4X4];
-            ct8X8PSpan[1] = txCount8X8P[(int)TxSize.Tx8X8];
+            Span<uint> ct8x8PSpan = ct8x8P[0].AsSpan();
+            
+            ct8x8PSpan[0] = txCount8x8P[(int)TxSize.Tx4x4];
+            ct8x8PSpan[1] = txCount8x8P[(int)TxSize.Tx8x8];
         }
 
         public static unsafe void SetupPastIndependence(ref Vp9Common cm)

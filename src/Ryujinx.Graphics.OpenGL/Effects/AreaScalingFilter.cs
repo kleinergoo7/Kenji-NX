@@ -94,7 +94,7 @@ namespace Ryujinx.Graphics.OpenGL.Effects
             GL.UseProgram(previousProgram);
             GL.MemoryBarrier(MemoryBarrierFlags.ShaderImageAccessBarrierBit);
 
-            (_renderer.Pipeline as Pipeline).RestoreImages1And2();
+            (_renderer.Pipeline as Pipeline)?.RestoreImages1And2();
 
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, previousTextureBinding);

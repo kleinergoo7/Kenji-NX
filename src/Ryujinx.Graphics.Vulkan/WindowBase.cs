@@ -1,4 +1,3 @@
-using Ryujinx.Common.Configuration;
 using Ryujinx.Graphics.GAL;
 using System;
 

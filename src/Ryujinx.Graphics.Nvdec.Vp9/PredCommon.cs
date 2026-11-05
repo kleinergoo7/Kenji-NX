@@ -62,7 +62,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 ctx = 1;
             }
 
-            Debug.Assert(ctx is >= 0 and < Constants.CompInterContexts);
+            Debug.Assert(ctx >= 0 && ctx < Constants.CompInterContexts);
             return ctx;
         }
 
@@ -111,7 +111,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     sbyte vrfl = lSg ? xd.LeftMi.Value.RefFrame[0] : xd.LeftMi.Value.RefFrame[varRefIdx];
 
                     Span<sbyte> compVarRefSpan = cm.CompVarRef.AsSpan();
-
+                    
                     if (vrfa == vrfl && compVarRefSpan[1] == vrfa)
                     {
                         predContext = 0;
@@ -189,7 +189,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 predContext = 2;
             }
 
-            Debug.Assert(predContext is >= 0 and < Constants.RefContexts);
+            Debug.Assert(predContext >= 0 && predContext < Constants.RefContexts);
             return predContext;
         }
 
@@ -288,7 +288,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     else
                     {
                         Span<sbyte> refFrameSpan = edgeMi.RefFrame.AsSpan();
-
+                        
                         predContext = 1 + (refFrameSpan[0] == Constants.LastFrame ||
                                            refFrameSpan[1] == Constants.LastFrame
                             ? 1
@@ -302,7 +302,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 predContext = 2;
             }
 
-            Debug.Assert(predContext is >= 0 and < Constants.RefContexts);
+            Debug.Assert(predContext >= 0 && predContext < Constants.RefContexts);
             return predContext;
         }
 
@@ -442,7 +442,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                 predContext = 2;
             }
 
-            Debug.Assert(predContext is >= 0 and < Constants.RefContexts);
+            Debug.Assert(predContext >= 0 && predContext < Constants.RefContexts);
             return predContext;
         }
     }

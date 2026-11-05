@@ -47,6 +47,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
         TextureSetDataSlice,
         TextureSetDataSliceRegion,
         TextureSetStorage,
+        TextureSetAstcData,
 
         TextureArrayDispose,
         TextureArraySetSamplers,

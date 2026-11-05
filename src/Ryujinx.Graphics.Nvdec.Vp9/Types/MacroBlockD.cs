@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Nvdec.Vp9.Common;
 using Ryujinx.Graphics.Video;
 using System;
@@ -56,7 +56,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
 
         public Ptr<InternalErrorInfo> ErrorInfo;
 
-        public readonly int GetPredContextSegId()
+        public int GetPredContextSegId()
         {
             sbyte aboveSip = !AboveMi.IsNull ? AboveMi.Value.SegIdPredicted : (sbyte)0;
             sbyte leftSip = !LeftMi.IsNull ? LeftMi.Value.SegIdPredicted : (sbyte)0;
@@ -64,14 +64,14 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             return aboveSip + leftSip;
         }
 
-        public readonly int GetSkipContext()
+        public int GetSkipContext()
         {
             int aboveSkip = !AboveMi.IsNull ? AboveMi.Value.Skip : 0;
             int leftSkip = !LeftMi.IsNull ? LeftMi.Value.Skip : 0;
             return aboveSkip + leftSkip;
         }
 
-        public readonly int GetPredContextSwitchableInterp()
+        public int GetPredContextSwitchableInterp()
         {
             // Note:
             // The mode info data structure has a one element border above and to the
@@ -105,7 +105,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         // 1 - intra/inter, inter/intra
         // 2 - intra/--, --/intra
         // 3 - intra/intra
-        public readonly int GetIntraInterContext()
+        public int GetIntraInterContext()
         {
             if (!AboveMi.IsNull && !LeftMi.IsNull)
             {
@@ -128,7 +128,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         // The mode info data structure has a one element border above and to the
         // left of the entries corresponding to real blocks.
         // The prediction flags in these dummy entries are initialized to 0.
-        public readonly int GetTxSizeContext()
+        public int GetTxSizeContext()
         {
             int maxTxSize = (int)Luts.MaxTxSizeLookup[(int)Mi[0].Value.SbType];
             int aboveCtx = !AboveMi.IsNull && AboveMi.Value.Skip == 0 ? (int)AboveMi.Value.TxSize : maxTxSize;
@@ -149,7 +149,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public void SetupBlockPlanes(int ssX, int ssY)
         {
             Span<MacroBlockDPlane> planeSpan = Plane.AsSpan();
-
+            
             for (int i = 0; i < Constants.MaxMbPlane; i++)
             {
                 planeSpan[i].SubsamplingX = i != 0 ? ssX : 0;
@@ -161,7 +161,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         {
             int aboveIdx = miCol * 2;
             int leftIdx = (miRow * 2) & 15;
-
+            
             Span<MacroBlockDPlane> planeSpan = Plane.AsSpan();
             Span<ArrayPtr<sbyte>> aboveContextSpan = AboveContext.AsSpan();
             Span<Array16<sbyte>> leftContextSpan = LeftContext.AsSpan();
@@ -190,7 +190,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public unsafe void DecResetSkipContext()
         {
             Span<MacroBlockDPlane> planeSpan = Plane.AsSpan();
-
+            
             for (int i = 0; i < Constants.MaxMbPlane; i++)
             {
                 ref MacroBlockDPlane pd = ref planeSpan[i];

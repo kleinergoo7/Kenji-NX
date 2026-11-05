@@ -102,8 +102,8 @@ namespace Ryujinx.Graphics.Shader.StructuredIr
                 return false;
             }
 
-            AstNode block;
-            AstNode other;
+            IAstNode block;
+            IAstNode other;
 
             int blockLvl, otherLvl;
 
@@ -441,7 +441,7 @@ namespace Ryujinx.Graphics.Shader.StructuredIr
             return path.ToArray();
         }
 
-        private static int Level(AstNode node)
+        private static int Level(IAstNode node)
         {
             int level = 0;
 

@@ -70,7 +70,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
 
                 StringBuilder builder = new();
 
-                if (atomic && (operation.StorageKind == StorageKind.StorageBuffer || operation.StorageKind == StorageKind.SharedMemory))
+                if (atomic && operation.StorageKind is StorageKind.StorageBuffer or StorageKind.SharedMemory)
                 {
                     builder.Append(GenerateLoadOrStore(context, operation, isStore: false));
 

@@ -164,7 +164,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
             {
                 isFixedFunc = TryFixedFuncToUserAttributeIpa(context, op.Imm10, out res);
 
-                if (op.Imm10 is >= AttributeConsts.UserAttributeBase and < AttributeConsts.UserAttributeEnd)
+                if (op.Imm10 >= AttributeConsts.UserAttributeBase && op.Imm10 < AttributeConsts.UserAttributeEnd)
                 {
                     int index = (op.Imm10 - AttributeConsts.UserAttributeBase) >> 4;
 
@@ -296,19 +296,19 @@ namespace Ryujinx.Graphics.Shader.Instructions
 
         private static bool HasPrimitiveVertex(int attr)
         {
-            return attr is not AttributeConsts.PrimitiveId and
-                   not AttributeConsts.TessCoordX and
-                   not AttributeConsts.TessCoordY;
+            return attr != AttributeConsts.PrimitiveId &&
+                   attr != AttributeConsts.TessCoordX &&
+                   attr != AttributeConsts.TessCoordY;
         }
 
         private static bool CanLoadOutput(int attr)
         {
-            return attr is not AttributeConsts.TessCoordX and not AttributeConsts.TessCoordY;
+            return attr != AttributeConsts.TessCoordX && attr != AttributeConsts.TessCoordY;
         }
 
         private static bool TryFixedFuncToUserAttributeIpa(EmitterContext context, int attr, out Operand selectedAttr)
         {
-            if (attr is >= AttributeConsts.FrontColorDiffuseR and < AttributeConsts.BackColorDiffuseR)
+            if (attr >= AttributeConsts.FrontColorDiffuseR && attr < AttributeConsts.BackColorDiffuseR)
             {
                 // TODO: If two sided rendering is enabled, then this should return
                 // FrontColor if the fragment is front facing, and back color otherwise.
@@ -321,12 +321,12 @@ namespace Ryujinx.Graphics.Shader.Instructions
                 selectedAttr = GenerateIpaLoad(context, FixedFuncToUserAttribute(context.TranslatorContext, attr, isOutput: false));
                 return true;
             }
-            else if (attr is >= AttributeConsts.BackColorDiffuseR and < AttributeConsts.ClipDistance0)
+            else if (attr >= AttributeConsts.BackColorDiffuseR && attr < AttributeConsts.ClipDistance0)
             {
                 selectedAttr = ConstF(((attr >> 2) & 3) == 3 ? 1f : 0f);
                 return true;
             }
-            else if (attr is >= AttributeConsts.TexCoordBase and < AttributeConsts.TexCoordEnd)
+            else if (attr >= AttributeConsts.TexCoordBase && attr < AttributeConsts.TexCoordEnd)
             {
                 selectedAttr = GenerateIpaLoad(context, FixedFuncToUserAttribute(context.TranslatorContext, attr, isOutput: false));
                 return true;
@@ -355,11 +355,11 @@ namespace Ryujinx.Graphics.Shader.Instructions
             {
                 attr = FixedFuncToUserAttribute(translatorContext, attr, AttributeConsts.FogCoord, fixedStartAttr, isOutput);
             }
-            else if (attr is >= AttributeConsts.FrontColorDiffuseR and < AttributeConsts.ClipDistance0)
+            else if (attr >= AttributeConsts.FrontColorDiffuseR && attr < AttributeConsts.ClipDistance0)
             {
                 attr = FixedFuncToUserAttribute(translatorContext, attr, AttributeConsts.FrontColorDiffuseR, fixedStartAttr + 1, isOutput);
             }
-            else if (attr is >= AttributeConsts.TexCoordBase and < AttributeConsts.TexCoordEnd)
+            else if (attr >= AttributeConsts.TexCoordBase && attr < AttributeConsts.TexCoordEnd)
             {
                 attr = FixedFuncToUserAttribute(translatorContext, attr, AttributeConsts.TexCoordBase, fixedStartAttr + 5, isOutput);
             }

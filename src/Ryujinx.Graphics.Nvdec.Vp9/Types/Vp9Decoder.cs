@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Nvdec.Vp9.Common;
 using Ryujinx.Graphics.Video;
 using System;
@@ -45,35 +45,35 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 allocator.Allocate<Vp9EntropyProbs>(Constants.FrameContexts));
 
             Span<Array10<Array9<byte>>> cKfYModeProbSpan1 = cm.Fc.Value.KfYModeProb.AsSpan();
-
+            
             for (int i = 0; i < EntropyMode.KfYModeProb.Length; i++)
             {
                 Span<Array9<byte>> cKfYModeProbSpan2 = cKfYModeProbSpan1[i].AsSpan();
-
+                
                 for (int j = 0; j < EntropyMode.KfYModeProb[i].Length; j++)
                 {
                     Span<byte> cKfYModeProbSpan3 = cKfYModeProbSpan2[j].AsSpan();
-
+                    
                     for (int k = 0; k < EntropyMode.KfYModeProb[i][j].Length; k++)
                     {
                         cKfYModeProbSpan3[k] = EntropyMode.KfYModeProb[i][j][k];
                     }
                 }
             }
-
+            
             Span<Array9<byte>> cKfUvModeProbSpan1 = cm.Fc.Value.KfUvModeProb.AsSpan();
 
             for (int i = 0; i < EntropyMode.KfUvModeProb.Length; i++)
             {
                 Span<byte> cKfUvModeProbSpan2 = cKfUvModeProbSpan1[i].AsSpan();
-
+                
                 for (int j = 0; j < EntropyMode.KfUvModeProb[i].Length; j++)
                 {
                     cKfUvModeProbSpan2[j] = EntropyMode.KfUvModeProb[i][j];
                 }
             }
 
-            byte[][] kfPartitionProbs =
+            byte[][] KfPartitionProbs =
             [
                 // 8x8 . 4x4
                 [158, 97, 94], // a/l both not split
@@ -99,16 +99,16 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 [57, 15, 9], // l split, a not split
                 [12, 3, 3] // a/l both split
             ];
-
+            
             Span<Array3<byte>> cKfPartitionProbSpan1 = cm.Fc.Value.KfPartitionProb.AsSpan();
 
-            for (int i = 0; i < kfPartitionProbs.Length; i++)
+            for (int i = 0; i < KfPartitionProbs.Length; i++)
             {
                 Span<byte> cKfPartitionProbSpan2 = cKfPartitionProbSpan1[i].AsSpan();
-
-                for (int j = 0; j < kfPartitionProbs[i].Length; j++)
+                
+                for (int j = 0; j < KfPartitionProbs[i].Length; j++)
                 {
-                    cKfPartitionProbSpan2[j] = kfPartitionProbs[i][j];
+                    cKfPartitionProbSpan2[j] = KfPartitionProbs[i][j];
                 }
             }
 
@@ -143,7 +143,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             ref Vp9Common cm = ref Common;
             ref BufferPool pool = ref cm.BufferPool.Value;
             Span<RefCntBuffer> frameBufs = cm.BufferPool.Value.FrameBufs.AsSpan();
-
+            
             Span<int> refFrameMapSpan = cm.RefFrameMap.AsSpan();
             Span<int> nextRefFrameMapSpan = cm.NextRefFrameMap.AsSpan();
             Span<RefBuffer> frameRefsSpan = cm.FrameRefs.AsSpan();
@@ -199,7 +199,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 // We do not know if the missing frame(s) was supposed to update
                 // any of the reference buffers, but we act conservative and
                 // mark only the last buffer as corrupted.
-
+                
                 Span<RefBuffer> frameRefsSpan = cm.FrameRefs.AsSpan();
 
                 if (frameRefsSpan[0].Idx > 0)
@@ -301,11 +301,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public CodecErr Decode(MemoryAllocator allocator, ArrayPtr<byte> data)
         {
             ArrayPtr<byte> dataStart = data;
-            CodecErr res;
             Array8<uint> frameSizes = new();
             Span<uint> frameSizesSpan = frameSizes.AsSpan();
+            int frameCount = 0;
 
-            res = Decoder.ParseSuperframeIndex(data, (ulong)data.Length, frameSizesSpan, out int frameCount);
+            CodecErr res = Decoder.ParseSuperframeIndex(data, (ulong)data.Length, frameSizesSpan, out frameCount);
             if (res != CodecErr.Ok)
             {
                 return res;

@@ -42,7 +42,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
 
             Operand[] callArgs = [Const(functionId), value, index, mask, valid];
 
-            LinkedListNode<INode> newNode = node.List.AddBefore(node, new Operation(Instruction.Call, 0, result, callArgs));
+            LinkedListNode<INode> newNode = node.List?.AddBefore(node, new Operation(Instruction.Call, 0, result, callArgs));
 
             Utils.DeleteNode(node, operation);
 

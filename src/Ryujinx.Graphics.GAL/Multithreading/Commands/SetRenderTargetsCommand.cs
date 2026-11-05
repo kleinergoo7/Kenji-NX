@@ -29,9 +29,9 @@ namespace Ryujinx.Graphics.GAL.Multithreading.Commands
             {
                 colorsSpan[i] = ((ThreadedTexture)colorsSpan[i])?.Base;
             }
-
+            
             renderer.Pipeline.SetRenderTargets(colorsSpan, command._depthStencil.GetAs<ThreadedTexture>(threaded)?.Base);
-
+            
             ArrayPool.Return(colors);
         }
     }

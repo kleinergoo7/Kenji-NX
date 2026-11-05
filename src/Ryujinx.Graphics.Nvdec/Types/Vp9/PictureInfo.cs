@@ -53,7 +53,6 @@ namespace Ryujinx.Graphics.Nvdec.Types.Vp9
                 IsKeyFrame = Flags.HasFlag(FrameFlags.IsKeyFrame),
                 IntraOnly = Flags.HasFlag(FrameFlags.IntraOnly),
                 UsePrevInFindMvRefs =
-                    !Flags.HasFlag(FrameFlags.IsKeyFrame) &&
                     !Flags.HasFlag(FrameFlags.ErrorResilientMode) &&
                     !Flags.HasFlag(FrameFlags.FrameSizeChanged) &&
                     !Flags.HasFlag(FrameFlags.IntraOnly) &&

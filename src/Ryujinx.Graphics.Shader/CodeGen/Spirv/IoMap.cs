@@ -104,9 +104,9 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
             }
             else
             {
-                return stage is ShaderStage.TessellationControl or
-                       ShaderStage.TessellationEvaluation or
-                       ShaderStage.Geometry;
+                return stage is ShaderStage.TessellationControl
+                    or ShaderStage.TessellationEvaluation
+                    or ShaderStage.Geometry;
             }
         }
 

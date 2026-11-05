@@ -224,7 +224,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             TranslatorContext translatorContext = DecodeComputeShader(gpuAccessor, _context.Capabilities.Api, gpuVa);
             TranslatedShader translatedShader = TranslateShader(_dumper, channel, translatorContext, cachedGuestCode, asCompute: false);
 
-            ShaderSource[] shaderSourcesArray = new ShaderSource[] { CreateShaderSource(translatedShader.Program) };
+            ShaderSource[] shaderSourcesArray = [CreateShaderSource(translatedShader.Program)];
             ShaderInfo info = ShaderInfoBuilder.BuildForCompute(_context, translatedShader.Program.Info);
             IProgram hostProgram = _context.Renderer.CreateProgram(shaderSourcesArray, info);
 
@@ -370,7 +370,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             bool geometryToCompute = ShouldConvertGeometryToCompute(_context, geometryHasStore);
 
             CachedShaderStage[] shaders = new CachedShaderStage[Constants.ShaderStages + 1];
-            List<ShaderSource> shaderSources = new();
+            List<ShaderSource> shaderSources = [];
 
             TranslatorContext previousStage = null;
             ShaderInfoBuilder infoBuilder = new(_context, transformFeedbackDescriptors != null, vertexToCompute);
@@ -537,7 +537,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             ShaderSource source = new(program.Code, program.BinaryCode, ShaderStage.Compute, program.Language);
             ShaderInfo info = ShaderInfoBuilder.BuildForVertexAsCompute(_context, program.Info, tfEnabled);
 
-            return new(_context.Renderer.CreateProgram(new[] { source }, info), program.Info, context.GetResourceReservations());
+            return new(_context.Renderer.CreateProgram([source], info), program.Info, context.GetResourceReservations());
         }
 
         /// <summary>
@@ -587,7 +587,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
 
             Span<TfState> tfStateSpan = state.TfState.AsSpan();
             Span<Array32<uint>> tfVaryingLocationsSpan = state.TfVaryingLocations.AsSpan();
-
+            
             for (int i = 0; i < Constants.TotalTransformFeedbackBuffers; i++)
             {
                 TfState tf = tfStateSpan[i];
@@ -805,7 +805,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
         {
             if (address == MemoryManager.PteUnmapped || size == 0)
             {
-                return Array.Empty<byte>();
+                return [];
             }
 
             return memoryManager.Physical.GetSpan(address, size).ToArray();

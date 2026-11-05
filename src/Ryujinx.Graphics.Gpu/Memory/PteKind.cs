@@ -207,6 +207,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
         S8 = 0x2a,
         S82S = 0x2b,
         Generic16Bx2 = 0xfe,
+        Generic16Bx2Turing = 0xc9,
         C322C = 0xd8,
         C322CBR = 0xd9,
         C322CBA = 0xda,

@@ -1,5 +1,4 @@
 using Ryujinx.Graphics.GAL;
-using Silk.NET.Vulkan;
 
 namespace Ryujinx.Graphics.Vulkan
 {
@@ -56,7 +55,7 @@ namespace Ryujinx.Graphics.Vulkan
             if (_handle != BufferHandle.Null)
             {
                 // May need to restride the vertex buffer.
-                //
+                // 
                 // Fix divide by zero when recovering from missed draw (Oct. 16 2024)
                 // (fixes crash in 'Baldo: The Guardian Owls' opening cutscene)
                 if (gd.NeedsVertexBufferAlignment(AttributeScalarAlignment, out int alignment) && alignment != 0 && (_stride % alignment) != 0)
@@ -72,7 +71,10 @@ namespace Ryujinx.Graphics.Vulkan
 
                         _buffer = autoBuffer;
 
-                        state.Internal.VertexBindingDescriptions[DescriptorIndex].Stride = (uint)stride;
+                        if (!gd.Capabilities.SupportsExtendedDynamicState)
+                        {
+                            state.Internal.VertexBindingDescriptions[DescriptorIndex].Stride = (uint)stride;
+                        }
                     }
 
                     return;
@@ -80,8 +82,11 @@ namespace Ryujinx.Graphics.Vulkan
 
                 autoBuffer = gd.BufferManager.GetBuffer(cbs.CommandBuffer, _handle, false, out int size);
 
-                // The original stride must be reapplied in case it was rewritten.
-                state.Internal.VertexBindingDescriptions[DescriptorIndex].Stride = (uint)_stride;
+                if (!gd.Capabilities.SupportsExtendedDynamicState)
+                {
+                    // The original stride must be reapplied in case it was rewritten.
+                    state.Internal.VertexBindingDescriptions[DescriptorIndex].Stride = (uint)_stride;
+                }
 
                 if (_offset >= size)
                 {

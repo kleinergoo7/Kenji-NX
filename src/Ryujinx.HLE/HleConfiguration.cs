@@ -94,7 +94,7 @@ namespace Ryujinx.HLE
         /// <summary>
         /// Control the initial state of the present interval in the SurfaceFlinger service (previously Vsync).
         /// </summary>
-        internal readonly VSyncMode VSyncMode;
+        internal readonly Ryujinx.Common.Configuration.VSyncMode VSyncMode;
 
         /// <summary>
         /// Control the custom VSync interval, if enabled and active.
@@ -226,7 +226,7 @@ namespace Ryujinx.HLE
         public HleConfiguration(MemoryConfiguration memoryConfiguration,
                                 SystemLanguage systemLanguage,
                                 RegionCode region,
-                                VSyncMode vSyncMode,
+                                Ryujinx.Common.Configuration.VSyncMode vSyncMode,
                                 bool enableDockedMode,
                                 bool enablePtc,
                                 long tickScalar,

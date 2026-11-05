@@ -746,7 +746,7 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             private static PatternTreeNode<byte> Label()
             {
-                return new(InstName.Invalid, (op) => true, type: TreeNodeType.Label);
+                return new(InstName.Invalid, (_) => true, type: TreeNodeType.Label);
             }
 
             private static PatternTreeNode<InstLopR> Lop(bool negB, LogicOp logicOp)
@@ -830,12 +830,12 @@ namespace Ryujinx.Graphics.Shader.Translation
 
                 if (use.Node != null)
                 {
-                    Console.Write($"{indentation} {separator}- ({(use.Inverted ? "INV " : string.Empty)}{use.Index})");
+                    Console.Write($"{indentation} {separator}- ({(use.Inverted ? "INV " : "")}{use.Index})");
                     PrintTreeNode(use.Node, indentation + (last ? "       " : " |     "));
                 }
                 else
                 {
-                    Console.WriteLine($"{indentation} {separator}- ({(use.Inverted ? "INV " : string.Empty)}{use.Index}) NULL");
+                    Console.WriteLine($"{indentation} {separator}- ({(use.Inverted ? "INV " : "")}{use.Index}) NULL");
                 }
             }
         }
@@ -852,12 +852,12 @@ namespace Ryujinx.Graphics.Shader.Translation
 
                 if (use.Node != null)
                 {
-                    Console.Write($"{indentation} {separator}- ({(use.Inverted ? "INV " : string.Empty)}{use.Index})");
+                    Console.Write($"{indentation} {separator}- ({(use.Inverted ? "INV " : "")}{use.Index})");
                     PrintTreeNode(use.Node, indentation + (last ? "       " : " |     "));
                 }
                 else
                 {
-                    Console.WriteLine($"{indentation} {separator}- ({(use.Inverted ? "INV " : string.Empty)}{use.Index}) NULL");
+                    Console.WriteLine($"{indentation} {separator}- ({(use.Inverted ? "INV " : "")}{use.Index}) NULL");
                 }
             }
         }

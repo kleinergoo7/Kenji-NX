@@ -30,7 +30,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
         private readonly long _spinTicks;
         private readonly long _1msTicks;
 
-        private VSyncMode _vSyncMode;
+        private Ryujinx.Common.Configuration.VSyncMode _vSyncMode;
         private long _targetVSyncInterval;
 
         private int _swapInterval;

@@ -8,7 +8,7 @@ namespace Ryujinx.Graphics.Gpu.Image
     /// <summary>
     /// Texture information.
     /// </summary>
-    readonly struct TextureInfo
+    struct TextureInfo
     {
         /// <summary>
         /// Address of the texture in GPU mapped memory.
@@ -74,6 +74,11 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// Total number of samples for multisampled textures.
         /// </summary>
         public int Samples => SamplesInX * SamplesInY;
+
+        /// <summary>
+        /// Whether the texture uses the Turing (v1.1) block layout.
+        /// </summary>
+        public bool UsesTuringLayout { get; set; }
 
         /// <summary>
         /// Texture target type.
@@ -208,6 +213,16 @@ namespace Ryujinx.Graphics.Gpu.Image
         }
 
         /// <summary>
+        /// Gets the number of layers or depth of the texture.
+        /// Returns 1 for non-array textures, 6 for cubemap textures, and layer faces for cubemap array textures.
+        /// </summary>
+        /// <returns>The number of texture layers or depth</returns>
+        public int GetDepthOrLayers()
+        {
+            return GetDepthOrLayers(Target, DepthOrLayers);
+        }
+
+        /// <summary>
         /// Gets the number of layers of the texture.
         /// Returns 1 for non-array textures, 6 for cubemap textures, and layer faces for cubemap array textures.
         /// </summary>
@@ -217,6 +232,33 @@ namespace Ryujinx.Graphics.Gpu.Image
         public static int GetLayers(Target target, int depthOrLayers)
         {
             if (target is Target.Texture2DArray or Target.Texture2DMultisampleArray)
+            {
+                return depthOrLayers;
+            }
+            else if (target == Target.CubemapArray)
+            {
+                return depthOrLayers * 6;
+            }
+            else if (target == Target.Cubemap)
+            {
+                return 6;
+            }
+            else
+            {
+                return 1;
+            }
+        }
+
+        /// <summary>
+        /// Gets the number of layers or depth of the texture.
+        /// Returns 1 for non-array textures, 6 for cubemap textures, and layer faces for cubemap array textures.
+        /// </summary>
+        /// <param name="target">Texture target</param>
+        /// <param name="depthOrLayers">Texture layers if the is a array texture, depth for 3D textures, ignored otherwise</param>
+        /// <returns>The number of texture layers or depth</returns>
+        public static int GetDepthOrLayers(Target target, int depthOrLayers)
+        {
+            if (target is Target.Texture2DArray or Target.Texture2DMultisampleArray or Target.Texture3D)
             {
                 return depthOrLayers;
             }
@@ -302,7 +344,13 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <param name="firstLevel">The first level of the texture view</param>
         /// <param name="parentFormat">True if the parent format should be inherited</param>
         /// <returns>The adjusted texture information with the new size</returns>
-        public TextureInfo CreateInfoForLevelView(Texture parent, int firstLevel, bool parentFormat)
+                public TextureInfo CreateInfoForLevelView(Texture parent, int firstLevel, bool parentFormat)
+        {
+            // v1.0-shaped overload; delegates to the info-based core.
+            return CreateInfoForLevelView(parent.Info, firstLevel, parentFormat);
+        }
+
+public TextureInfo CreateInfoForLevelView(TextureInfo parentInfo, int firstLevel, bool parentFormat)
         {
             // When the texture is used as view of another texture, we must
             // ensure that the sizes are valid, otherwise data uploads would fail
@@ -318,15 +366,15 @@ namespace Ryujinx.Graphics.Gpu.Image
             // - If the parent format is not compressed, and the view is, the view
             // size is calculated as described on the first point, but the width and height
             // of the view must be also multiplied by the block width and height.
-            int width = Math.Max(1, parent.Info.Width >> firstLevel);
-            int height = Math.Max(1, parent.Info.Height >> firstLevel);
+            int width = Math.Max(1, parentInfo.Width >> firstLevel);
+            int height = Math.Max(1, parentInfo.Height >> firstLevel);
 
-            if (parent.Info.FormatInfo.IsCompressed && !FormatInfo.IsCompressed)
+            if (parentInfo.FormatInfo.IsCompressed && !FormatInfo.IsCompressed)
             {
-                width = BitUtils.DivRoundUp(width, parent.Info.FormatInfo.BlockWidth);
-                height = BitUtils.DivRoundUp(height, parent.Info.FormatInfo.BlockHeight);
+                width = BitUtils.DivRoundUp(width, parentInfo.FormatInfo.BlockWidth);
+                height = BitUtils.DivRoundUp(height, parentInfo.FormatInfo.BlockHeight);
             }
-            else if (!parent.Info.FormatInfo.IsCompressed && FormatInfo.IsCompressed)
+            else if (!parentInfo.FormatInfo.IsCompressed && FormatInfo.IsCompressed)
             {
                 width *= FormatInfo.BlockWidth;
                 height *= FormatInfo.BlockHeight;
@@ -336,7 +384,7 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             if (Target == Target.Texture3D)
             {
-                depthOrLayers = Math.Max(1, parent.Info.DepthOrLayers >> firstLevel);
+                depthOrLayers = Math.Max(1, parentInfo.DepthOrLayers >> firstLevel);
             }
             else
             {
@@ -350,11 +398,11 @@ namespace Ryujinx.Graphics.Gpu.Image
             int samplesInX = SamplesInX;
             int samplesInY = SamplesInY;
 
-            if (target == Target.Texture2D && parent.Target == Target.Texture2DMultisample)
+            if (target == Target.Texture2D && parentInfo.Target == Target.Texture2DMultisample)
             {
                 target = Target.Texture2DMultisample;
-                samplesInX = parent.Info.SamplesInX;
-                samplesInY = parent.Info.SamplesInY;
+                samplesInX = parentInfo.SamplesInX;
+                samplesInY = parentInfo.SamplesInY;
             }
 
             return new TextureInfo(
@@ -371,7 +419,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                 GobBlocksInZ,
                 GobBlocksInTileX,
                 target,
-                parentFormat ? parent.Info.FormatInfo : FormatInfo,
+                parentFormat ? parentInfo.FormatInfo : FormatInfo,
                 DepthStencilMode,
                 SwizzleR,
                 SwizzleG,

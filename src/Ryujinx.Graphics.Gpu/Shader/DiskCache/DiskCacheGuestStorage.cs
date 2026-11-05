@@ -379,8 +379,8 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
         /// <param name="hash">Code and constant buffer data hash</param>
         /// <returns>Entry index</returns>
         private int WriteNewEntry(
-            FileStream tocFileStream,
-            FileStream dataFileStream,
+            Stream tocFileStream,
+            Stream dataFileStream,
             ref TocHeader header,
             ReadOnlySpan<byte> data,
             ReadOnlySpan<byte> cb1Data,
@@ -453,7 +453,7 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
         /// <returns>Hash of the data</returns>
         private static uint CalcHash(ReadOnlySpan<byte> data)
         {
-            return (uint)Hash128.ComputeHash(data).Low;
+            return (uint)XXHash128.ComputeHash(data).Low;
         }
     }
 }

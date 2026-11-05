@@ -5,17 +5,18 @@ namespace Ryujinx.Graphics.Vulkan
 {
     static class ResultExtensions
     {
-        extension(Result result)
+        public static bool IsError(this Result result)
         {
-            public bool IsError => result < Result.Success;
+            // Only negative result codes are errors.
+            return result < Result.Success;
+        }
 
-            public void ThrowOnError()
+        public static void ThrowOnError(this Result result)
+        {
+            // Only negative result codes are errors.
+            if (result.IsError())
             {
-                // Only negative result codes are errors.
-                if (result.IsError)
-                {
-                    throw new VulkanException(result);
-                }
+                throw new VulkanException(result);
             }
         }
     }

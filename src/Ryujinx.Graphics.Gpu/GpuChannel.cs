@@ -3,6 +3,7 @@ using Ryujinx.Graphics.Gpu.Engine.GPFifo;
 using Ryujinx.Graphics.Gpu.Image;
 using Ryujinx.Graphics.Gpu.Memory;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace Ryujinx.Graphics.Gpu
@@ -36,6 +37,40 @@ namespace Ryujinx.Graphics.Gpu
         /// Host hardware capabilities from the GPU context.
         /// </summary>
         internal ref Capabilities Capabilities => ref _context.Capabilities;
+
+        // v1.1 (Switch 2 enablement): T239 (Ampere) engine class IDs.
+        private const int AmpereClassId0 = 51095; // 0xC797
+        private const int AmpereClassId1 = 51136; // 0xC7C0
+        private const int AmpereClassId2 = 51125; // 0xC7B5
+
+        private readonly List<int> _boundEngineClassIds = new();
+
+        /// <summary>
+        /// Records an engine class ID bound to this channel, latching
+        /// <see cref="GpuContext.IsAmpere"/> for T239 (Ampere) steppings.
+        /// </summary>
+        /// <param name="classId">Bound engine class ID</param>
+        internal void BindEngineClass(int classId)
+        {
+            _boundEngineClassIds.Add(classId);
+
+            if (classId == AmpereClassId0 || classId == AmpereClassId1 || classId == AmpereClassId2)
+            {
+                _context.IsAmpere = true;
+            }
+        }
+
+        /// <summary>
+        /// Whether the channel uses Ampere shaders (first bound engine class is 51095).
+        /// v1.1 (Switch 2 enablement).
+        /// </summary>
+        internal bool UsesAmpereShaders => _boundEngineClassIds.Count > 0 && _boundEngineClassIds[0] == AmpereClassId0;
+
+        /// <summary>
+        /// Whether any bound engine class ID on this context is a T239 (Ampere) stepping.
+        /// v1.1 (Switch 2 enablement): mirrors <c>ClassBinding.IsAmpere</c>.
+        /// </summary>
+        internal bool IsAmpere => _context.IsAmpere;
 
         /// <summary>
         /// Creates a new instance of a GPU channel.

@@ -32,6 +32,7 @@ namespace Ryujinx.Graphics.GAL
         public readonly bool SupportsGeometryShader;
         public readonly bool SupportsGeometryShaderPassthrough;
         public readonly bool SupportsTransformFeedback;
+        public readonly bool SupportsImageBufferPixelAlignment;
         public readonly bool SupportsImageLoadFormatted;
         public readonly bool SupportsLayerVertexTessellation;
         public readonly bool SupportsMismatchingViewFormat;
@@ -43,6 +44,7 @@ namespace Ryujinx.Graphics.GAL
         public readonly bool SupportsShaderBarrierDivergence;
         public readonly bool SupportsShaderFloat64;
         public readonly bool SupportsShaderNonUniformIndexing;
+        public readonly bool SupportsTextureBufferPixelAlignment;
         public readonly bool SupportsTextureGatherOffsets;
         public readonly bool SupportsTextureShadowLod;
         public readonly bool SupportsVertexStoreAndAtomics;
@@ -51,6 +53,10 @@ namespace Ryujinx.Graphics.GAL
         public readonly bool SupportsViewportSwizzle;
         public readonly bool SupportsIndirectParameters;
         public readonly bool SupportsDepthClipControl;
+        public readonly bool SupportsExtendedDynamicState;
+        public readonly bool SupportsExtendedDynamicState2;
+        public readonly bool SupportsLogicOpDynamicState;
+        public readonly bool SupportsPatchControlPointsDynamicState;
 
         public readonly int UniformBufferSetIndex;
         public readonly int StorageBufferSetIndex;
@@ -101,6 +107,7 @@ namespace Ryujinx.Graphics.GAL
             bool supportsGeometryShader,
             bool supportsGeometryShaderPassthrough,
             bool supportsTransformFeedback,
+            bool supportsImageBufferPixelAlignment,
             bool supportsImageLoadFormatted,
             bool supportsLayerVertexTessellation,
             bool supportsMismatchingViewFormat,
@@ -112,6 +119,7 @@ namespace Ryujinx.Graphics.GAL
             bool supportsShaderBarrierDivergence,
             bool supportsShaderFloat64,
             bool supportsShaderNonUniformIndexing,
+            bool supportsTextureBufferPixelAlignment,
             bool supportsTextureGatherOffsets,
             bool supportsTextureShadowLod,
             bool supportsVertexStoreAndAtomics,
@@ -120,6 +128,10 @@ namespace Ryujinx.Graphics.GAL
             bool supportsViewportSwizzle,
             bool supportsIndirectParameters,
             bool supportsDepthClipControl,
+            bool supportsExtendedDynamicState,
+            bool supportsExtendedDynamicState2,
+            bool supportsLogicOpDynamicState,
+            bool supportsPatchControlPointsDynamicState,
             int uniformBufferSetIndex,
             int storageBufferSetIndex,
             int textureSetIndex,
@@ -164,6 +176,7 @@ namespace Ryujinx.Graphics.GAL
             SupportsGeometryShader = supportsGeometryShader;
             SupportsGeometryShaderPassthrough = supportsGeometryShaderPassthrough;
             SupportsTransformFeedback = supportsTransformFeedback;
+            SupportsImageBufferPixelAlignment = supportsImageBufferPixelAlignment;
             SupportsImageLoadFormatted = supportsImageLoadFormatted;
             SupportsLayerVertexTessellation = supportsLayerVertexTessellation;
             SupportsMismatchingViewFormat = supportsMismatchingViewFormat;
@@ -175,6 +188,7 @@ namespace Ryujinx.Graphics.GAL
             SupportsShaderBarrierDivergence = supportsShaderBarrierDivergence;
             SupportsShaderFloat64 = supportsShaderFloat64;
             SupportsShaderNonUniformIndexing = supportsShaderNonUniformIndexing;
+            SupportsTextureBufferPixelAlignment = supportsTextureBufferPixelAlignment;
             SupportsTextureGatherOffsets = supportsTextureGatherOffsets;
             SupportsTextureShadowLod = supportsTextureShadowLod;
             SupportsVertexStoreAndAtomics = supportsVertexStoreAndAtomics;
@@ -183,6 +197,10 @@ namespace Ryujinx.Graphics.GAL
             SupportsViewportSwizzle = supportsViewportSwizzle;
             SupportsIndirectParameters = supportsIndirectParameters;
             SupportsDepthClipControl = supportsDepthClipControl;
+            SupportsExtendedDynamicState = supportsExtendedDynamicState;
+            SupportsExtendedDynamicState2 = supportsExtendedDynamicState2;
+            SupportsLogicOpDynamicState = supportsLogicOpDynamicState;
+            SupportsPatchControlPointsDynamicState = supportsPatchControlPointsDynamicState;
             UniformBufferSetIndex = uniformBufferSetIndex;
             StorageBufferSetIndex = storageBufferSetIndex;
             TextureSetIndex = textureSetIndex;

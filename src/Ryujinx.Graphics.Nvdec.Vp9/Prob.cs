@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Nvdec.Vp9.Common;
 using System;
 using System.Diagnostics;
@@ -46,7 +46,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         }
 
         // MODE_MV_MAX_UPDATE_FACTOR (128) * count / MODE_MV_COUNT_SAT;
-        private static readonly uint[] _countToUpdateFactor =
+        private static readonly uint[] CountToUpdateFactor =
         [
             0, 6, 12, 19, 25, 32, 38, 44, 51, 57, 64, 70, 76, 83, 89, 96, 102, 108, 115, 121, 128
         ];
@@ -62,7 +62,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             }
 
             uint count = Math.Min(den, ModeMvCountSat);
-            uint factor = _countToUpdateFactor[(int)count];
+            uint factor = CountToUpdateFactor[(int)count];
             byte prob = GetProb(ct[0], den);
             return WeightedProb(preProb, prob, (int)factor);
         }

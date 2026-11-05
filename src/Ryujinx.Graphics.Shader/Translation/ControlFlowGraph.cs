@@ -110,9 +110,8 @@ namespace Ryujinx.Graphics.Shader.Translation
                     currentBlock.Operations.AddLast(operation);
                 }
 
-                needsNewBlock = operation.Inst is Instruction.Branch or
-                                Instruction.BranchIfTrue or
-                                Instruction.BranchIfFalse;
+                needsNewBlock =
+                    operation.Inst is Instruction.Branch or Instruction.BranchIfTrue or Instruction.BranchIfFalse;
 
                 if (needsNewBlock)
                 {

@@ -1,4 +1,3 @@
-using Ryujinx.Common.Configuration;
 using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Vulkan.Effects;
 using Silk.NET.Vulkan;
@@ -401,7 +400,7 @@ namespace Ryujinx.Graphics.Vulkan
                     cbs = _gd.CommandBufferPool.Rent();
                 }
 
-                CaptureFrame(view, srcX0, srcY0, srcX1 - srcX0, srcY1 - srcY0, view.Info.Format.IsBgr, crop.FlipX, crop.FlipY);
+                CaptureFrame(view, srcX0, srcY0, srcX1 - srcX0, srcY1 - srcY0, view.Info.Format.IsBgr(), crop.FlipX, crop.FlipY);
 
                 ScreenCaptureRequested = false;
             }
@@ -546,7 +545,6 @@ namespace Ryujinx.Graphics.Vulkan
                             _effect?.Dispose();
                             _effect = new SmaaPostProcessingEffect(_gd, _device, quality);
                         }
-
                         break;
                 }
             }
@@ -578,7 +576,6 @@ namespace Ryujinx.Graphics.Vulkan
                             _scalingFilter?.Dispose();
                             _scalingFilter = new AreaScalingFilter(_gd, _device);
                         }
-
                         break;
                 }
             }

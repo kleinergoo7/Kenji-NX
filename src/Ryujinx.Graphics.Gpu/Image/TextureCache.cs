@@ -48,6 +48,22 @@ namespace Ryujinx.Graphics.Gpu.Image
 
         private readonly AutoDeleteCache _cache;
 
+        // v1.1 (Switch 2 enablement): texture cache telemetry.
+        private long _hits;
+        private long _misses;
+        private long _retainedBytes;
+
+        public long MaximumEntryBytes { get; set; }
+
+        /// <summary>Cache hits since creation.</summary>
+        public long Hits => Interlocked.Read(ref _hits);
+
+        /// <summary>Cache misses since creation.</summary>
+        public long Misses => Interlocked.Read(ref _misses);
+
+        /// <summary>Bytes currently retained by cached textures.</summary>
+        public long RetainedBytes => Interlocked.Read(ref _retainedBytes);
+
         /// <summary>
         /// Constructs a new instance of the texture manager.
         /// </summary>
@@ -146,7 +162,7 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <returns>True if eligible</returns>
         private static TextureScaleMode IsUpscaleCompatible(TextureInfo info, bool withUpscale)
         {
-            if ((info.Target == Target.Texture2D || info.Target == Target.Texture2DArray || info.Target == Target.Texture2DMultisample) && !info.FormatInfo.IsCompressed)
+            if (info.Target is Target.Texture2D or Target.Texture2DArray or Target.Texture2DMultisample && !info.FormatInfo.IsCompressed)
             {
                 return UpscaleSafeMode(info) ? (withUpscale ? TextureScaleMode.Scaled : TextureScaleMode.Eligible) : TextureScaleMode.Undesired;
             }
@@ -180,7 +196,7 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             int widthAlignment = (info.IsLinear ? Constants.StrideAlignment : Constants.GobAlignment) / info.FormatInfo.BytesPerPixel;
 
-            if (!(info.FormatInfo.Format.IsDepthOrStencil || info.FormatInfo.Components == 1))
+            if (!(info.FormatInfo.Format.IsDepthOrStencil() || info.FormatInfo.Components == 1))
             {
                 // Discount square textures that aren't depth-stencil like. (excludes game textures, cubemap faces, most 3D texture LUT, texture atlas)
                 // Detect if the texture is possibly square. Widths may be aligned, so to remove the uncertainty we align both the width and height.
@@ -675,10 +691,11 @@ namespace Ryujinx.Graphics.Gpu.Image
                         return null;
                     }
 
-                    if ((info.Target == Target.Texture3D ||
-                         info.Target == Target.Texture2DArray ||
-                         info.Target == Target.Texture2DMultisampleArray ||
-                         info.Target == Target.CubemapArray) && info.DepthOrLayers < 1)
+                    if (info.Target is Target.Texture3D
+                            or Target.Texture2DArray
+                            or Target.Texture2DMultisampleArray
+                            or Target.CubemapArray &&
+                        info.DepthOrLayers < 1)
                     {
                         return null;
                     }
@@ -754,6 +771,8 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             if (texture != null)
             {
+                Interlocked.Increment(ref _hits);
+
                 DiscardIfNeeded(discard, texture, sizeHint);
 
                 texture.SynchronizeMemory();
@@ -827,6 +846,11 @@ namespace Ryujinx.Graphics.Gpu.Image
                     out int firstLevel,
                     flags);
 
+                if (overlap.HasImportOverride())
+                {
+                    overlapCompatibility = TextureViewCompatibility.Incompatible;
+                }
+
                 if (overlapCompatibility >= TextureViewCompatibility.FormatAlias)
                 {
                     if (overlap.IsView)
@@ -886,7 +910,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                     {
                         // Only copy compatible. If there's another choice for a FULLY compatible texture, choose that instead.
 
-                        texture = new Texture(_context, _physicalMemory, info, sizeInfo, range.Value, scaleMode);
+                        texture = new Texture(_context, _physicalMemory, info, sizeInfo, range.Value, scaleMode, flags.HasFlag(TextureSearchFlags.WithUpscale));
 
                         // If the new texture is larger than the existing one, we need to fill the remaining space with CPU data,
                         // otherwise we only need the data that is copied from the existing texture, without loading the CPU data.
@@ -935,7 +959,9 @@ namespace Ryujinx.Graphics.Gpu.Image
             // No match, create a new texture.
             if (texture == null)
             {
-                texture = new Texture(_context, _physicalMemory, info, sizeInfo, range.Value, scaleMode);
+                Interlocked.Increment(ref _misses);
+
+                texture = new Texture(_context, _physicalMemory, info, sizeInfo, range.Value, scaleMode, flags.HasFlag(TextureSearchFlags.WithUpscale));
 
                 // Step 1: Find textures that are view compatible with the new texture.
                 // Any textures that are incompatible will contain garbage data, so they should be removed where possible.
@@ -947,7 +973,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                 bool hasLayerViews = false;
                 bool hasMipViews = false;
 
-                List<TextureIncompatibleOverlap> incompatibleOverlaps = [];
+                List<TextureIncompatibleOverlap> incompatibleOverlaps = new();
 
                 for (int index = 0; index < overlapsCount; index++)
                 {
@@ -962,6 +988,11 @@ namespace Ryujinx.Graphics.Gpu.Image
                         _context.Capabilities,
                         out int firstLayer,
                         out int firstLevel);
+
+                    if (overlap.HasImportOverride())
+                    {
+                        compatibility = TextureViewCompatibility.Incompatible;
+                    }
 
                     if (overlap.IsView && compatibility == TextureViewCompatibility.Full)
                     {
@@ -1078,6 +1109,12 @@ namespace Ryujinx.Graphics.Gpu.Image
                         continue;
                     }
 
+                    if (texture.HasImportOverride())
+                    {
+                        // Replaced textures with different parameters are not considered compatible.
+                        continue;
+                    }
+
                     // Note: If we allow different sizes for those overlaps,
                     // we need to make sure that the "info" has the correct size for the parent texture here.
                     // Since this is not allowed right now, we don't need to do it.
@@ -1101,14 +1138,11 @@ namespace Ryujinx.Graphics.Gpu.Image
                     }
                     else
                     {
-                        TextureCreateInfo createInfo = GetCreateInfo(overlapInfo, _context.Capabilities, overlap.ScaleFactor);
-
+                        TextureCreateInfo createInfo = GetCreateInfo(overlapInfo, _context.Capabilities, overlap.ScaleFactor, null);
                         ITexture newView = texture.HostTexture.CreateView(createInfo, oInfo.FirstLayer, oInfo.FirstLevel);
 
                         overlap.SynchronizeMemory();
-
                         overlap.HostTexture.CopyTo(newView, 0, 0);
-
                         overlap.ReplaceView(texture, overlapInfo, newView, oInfo.FirstLayer, oInfo.FirstLevel);
                     }
                 }
@@ -1277,10 +1311,30 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <param name="info">Texture information</param>
         /// <param name="caps">GPU capabilities</param>
         /// <param name="scale">Texture scale factor, to be applied to the texture size</param>
+        /// <param name="infoOverride">Optional parameters to override the <paramref name="info"/> parameter</param>
         /// <returns>The texture creation information</returns>
-        public static TextureCreateInfo GetCreateInfo(TextureInfo info, Capabilities caps, float scale)
+        public static TextureCreateInfo GetCreateInfo(TextureInfo info, in Capabilities caps, float scale, TextureInfoOverride? infoOverride)
         {
-            FormatInfo formatInfo = TextureCompatibility.ToHostCompatibleFormat(info, caps);
+            int width = info.Width / info.SamplesInX;
+            int height = info.Height / info.SamplesInY;
+
+            int depth = info.GetDepth() * info.GetLayers();
+            int levels = info.Levels;
+
+            FormatInfo formatInfo = info.FormatInfo;
+
+            if (infoOverride.HasValue)
+            {
+                TextureInfoOverride overrideValue = infoOverride.Value;
+
+                width = overrideValue.Width;
+                height = overrideValue.Height;
+                depth = overrideValue.DepthOrLayers;
+                levels = overrideValue.Levels;
+                formatInfo = overrideValue.FormatInfo;
+            }
+
+            formatInfo = TextureCompatibility.ToHostCompatibleFormat(formatInfo, info.Target, caps);
 
             if (info.Target == Target.TextureBuffer && !caps.SupportsSnormBufferTextureFormat)
             {
@@ -1309,11 +1363,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                 }
             }
 
-            int width = info.Width / info.SamplesInX;
-            int height = info.Height / info.SamplesInY;
-
-            int depth = info.GetDepth() * info.GetLayers();
-
             if (scale != 1f)
             {
                 width = (int)MathF.Ceiling(width * scale);
@@ -1324,7 +1373,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                 width,
                 height,
                 depth,
-                info.Levels,
+                levels,
                 info.Samples,
                 formatInfo.BlockWidth,
                 formatInfo.BlockHeight,

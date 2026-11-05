@@ -125,48 +125,53 @@ namespace Ryujinx.Graphics.OpenGL.Effects
             GL.ActiveTexture(TextureUnit.Texture0);
             int previousTextureBinding = GL.GetInteger(GetPName.TextureBinding2D);
 
-            GL.BindImageTexture(0, textureView.Handle, 0, false, 0, TextureAccess.ReadWrite, SizedInternalFormat.Rgba8);
+            if (textureView != null)
+            {
+                GL.BindImageTexture(0, textureView.Handle, 0, false, 0, TextureAccess.ReadWrite,
+                    SizedInternalFormat.Rgba8);
 
-            int threadGroupWorkRegionDim = 16;
-            int dispatchX = (width + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
-            int dispatchY = (height + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
+                int threadGroupWorkRegionDim = 16;
+                int dispatchX = (width + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
+                int dispatchY = (height + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
 
-            // Scaling pass
-            float srcWidth = Math.Abs(source.X2 - source.X1);
-            float srcHeight = Math.Abs(source.Y2 - source.Y1);
-            float scaleX = srcWidth / view.Width;
-            float scaleY = srcHeight / view.Height;
-            GL.UseProgram(_scalingShaderProgram);
-            view.Bind(0);
-            GL.Uniform1(_inputUniform, 0);
-            GL.Uniform1(_outputUniform, 0);
-            GL.Uniform1(_srcX0Uniform, (float)source.X1);
-            GL.Uniform1(_srcX1Uniform, (float)source.X2);
-            GL.Uniform1(_srcY0Uniform, (float)source.Y1);
-            GL.Uniform1(_srcY1Uniform, (float)source.Y2);
-            GL.Uniform1(_dstX0Uniform, (float)destination.X1);
-            GL.Uniform1(_dstX1Uniform, (float)destination.X2);
-            GL.Uniform1(_dstY0Uniform, (float)destination.Y1);
-            GL.Uniform1(_dstY1Uniform, (float)destination.Y2);
-            GL.Uniform1(_scaleXUniform, scaleX);
-            GL.Uniform1(_scaleYUniform, scaleY);
-            GL.DispatchCompute(dispatchX, dispatchY, 1);
+                // Scaling pass
+                float srcWidth = Math.Abs(source.X2 - source.X1);
+                float srcHeight = Math.Abs(source.Y2 - source.Y1);
+                float scaleX = srcWidth / view.Width;
+                float scaleY = srcHeight / view.Height;
+                GL.UseProgram(_scalingShaderProgram);
+                view.Bind(0);
+                GL.Uniform1(_inputUniform, 0);
+                GL.Uniform1(_outputUniform, 0);
+                GL.Uniform1(_srcX0Uniform, (float)source.X1);
+                GL.Uniform1(_srcX1Uniform, (float)source.X2);
+                GL.Uniform1(_srcY0Uniform, (float)source.Y1);
+                GL.Uniform1(_srcY1Uniform, (float)source.Y2);
+                GL.Uniform1(_dstX0Uniform, (float)destination.X1);
+                GL.Uniform1(_dstX1Uniform, (float)destination.X2);
+                GL.Uniform1(_dstY0Uniform, (float)destination.Y1);
+                GL.Uniform1(_dstY1Uniform, (float)destination.Y2);
+                GL.Uniform1(_scaleXUniform, scaleX);
+                GL.Uniform1(_scaleYUniform, scaleY);
+                GL.DispatchCompute(dispatchX, dispatchY, 1);
 
-            GL.MemoryBarrier(MemoryBarrierFlags.ShaderImageAccessBarrierBit);
+                GL.MemoryBarrier(MemoryBarrierFlags.ShaderImageAccessBarrierBit);
 
-            // Sharpening Pass
-            GL.UseProgram(_sharpeningShaderProgram);
-            GL.BindImageTexture(0, destinationTexture.Handle, 0, false, 0, TextureAccess.ReadWrite, SizedInternalFormat.Rgba8);
-            textureView.Bind(0);
-            GL.Uniform1(_inputUniform, 0);
-            GL.Uniform1(_outputUniform, 0);
-            GL.Uniform1(_sharpeningUniform, 1.5f - (Level * 0.01f * 1.5f));
-            GL.DispatchCompute(dispatchX, dispatchY, 1);
+                // Sharpening Pass
+                GL.UseProgram(_sharpeningShaderProgram);
+                GL.BindImageTexture(0, destinationTexture.Handle, 0, false, 0, TextureAccess.ReadWrite,
+                    SizedInternalFormat.Rgba8);
+                textureView.Bind(0);
+                GL.Uniform1(_inputUniform, 0);
+                GL.Uniform1(_outputUniform, 0);
+                GL.Uniform1(_sharpeningUniform, 1.5f - (Level * 0.01f * 1.5f));
+                GL.DispatchCompute(dispatchX, dispatchY, 1);
+            }
 
             GL.UseProgram(previousProgram);
             GL.MemoryBarrier(MemoryBarrierFlags.ShaderImageAccessBarrierBit);
 
-            (_renderer.Pipeline as Pipeline).RestoreImages1And2();
+            (_renderer.Pipeline as Pipeline)?.RestoreImages1And2();
 
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, previousTextureBinding);

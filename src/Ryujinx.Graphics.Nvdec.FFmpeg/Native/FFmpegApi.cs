@@ -36,6 +36,7 @@ namespace Ryujinx.Graphics.Nvdec.FFmpeg.Native
             }
         }
 
+
         private static bool TryLoadWhitelistedLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath, out nint handle)
         {
             handle = nint.Zero;
@@ -61,11 +62,8 @@ namespace Ryujinx.Graphics.Nvdec.FFmpeg.Native
             NativeLibrary.SetDllImportResolver(typeof(FFmpegApi).Assembly, (name, assembly, path) =>
             {
 
-                if (name == AvUtilLibraryName && TryLoadWhitelistedLibrary(AvUtilLibraryName, assembly, path, out nint handle))
-                {
-                    return handle;
-                }
-                else if (name == AvCodecLibraryName && TryLoadWhitelistedLibrary(AvCodecLibraryName, assembly, path, out handle))
+                if (name == AvUtilLibraryName && TryLoadWhitelistedLibrary(AvUtilLibraryName, assembly, path, out nint handle) ||
+                    name == AvCodecLibraryName && TryLoadWhitelistedLibrary(AvCodecLibraryName, assembly, path, out handle))
                 {
                     return handle;
                 }

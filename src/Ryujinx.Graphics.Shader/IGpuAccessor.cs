@@ -9,6 +9,12 @@ namespace Ryujinx.Graphics.Shader
     public interface IGpuAccessor : ILogger
     {
         /// <summary>
+        /// True when the bound shader code is a native Ampere (SM86) program.
+        /// Upstream stack has no Ampere concept; defaults to false.
+        /// </summary>
+        bool IsNx2Ampere => false;
+
+        /// <summary>
         /// Reads data from the constant buffer 1.
         /// </summary>
         /// <param name="offset">Offset in bytes to read from</param>
@@ -25,12 +31,6 @@ namespace Ryujinx.Graphics.Shader
         /// <param name="minimumSize">Minimum size that the returned span may have</param>
         /// <returns>Span of the memory location</returns>
         ReadOnlySpan<ulong> GetCode(ulong address, int minimumSize);
-
-        /// <summary>
-        /// Indicates that the shader code is a native Ampere (SM86) program that must be
-        /// lowered before decoding. Maxwell programs leave this false.
-        /// </summary>
-        bool IsNx2Ampere => false;
 
         /// <summary>
         /// Gets the binding number of a constant buffer.
@@ -190,6 +190,11 @@ namespace Ryujinx.Graphics.Shader
             return false;
         }
 
+        bool QueryStorageImageExtendedFormats()
+        {
+            return true;
+        }
+
         /// <summary>
         /// Queries host about the presence of the FrontFacing built-in variable bug.
         /// </summary>
@@ -231,6 +236,24 @@ namespace Ryujinx.Graphics.Shader
         /// </summary>
         /// <returns>True if BGRA formats are supported, false otherwise</returns>
         bool QueryHostSupportsBgraFormat()
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Queries host support for buffer image access with the buffer offset aligned to a single pixel rather than a fixed alignment.
+        /// </summary>
+        /// <returns>True if the host supports buffer image access with pixel alignment, false otherwise</returns>
+        bool QueryHostSupportsBufferImagePixelAlignment()
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Queries host support for buffer texture access with the buffer offset aligned to a single pixel rather than a fixed alignment.
+        /// </summary>
+        /// <returns>True if the host supports buffer texture access with pixel alignment, false otherwise</returns>
+        bool QueryHostSupportsBufferTexturePixelAlignment()
         {
             return true;
         }

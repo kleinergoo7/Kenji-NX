@@ -396,7 +396,6 @@ namespace Ryujinx.Graphics.Vic.Image
                         {
                             Scaler.DeinterlaceBob(buffer.Data, w, stride, isTopField);
                         }
-
                         break;
                     default:
                         Logger.Error?.Print(LogClass.Vic, $"Unsupported deinterlace mode \"{config.DeinterlaceMode}\".");

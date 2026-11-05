@@ -178,8 +178,8 @@ namespace Ryujinx.Graphics.Vulkan.Effects
             _areaTexture = _renderer.CreateTexture(areaInfo) as TextureView;
             _searchTexture = _renderer.CreateTexture(searchInfo) as TextureView;
 
-            _areaTexture.SetData(areaTexture);
-            _searchTexture.SetData(searchTexture);
+            _areaTexture?.SetData(areaTexture);
+            _searchTexture?.SetData(searchTexture);
         }
 
         public TextureView Run(TextureView view, CommandBufferScoped cbs, int width, int height)
@@ -217,7 +217,7 @@ namespace Ryujinx.Graphics.Vulkan.Effects
 
             buffer.Holder.SetDataUnchecked(buffer.Offset, resolutionBuffer);
             _pipeline.SetUniformBuffers([new BufferAssignment(2, buffer.Range)]);
-            _pipeline.SetImage(ShaderStage.Compute, 0, _edgeOutputTexture.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
+            _pipeline.SetImage(ShaderStage.Compute, 0, _edgeOutputTexture?.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
             _pipeline.DispatchCompute(dispatchX, dispatchY, 1);
             _pipeline.ComputeBarrier();
 
@@ -227,7 +227,7 @@ namespace Ryujinx.Graphics.Vulkan.Effects
             _pipeline.SetTextureAndSampler(ShaderStage.Compute, 1, _edgeOutputTexture, _samplerLinear);
             _pipeline.SetTextureAndSampler(ShaderStage.Compute, 3, _areaTexture, _samplerLinear);
             _pipeline.SetTextureAndSampler(ShaderStage.Compute, 4, _searchTexture, _samplerLinear);
-            _pipeline.SetImage(ShaderStage.Compute, 0, _blendOutputTexture.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
+            _pipeline.SetImage(ShaderStage.Compute, 0, _blendOutputTexture?.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
             _pipeline.DispatchCompute(dispatchX, dispatchY, 1);
             _pipeline.ComputeBarrier();
 
@@ -236,7 +236,7 @@ namespace Ryujinx.Graphics.Vulkan.Effects
             _pipeline.Specialize(_specConstants);
             _pipeline.SetTextureAndSampler(ShaderStage.Compute, 3, _blendOutputTexture, _samplerLinear);
             _pipeline.SetTextureAndSampler(ShaderStage.Compute, 1, view, _samplerLinear);
-            _pipeline.SetImage(ShaderStage.Compute, 0, _outputTexture.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
+            _pipeline.SetImage(ShaderStage.Compute, 0, _outputTexture?.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
             _pipeline.DispatchCompute(dispatchX, dispatchY, 1);
             _pipeline.ComputeBarrier();
 
@@ -255,8 +255,8 @@ namespace Ryujinx.Graphics.Vulkan.Effects
 
             scissors[0] = new Rectangle<int>(0, 0, texture.Width, texture.Height);
 
-            _pipeline.SetRenderTarget(texture, (uint)texture.Width, (uint)texture.Height);
-            _pipeline.SetRenderTargetColorMasks(colorMasks);
+            _pipeline.SetRenderTarget(texture, (uint)texture.Width, (uint)texture.Height, false);
+            _pipeline.SetRenderTargetColorMasks(colorMasks, false);
             _pipeline.SetScissors(scissors);
             _pipeline.ClearRenderTargetColor(0, 0, 1, new ColorF(0f, 0f, 0f, 1f));
         }

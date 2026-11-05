@@ -20,18 +20,20 @@ namespace Ryujinx.Graphics.Shader
 
     static class AttributeTypeExtensions
     {
-        extension(AttributeType type)
+        public static AggregateType ToAggregateType(this AttributeType type)
         {
-            public AggregateType Aggregate =>
-                (type & ~AttributeType.AnyPacked) switch
-                {
-                    AttributeType.Float => AggregateType.FP32,
-                    AttributeType.Sint => AggregateType.S32,
-                    AttributeType.Uint => AggregateType.U32,
-                    _ => throw new ArgumentException($"Invalid attribute type \"{type}\"."),
-                };
+            return (type & ~AttributeType.AnyPacked) switch
+            {
+                AttributeType.Float => AggregateType.FP32,
+                AttributeType.Sint => AggregateType.S32,
+                AttributeType.Uint => AggregateType.U32,
+                _ => throw new ArgumentException($"Invalid attribute type \"{type}\"."),
+            };
+        }
 
-            public AggregateType AsAggregate(bool supportsScaledFormats) => (type & ~AttributeType.AnyPacked) switch
+        public static AggregateType ToAggregateType(this AttributeType type, bool supportsScaledFormats)
+        {
+            return (type & ~AttributeType.AnyPacked) switch
             {
                 AttributeType.Float => AggregateType.FP32,
                 AttributeType.Sint => AggregateType.S32,

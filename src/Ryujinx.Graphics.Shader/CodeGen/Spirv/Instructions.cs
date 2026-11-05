@@ -633,7 +633,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 MarkNonUniform(context, image);
             }
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
 
             int pCount = coordsCount + (isArray ? 1 : 0);
 
@@ -717,7 +717,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 MarkNonUniform(context, image);
             }
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
 
             int pCount = coordsCount + (isArray ? 1 : 0);
 
@@ -780,7 +780,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 MarkNonUniform(context, image);
             }
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
 
             int pCount = coordsCount + (isArray ? 1 : 0);
 
@@ -870,7 +870,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
             SamplerDeclaration declaration = context.Samplers[texOp.GetTextureSetAndBinding()];
             SpvInstruction image = GenerateSampledImageLoad(context, texOp, declaration, ref srcIndex);
 
-            int pCount = texOp.Type.Dimensions;
+            int pCount = texOp.Type.GetDimensions();
 
             SpvInstruction pCoords;
 
@@ -1194,7 +1194,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
             SamplerDeclaration declaration = context.Samplers[texOp.GetTextureSetAndBinding()];
             SpvInstruction image = GenerateSampledImageLoad(context, texOp, declaration, ref srcIndex);
 
-            int coordsCount = texOp.Type.Dimensions;
+            int coordsCount = texOp.Type.GetDimensions();
 
             int pCount = coordsCount;
 
@@ -1250,8 +1250,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 if (pCount > 1)
                 {
                     SpvInstruction[] nfElems = new SpvInstruction[pCount];
-                    for (int nfI = 0; nfI < pCount; nfI++)
-                    { nfElems[nfI] = nfZero; }
+                    for (int nfI = 0; nfI < pCount; nfI++) { nfElems[nfI] = nfZero; }
                     nfZero = context.ConstantComposite(nfType, nfElems);
                 }
 
@@ -1375,7 +1374,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 compIdx = Src(AggregateType.S32);
             }
 
-            List<SpvInstruction> operandsList = [];
+            List<SpvInstruction> operandsList = new();
             ImageOperandsMask operandsMask = ImageOperandsMask.MaskNone;
 
             if (hasLodBias)
@@ -1511,7 +1510,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                 SamplerType type = context.SamplersTypes[texOp.GetTextureSetAndBinding()];
                 bool hasLod = !type.HasFlag(SamplerType.Multisample) && type != SamplerType.TextureBuffer;
 
-                int dimensions = (type & SamplerType.Mask) == SamplerType.TextureCube ? 2 : type.Dimensions;
+                int dimensions = (type & SamplerType.Mask) == SamplerType.TextureCube ? 2 : type.GetDimensions();
 
                 if (type.HasFlag(SamplerType.Array))
                 {
@@ -1534,7 +1533,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
 
                 if (dimensions != 1)
                 {
-                    result = context.CompositeExtract(context.TypeS32(), result, texOp.Index);
+                    result = context.CompositeExtract(context.TypeS32(), result, (SpvLiteralInteger)texOp.Index);
                 }
 
                 return new OperationResult(AggregateType.S32, result);
@@ -1743,7 +1742,6 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                         varType = context.Properties.SharedMemories[bindingId.Value].Type & AggregateType.ElementTypeMask;
                         baseObj = context.SharedMemories[bindingId.Value];
                     }
-
                     break;
 
                 case StorageKind.Input:
@@ -1792,7 +1790,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Spirv
                     {
                         (_, varType) = IoMap.GetSpirvBuiltIn(ioVariable);
 
-                        if (IoMap.IsPerVertexBuiltIn(ioVariable))
+                        if (context.Definitions.Stage.IsVtg() && IoMap.IsPerVertexBuiltIn(ioVariable))
                         {
                             perVertexBuiltIn = ioVariable;
                             ioVariable = IoVariable.Position;

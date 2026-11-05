@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 
 namespace Ryujinx.Graphics.Nvdec.Vp9
@@ -8,7 +8,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         public const int MaxQ = 255;
         public const int QindexBits = 8;
 
-        private static readonly short[] _dcQlookup =
+        private static readonly short[] DcQlookup =
         [
             4, 8, 8, 9, 10, 11, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 23, 24, 25, 26, 26, 27, 28, 29,
             30, 31, 32, 32, 33, 34, 35, 36, 37, 38, 38, 39, 40, 41, 42, 43, 43, 44, 45, 46, 47, 48, 48, 49, 50, 51,
@@ -24,7 +24,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             1139, 1184, 1232, 1282, 1336
         ];
 
-        private static readonly short[] _dcQlookup10 =
+        private static readonly short[] DcQlookup10 =
         [
             4, 9, 10, 13, 15, 17, 20, 22, 25, 28, 31, 34, 37, 40, 43, 47, 50, 53, 57, 60, 64, 68, 71, 75, 78, 82,
             86, 90, 93, 97, 101, 105, 109, 113, 116, 120, 124, 128, 132, 136, 140, 143, 147, 151, 155, 159, 163,
@@ -41,7 +41,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             3188, 3280, 3375, 3478, 3586, 3702, 3823, 3953, 4089, 4236, 4394, 4559, 4737, 4929, 5130, 5347
         ];
 
-        private static readonly short[] _dcQlookup12 =
+        private static readonly short[] DcQlookup12 =
         [
             4, 12, 18, 25, 33, 41, 50, 60, 70, 80, 91, 103, 115, 127, 140, 153, 166, 180, 194, 208, 222, 237, 251,
             266, 281, 296, 312, 327, 343, 358, 374, 390, 405, 421, 437, 453, 469, 484, 500, 516, 532, 548, 564, 580,
@@ -60,7 +60,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             17575, 18237, 18949, 19718, 20521, 21387
         ];
 
-        private static readonly short[] _acQlookup =
+        private static readonly short[] AcQlookup =
         [
             4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
             34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
@@ -76,7 +76,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             1479, 1508, 1537, 1567, 1597, 1628, 1660, 1692, 1725, 1759, 1793, 1828
         ];
 
-        private static readonly short[] _acQlookup10 =
+        private static readonly short[] AcQlookup10 =
         [
             4, 9, 11, 13, 16, 18, 21, 24, 27, 30, 33, 37, 40, 44, 48, 51, 55, 59, 63, 67, 71, 75, 79, 83, 88, 92,
             96, 100, 105, 109, 114, 118, 122, 127, 131, 136, 140, 145, 149, 154, 158, 163, 168, 172, 177, 181, 186,
@@ -94,7 +94,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             7036, 7172, 7312
         ];
 
-        private static readonly short[] _acQlookup12 =
+        private static readonly short[] AcQlookup12 =
         [
             4, 13, 19, 27, 35, 44, 54, 64, 75, 87, 99, 112, 126, 139, 154, 168, 183, 199, 214, 230, 247, 263, 280,
             297, 314, 331, 349, 366, 384, 402, 420, 438, 456, 475, 493, 511, 530, 548, 567, 586, 604, 623, 642, 660,
@@ -117,12 +117,9 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         {
             switch (bitDepth)
             {
-                case BitDepth.Bits8:
-                    return _dcQlookup[Math.Clamp(qindex + delta, 0, MaxQ)];
-                case BitDepth.Bits10:
-                    return _dcQlookup10[Math.Clamp(qindex + delta, 0, MaxQ)];
-                case BitDepth.Bits12:
-                    return _dcQlookup12[Math.Clamp(qindex + delta, 0, MaxQ)];
+                case BitDepth.Bits8: return DcQlookup[Math.Clamp(qindex + delta, 0, MaxQ)];
+                case BitDepth.Bits10: return DcQlookup10[Math.Clamp(qindex + delta, 0, MaxQ)];
+                case BitDepth.Bits12: return DcQlookup12[Math.Clamp(qindex + delta, 0, MaxQ)];
                 default:
                     Debug.Assert(false, "bitDepth should be Bits8, Bits10 or Bits12");
                     return -1;
@@ -133,12 +130,9 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         {
             switch (bitDepth)
             {
-                case BitDepth.Bits8:
-                    return _acQlookup[Math.Clamp(qindex + delta, 0, MaxQ)];
-                case BitDepth.Bits10:
-                    return _acQlookup10[Math.Clamp(qindex + delta, 0, MaxQ)];
-                case BitDepth.Bits12:
-                    return _acQlookup12[Math.Clamp(qindex + delta, 0, MaxQ)];
+                case BitDepth.Bits8: return AcQlookup[Math.Clamp(qindex + delta, 0, MaxQ)];
+                case BitDepth.Bits10: return AcQlookup10[Math.Clamp(qindex + delta, 0, MaxQ)];
+                case BitDepth.Bits12: return AcQlookup12[Math.Clamp(qindex + delta, 0, MaxQ)];
                 default:
                     Debug.Assert(false, "bitDepth should be Bits8, Bits10 or Bits12");
                     return -1;

@@ -43,6 +43,20 @@ namespace Ryujinx.Graphics.GAL
         /// <param name="region">Target sub-region of the texture to update</param>
         void SetData(MemoryOwner<byte> data, int layer, int level, Rectangle<int> region);
 
+        /// <summary>
+        /// Sets raw ASTC data so the backend may use hardware ASTC decoding (v1.1 addition).
+        /// Backends without ASTC acceleration may ignore this call.
+        /// </summary>
+        /// <param name="data">ASTC data bytes</param>
+        /// <param name="info">ASTC texture metadata</param>
+        /// <param name="layer">Target layer</param>
+        /// <param name="level">Target level</param>
+        /// <param name="single">True when the texture has a single layer and level</param>
+        void SetAstcData(MemoryOwner<byte> data, AstcTextureInfo info, int layer, int level, bool single)
+        {
+            data.Dispose();
+        }
+
         void SetStorage(BufferRange buffer);
 
         void Release();

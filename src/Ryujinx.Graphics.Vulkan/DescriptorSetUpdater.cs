@@ -217,7 +217,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             if (isMainPipeline)
             {
-                FeedbackLoopHazards = [];
+                FeedbackLoopHazards = new();
             }
         }
 
@@ -235,7 +235,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             // Check stage bindings
 
-            _uniformMirrored.Union(_uniformSet).SignalSet((binding, count) =>
+            _uniformMirrored.Union(_uniformSet).SignalSet((int binding, int count) =>
             {
                 for (int i = 0; i < count; i++)
                 {
@@ -257,7 +257,7 @@ namespace Ryujinx.Graphics.Vulkan
                 }
             });
 
-            _storageMirrored.Union(_storageSet).SignalSet((binding, count) =>
+            _storageMirrored.Union(_storageSet).SignalSet((int binding, int count) =>
             {
                 for (int i = 0; i < count; i++)
                 {
@@ -348,10 +348,10 @@ namespace Ryujinx.Graphics.Vulkan
 
                 if (segment.IsArray)
                 {
-                    if (segment.Type is ResourceType.Texture or
-                        ResourceType.Sampler or
-                        ResourceType.TextureAndSampler or
-                        ResourceType.BufferTexture)
+                    if (segment.Type is ResourceType.Texture
+                        or ResourceType.Sampler
+                        or ResourceType.TextureAndSampler
+                        or ResourceType.BufferTexture)
                     {
                         ref ArrayRef<TextureArray> arrayRef = ref _textureArrayExtraRefs[setIndex - PipelineBase.DescriptorSetLayouts];
                         PipelineStageFlags stageFlags = arrayRef.Stage.ConvertToPipelineStageFlags();
@@ -1072,7 +1072,7 @@ namespace Ryujinx.Graphics.Vulkan
         private void Initialize(CommandBufferScoped cbs, int setIndex, DescriptorSetCollection dsc)
         {
             // We don't support clearing texture descriptors currently.
-            if (setIndex is not PipelineBase.UniformSetIndex and not PipelineBase.StorageSetIndex)
+            if (setIndex != PipelineBase.UniformSetIndex && setIndex != PipelineBase.StorageSetIndex)
             {
                 return;
             }
@@ -1102,10 +1102,10 @@ namespace Ryujinx.Graphics.Vulkan
                 {
                     DescriptorSet[] sets = null;
 
-                    if (segment.Type is ResourceType.Texture or
-                        ResourceType.Sampler or
-                        ResourceType.TextureAndSampler or
-                        ResourceType.BufferTexture)
+                    if (segment.Type is ResourceType.Texture
+                        or ResourceType.Sampler
+                        or ResourceType.TextureAndSampler
+                        or ResourceType.BufferTexture)
                     {
                         sets = _textureArrayExtraRefs[setIndex - PipelineBase.DescriptorSetLayouts].Array.GetDescriptorSets(
                             _device,

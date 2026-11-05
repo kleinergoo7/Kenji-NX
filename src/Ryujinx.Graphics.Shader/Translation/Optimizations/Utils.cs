@@ -45,7 +45,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
             return x == y || x.Type == OperandType.Constant || x.Type == OperandType.ConstantBuffer;
         }
 
-        private static bool AreAllSourcesEqual(Operation node, Operation otherNode)
+        private static bool AreAllSourcesEqual(INode node, INode otherNode)
         {
             if (node.SourcesCount != otherNode.SourcesCount)
             {
@@ -189,7 +189,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
         public static void DeleteNode(LinkedListNode<INode> node, Operation operation)
         {
-            node.List.Remove(node);
+            node.List?.Remove(node);
 
             for (int srcIndex = 0; srcIndex < operation.SourcesCount; srcIndex++)
             {

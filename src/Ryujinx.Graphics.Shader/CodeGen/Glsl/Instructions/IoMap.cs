@@ -79,9 +79,9 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl.Instructions
                     }
                     else
                     {
-                        return stage is ShaderStage.TessellationControl or
-                               ShaderStage.TessellationEvaluation or
-                               ShaderStage.Geometry;
+                        return stage is ShaderStage.TessellationControl
+                            or ShaderStage.TessellationEvaluation
+                            or ShaderStage.Geometry;
                     }
             }
 

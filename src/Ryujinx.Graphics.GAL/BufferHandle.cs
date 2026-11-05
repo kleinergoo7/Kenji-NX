@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Ryujinx.Graphics.GAL
@@ -11,7 +10,5 @@ namespace Ryujinx.Graphics.GAL
         public static BufferHandle Null => new(0);
 
         private BufferHandle(ulong value) => _value = value;
-
-        public static implicit operator int(BufferHandle handle) => (int)Unsafe.As<BufferHandle, ulong>(ref handle);
     }
 }

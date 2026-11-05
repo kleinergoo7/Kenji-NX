@@ -48,7 +48,7 @@ namespace Ryujinx.Graphics.Vulkan
                     return false;
                 }
 
-                if (SetDescriptors != null)
+                if (SetDescriptors != null && other.SetDescriptors != null)
                 {
                     if (SetDescriptors.Count != other.SetDescriptors.Count)
                     {
@@ -83,7 +83,7 @@ namespace Ryujinx.Graphics.Vulkan
         {
             PlceKey key = new(setDescriptors, usePushDescriptors);
 
-            return _plces.GetOrAdd(key, newKey => new PipelineLayoutCacheEntry(gd, device, setDescriptors, usePushDescriptors));
+            return _plces.GetOrAdd(key, _ => new PipelineLayoutCacheEntry(gd, device, setDescriptors, usePushDescriptors));
         }
 
         protected virtual void Dispose(bool disposing)

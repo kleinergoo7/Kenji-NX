@@ -67,7 +67,8 @@ namespace Ryujinx.Graphics.Gpu.Image
         public T FindOrCreate(GpuChannel channel, ulong address, int maximumId, TextureBindingsArrayCache bindingsArrayCache)
         {
             // Remove old entries from the cache, if possible.
-            while (_pools.Count > MaxCapacity && (_currentTimestamp - _pools.First.Value.CacheTimestamp) >= MinDeltaForRemoval)
+            while (_pools.Count > MaxCapacity && _pools.First != null &&
+                   (_currentTimestamp - _pools.First.Value.CacheTimestamp) >= MinDeltaForRemoval)
             {
                 T oldestPool = _pools.First.Value;
 

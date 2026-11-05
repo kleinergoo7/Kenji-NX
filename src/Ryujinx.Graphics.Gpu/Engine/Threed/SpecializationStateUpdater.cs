@@ -250,13 +250,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                     };
                 }
 
-                if (mayConvertVtgToCompute && (size == VertexAttribSize.Rgb10A2 || size == VertexAttribSize.Rg11B10))
+                if (mayConvertVtgToCompute && size is VertexAttribSize.Rgb10A2 or VertexAttribSize.Rg11B10)
                 {
                     value |= AttributeType.Packed;
 
-                    if (type is VertexAttribType.Snorm or
-                        VertexAttribType.Sint or
-                        VertexAttribType.Sscaled)
+                    if (type is VertexAttribType.Snorm or VertexAttribType.Sint or VertexAttribType.Sscaled)
                     {
                         value |= AttributeType.PackedRgb10A2Signed;
                     }
@@ -284,7 +282,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         {
             bool changed = false;
             int count = rtControl.UnpackCount();
-
+            
             Span<AttributeType> fragmentOutputTypesSpan = _graphics.FragmentOutputTypes.AsSpan();
 
             for (int index = 0; index < Constants.TotalRenderTargets; index++)
@@ -297,9 +295,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                 {
                     Format format = colorState.Format.Convert().Format;
 
-                    AttributeType type = format.IsInt
-                        ? (format.IsSignedInt ? AttributeType.Sint : AttributeType.Uint)
-                        : AttributeType.Float;
+                    AttributeType type = format.IsInteger() ? (format.IsSint() ? AttributeType.Sint : AttributeType.Uint) : AttributeType.Float;
 
                     if (type != fragmentOutputTypesSpan[index])
                     {

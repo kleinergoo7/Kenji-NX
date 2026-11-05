@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Nvdec.Vp9.Common;
 using Ryujinx.Graphics.Video;
 using System.Diagnostics;
@@ -22,11 +22,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public ArrayPtr<byte> UBuffer;
         public ArrayPtr<byte> VBuffer;
 
-        public readonly unsafe Plane YPlane => new((nint)YBuffer.ToPointer(), YBuffer.Length);
-        public readonly unsafe Plane UPlane => new((nint)UBuffer.ToPointer(), UBuffer.Length);
-        public readonly unsafe Plane VPlane => new((nint)VBuffer.ToPointer(), VBuffer.Length);
+        public unsafe Plane YPlane => new((nint)YBuffer.ToPointer(), YBuffer.Length);
+        public unsafe Plane UPlane => new((nint)UBuffer.ToPointer(), UBuffer.Length);
+        public unsafe Plane VPlane => new((nint)VBuffer.ToPointer(), VBuffer.Length);
 
-        public readonly FrameField Field => FrameField.Progressive;
+        public FrameField Field => FrameField.Progressive;
 
         public int Width { get; private set; }
         public int Height { get; private set; }
@@ -43,10 +43,10 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public int FrameSize { get; private set; }
         public int Border { get; private set; }
 
-        public readonly int YCropWidth => Width;
-        public readonly int YCropHeight => Height;
-        public readonly int UvCropWidth => UvWidth;
-        public readonly int UvCropHeight => UvHeight;
+        public int YCropWidth => Width;
+        public int YCropHeight => Height;
+        public int UvCropWidth => UvWidth;
+        public int UvCropHeight => UvHeight;
 
         public ArrayPtr<byte> BufferAlloc;
         public int BufferAllocSz;
@@ -65,23 +65,23 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
 
         public Surface(int width, int height)
         {
-            const int Border = 32;
-            const int SsX = 1;
-            const int SsY = 1;
-            const bool Highbd = false;
+            const int border = 32;
+            const int ssX = 1;
+            const int ssY = 1;
+            const bool highbd = false;
 
             int alignedWidth = (width + 7) & ~7;
             int alignedHeight = (height + 7) & ~7;
-            int yStride = (alignedWidth + (2 * Border) + 31) & ~31;
-            int yplaneSize = (alignedHeight + (2 * Border)) * yStride;
-            int uvWidth = alignedWidth >> SsX;
-            int uvHeight = alignedHeight >> SsY;
-            int uvStride = yStride >> SsX;
-            int uvBorderW = Border >> SsX;
-            int uvBorderH = Border >> SsY;
+            int yStride = (alignedWidth + (2 * border) + 31) & ~31;
+            int yplaneSize = (alignedHeight + (2 * border)) * yStride;
+            int uvWidth = alignedWidth >> ssX;
+            int uvHeight = alignedHeight >> ssY;
+            int uvStride = yStride >> ssX;
+            int uvBorderW = border >> ssX;
+            int uvBorderH = border >> ssY;
             int uvplaneSize = (uvHeight + (2 * uvBorderH)) * uvStride;
 
-            int frameSize = (Highbd ? 2 : 1) * (yplaneSize + (2 * uvplaneSize));
+            int frameSize = (highbd ? 2 : 1) * (yplaneSize + (2 * uvplaneSize));
 
             nint pointer = Marshal.AllocHGlobal(frameSize);
             _pointer = pointer;
@@ -90,8 +90,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             AlignedWidth = alignedWidth;
             AlignedHeight = alignedHeight;
             Stride = yStride;
-            UvWidth = (width + SsX) >> SsX;
-            UvHeight = (height + SsY) >> SsY;
+            UvWidth = (width + ssX) >> ssX;
+            UvHeight = (height + ssY) >> ssY;
             UvAlignedWidth = uvWidth;
             UvAlignedHeight = uvHeight;
             UvStride = uvStride;
@@ -101,7 +101,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 return new ArrayPtr<byte>(pointer + start + border, size - border);
             }
 
-            YBuffer = NewPlane(0, yplaneSize, (Border * yStride) + Border);
+            YBuffer = NewPlane(0, yplaneSize, (border * yStride) + border);
             UBuffer = NewPlane(yplaneSize, uvplaneSize, (uvBorderH * uvStride) + uvBorderW);
             VBuffer = NewPlane(yplaneSize + uvplaneSize, uvplaneSize, (uvBorderH * uvStride) + uvBorderW);
         }
@@ -119,6 +119,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             VpxGetFrameBufferCbFnT cb,
             Ptr<InternalFrameBufferList> cbPriv)
         {
+            int byteAlign = byteAlignment == 0 ? 1 : byteAlignment; // TODO: Is it safe to ignore the alignment?
             int alignedWidth = (width + 7) & ~7;
             int alignedHeight = (height + 7) & ~7;
             int yStride = (alignedWidth + (2 * border) + 31) & ~31;
@@ -143,8 +144,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
 
             if (cb != null)
             {
-                const int AlignAddrExtraSize = 31;
-                ulong externalFrameSize = frameSize + AlignAddrExtraSize;
+                const int alignAddrExtraSize = 31;
+                ulong externalFrameSize = frameSize + alignAddrExtraSize;
 
                 Debug.Assert(!fb.IsNull);
 
@@ -228,7 +229,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             return 0;
         }
 
-        public readonly void Dispose()
+        public void Dispose()
         {
             Marshal.FreeHGlobal(_pointer);
         }

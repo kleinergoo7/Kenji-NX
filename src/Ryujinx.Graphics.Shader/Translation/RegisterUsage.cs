@@ -141,7 +141,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 {
                     Operation operation = node.Value as Operation;
 
-                    for (int srcIndex = 0; srcIndex < operation.SourcesCount; srcIndex++)
+                    for (int srcIndex = 0; srcIndex < operation?.SourcesCount; srcIndex++)
                     {
                         Operand source = operation.GetSource(srcIndex);
 
@@ -155,7 +155,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                         localInputs[block.Index] |= GetMask(register) & ~localOutputs[block.Index];
                     }
 
-                    for (int dstIndex = 0; dstIndex < operation.DestsCount; dstIndex++)
+                    for (int dstIndex = 0; dstIndex < operation?.DestsCount; dstIndex++)
                     {
                         Operand dest = operation.GetDest(dstIndex);
 
@@ -296,7 +296,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 {
                     Operation operation = node.Value as Operation;
 
-                    if (operation.Inst == Instruction.Call)
+                    if (operation?.Inst == Instruction.Call)
                     {
                         Operand funcId = operation.GetSource(0);
 
@@ -333,7 +333,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 return false;
             }
 
-            return block.Operations.First.Value is Operation operation && operation.Inst == inst;
+            return block.Operations.First?.Value is Operation operation && operation.Inst == inst;
         }
 
         private static bool EndsWith(BasicBlock block, Instruction inst)
@@ -343,7 +343,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 return false;
             }
 
-            return block.Operations.Last.Value is Operation operation && operation.Inst == inst;
+            return block.Operations.Last?.Value is Operation operation && operation.Inst == inst;
         }
 
         private static RegisterMask GetMask(Register register)
@@ -445,7 +445,10 @@ namespace Ryujinx.Graphics.Shader.Translation
 
                     if (node == null)
                     {
-                        node = block.Operations.AddBefore(block.Operations.Last, copyOp);
+                        if (block.Operations.Last != null)
+                        {
+                            node = block.Operations.AddBefore(block.Operations.Last, copyOp);
+                        }
                     }
                     else
                     {

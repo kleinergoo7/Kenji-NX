@@ -38,6 +38,12 @@ namespace Ryujinx.Graphics.Gpu.Shader
         public readonly bool HasUnalignedStorageBuffer;
 
         /// <summary>
+        /// Indicates that Ampere shaders are used (T239).
+        /// v1.1 (Switch 2 enablement): appended at the end to keep disk shader cache compatibility.
+        /// </summary>
+        public readonly bool UsesAmpereShaders;
+
+        /// <summary>
         /// Creates a new GPU compute state.
         /// </summary>
         /// <param name="localSizeX">Local group size X of the compute shader</param>
@@ -52,7 +58,8 @@ namespace Ryujinx.Graphics.Gpu.Shader
             int localSizeZ,
             int localMemorySize,
             int sharedMemorySize,
-            bool hasUnalignedStorageBuffer)
+            bool hasUnalignedStorageBuffer,
+            bool usesAmpereShaders = false)
         {
             LocalSizeX = localSizeX;
             LocalSizeY = localSizeY;
@@ -60,6 +67,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             LocalMemorySize = localMemorySize;
             SharedMemorySize = sharedMemorySize;
             HasUnalignedStorageBuffer = hasUnalignedStorageBuffer;
+            UsesAmpereShaders = usesAmpereShaders;
         }
     }
 }

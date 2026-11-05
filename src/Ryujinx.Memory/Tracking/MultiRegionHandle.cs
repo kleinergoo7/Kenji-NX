@@ -125,6 +125,11 @@ namespace Ryujinx.Memory.Tracking
 
         public IEnumerable<RegionHandle> Handles => _handles;
 
+        public IEnumerable<RegionHandle> GetHandles()
+        {
+            return _handles;
+        }
+
         public void ForceDirty(ulong address, ulong size)
         {
             Dirty = true;

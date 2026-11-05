@@ -1,4 +1,4 @@
-using Ryujinx.Graphics.Nvdec.Vp9.Types;
+﻿using Ryujinx.Graphics.Nvdec.Vp9.Types;
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -82,7 +82,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
         public const int EobModelToken = 3;
 
-        private static readonly byte[] _coefbandTrans8X8Plus =
+        private static readonly byte[] CoefbandTrans8x8Plus =
         [
             0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5,
             // beyond MAXBAND_INDEX+1 all values are filled as 5
@@ -116,7 +116,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5
         ];
 
-        private static readonly byte[] _coefbandTrans4X4 = [0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5];
+        private static readonly byte[] CoefbandTrans4x4 = [0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5];
 
         public static readonly byte[][] Pareto8Full =
         [
@@ -366,7 +366,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             [255, 246, 247, 255, 239, 255, 253, 255]
         ];
 
-        internal static readonly byte[] DefaultCoefProbs4X4 =
+        internal static readonly byte[] DefaultCoefProbs4x4 =
         [
             // Y plane
             // Intra
@@ -424,7 +424,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             157, 78, 244, 140, 72, 231, 69, 58, 184, 31, 44, 137, 14, 38, 105, 8, 23, 61
         ];
 
-        internal static readonly byte[] DefaultCoefProbs8X8 =
+        internal static readonly byte[] DefaultCoefProbs8x8 =
         [
             // Y plane
             // Intra
@@ -482,7 +482,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             61, 199, 240, 27, 161, 226, 4, 113, 180, 1, 76, 129, 1, 46, 80, 1, 23, 41
         ];
 
-        internal static readonly byte[] DefaultCoefProbs16X16 =
+        internal static readonly byte[] DefaultCoefProbs16x16 =
         [
             // Y plane
             // Intra
@@ -540,7 +540,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             16, 208, 228, 3, 151, 207, 1, 98, 160, 1, 67, 117, 1, 41, 74, 1, 17, 31
         ];
 
-        internal static readonly byte[] DefaultCoefProbs32X32 =
+        internal static readonly byte[] DefaultCoefProbs32x32 =
         [
             // Y plane
             // Intra
@@ -600,7 +600,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
         public static byte[] GetBandTranslate(int txSize)
         {
-            return txSize == (int)TxSize.Tx4X4 ? _coefbandTrans4X4 : _coefbandTrans8X8Plus;
+            return txSize == (int)TxSize.Tx4x4 ? CoefbandTrans4x4 : CoefbandTrans8x8Plus;
         }
 
         public static void CopyProbs<T>(ref T dest, ReadOnlySpan<byte> probs) where T : unmanaged

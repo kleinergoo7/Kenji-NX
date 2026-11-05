@@ -91,7 +91,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                 return functionId;
             }
 
-            public bool TryGetFunctionId(Operation baseOp, bool isMultiTarget, List<uint> targetCbs, out int functionId)
+            public bool TryGetFunctionId(Operation baseOp, bool isMultiTarget, IReadOnlyList<uint> targetCbs, out int functionId)
             {
                 foreach (Entry entry in _entries)
                 {
@@ -256,8 +256,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                         }
                     }
                     else if (operation.Inst == Instruction.Store &&
-                        (operation.StorageKind == StorageKind.SharedMemory ||
-                        operation.StorageKind == StorageKind.LocalMemory))
+                        operation.StorageKind is StorageKind.SharedMemory or StorageKind.LocalMemory)
                     {
                         // The NVIDIA compiler can sometimes use shared or local memory as temporary
                         // storage to place the base address and size on, so we need
@@ -281,19 +280,19 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
         private static bool IsGlobalMemory(StorageKind storageKind)
         {
-            return storageKind is StorageKind.GlobalMemory or
-                   StorageKind.GlobalMemoryS8 or
-                   StorageKind.GlobalMemoryS16 or
-                   StorageKind.GlobalMemoryU8 or
-                   StorageKind.GlobalMemoryU16;
+            return storageKind is StorageKind.GlobalMemory
+                or StorageKind.GlobalMemoryS8
+                or StorageKind.GlobalMemoryS16
+                or StorageKind.GlobalMemoryU8
+                or StorageKind.GlobalMemoryU16;
         }
 
         private static bool IsSmallInt(StorageKind storageKind)
         {
-            return storageKind is StorageKind.GlobalMemoryS8 or
-                   StorageKind.GlobalMemoryS16 or
-                   StorageKind.GlobalMemoryU8 or
-                   StorageKind.GlobalMemoryU16;
+            return storageKind is StorageKind.GlobalMemoryS8
+                or StorageKind.GlobalMemoryS16
+                or StorageKind.GlobalMemoryU8
+                or StorageKind.GlobalMemoryU16;
         }
 
         private static LinkedListNode<INode> ReplaceGlobalMemoryWithStorage(
@@ -305,7 +304,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
             LinkedListNode<INode> node)
         {
             Operation operation = node.Value as Operation;
-            Operand globalAddress = operation.GetSource(0);
+            Operand globalAddress = operation?.GetSource(0);
             SearchResult result = FindUniqueBaseAddressCb(gtsContext, block, globalAddress, needsOffset: true);
 
             if (result.Found)
@@ -331,8 +330,8 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                     Operation maskOp = new(Instruction.BitwiseAnd, baseAddressMasked, baseAddress, Const(-alignment));
                     Operation subOp = new(Instruction.Subtract, hostOffset, globalAddress, baseAddressMasked);
 
-                    node.List.AddBefore(node, maskOp);
-                    node.List.AddBefore(node, subOp);
+                    node.List?.AddBefore(node, maskOp);
+                    node.List?.AddBefore(node, subOp);
 
                     offset = hostOffset;
                 }
@@ -342,7 +341,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
                     Operation addOp = new(Instruction.Add, newOffset, offset, Const(result.ConstOffset));
 
-                    node.List.AddBefore(node, addOp);
+                    node.List?.AddBefore(node, addOp);
 
                     offset = newOffset;
                 }
@@ -441,8 +440,8 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
             Operation shiftOp = new(Instruction.ShiftRightU32, wordOffset, offset, Const(2));
             Operation storageOp = new(operation.Inst, StorageKind.StorageBuffer, operation.Dest, sources);
 
-            node.List.AddBefore(node, shiftOp);
-            LinkedListNode<INode> newNode = node.List.AddBefore(node, storageOp);
+            node.List?.AddBefore(node, shiftOp);
+            LinkedListNode<INode> newNode = node.List?.AddBefore(node, storageOp);
 
             Utils.DeleteNode(node, operation);
 
@@ -483,7 +482,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
             Operation callOp = new(Instruction.Call, returnValue, sources);
 
-            LinkedListNode<INode> newNode = node.List.AddBefore(node, callOp);
+            LinkedListNode<INode> newNode = node.List?.AddBefore(node, callOp);
 
             if (returnsValue)
             {
@@ -865,7 +864,6 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                                 return context.IMaximumS32(memValue, value);
                             });
                         }
-
                         break;
                     case Instruction.AtomicMaxU32:
                         resultValue = context.AtomicMaxU32(StorageKind.StorageBuffer, binding, Const(0), wordOffset, value);
@@ -882,7 +880,6 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                                 return context.IMinimumS32(memValue, value);
                             });
                         }
-
                         break;
                     case Instruction.AtomicMinU32:
                         resultValue = context.AtomicMinU32(StorageKind.StorageBuffer, binding, Const(0), wordOffset, value);

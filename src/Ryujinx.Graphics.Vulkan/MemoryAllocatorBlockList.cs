@@ -44,7 +44,7 @@ namespace Ryujinx.Graphics.Vulkan
                 Size = size;
                 _freeRanges =
                 [
-                    new(0, size)
+                    new Range(0, size)
                 ];
             }
 

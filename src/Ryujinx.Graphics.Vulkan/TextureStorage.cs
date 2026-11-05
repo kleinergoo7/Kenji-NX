@@ -95,7 +95,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             SampleCountFlags sampleCountFlags = ConvertToSampleCountFlags(gd.Capabilities.SupportedSampleCounts, (uint)info.Samples);
 
-            ImageUsageFlags usage = GetImageUsage(info.Format, gd.Capabilities, isMsImageStorageSupported);
+            ImageUsageFlags usage = GetImageUsage(info.Format, info.Target, gd.Capabilities, isMsImageStorageSupported);
             UsageFlags = usage;
 
             ImageCreateFlags flags = ImageCreateFlags.CreateMutableFormatBit | ImageCreateFlags.CreateExtendedUsageBit;
@@ -310,20 +310,20 @@ namespace Ryujinx.Graphics.Vulkan
             }
         }
 
-        public static ImageUsageFlags GetImageUsage(Format format, in HardwareCapabilities capabilities, bool isMsImageStorageSupported)
+        public static ImageUsageFlags GetImageUsage(Format format, Target target, in HardwareCapabilities capabilities, bool isMsImageStorageSupported)
         {
             ImageUsageFlags usage = DefaultUsageFlags;
 
-            if (format.IsDepthOrStencil)
+            if (format.IsDepthOrStencil())
             {
                 usage |= ImageUsageFlags.DepthStencilAttachmentBit;
             }
-            else if (format.IsRtColorCompatible)
+            else if (format.IsRtColorCompatible())
             {
                 usage |= ImageUsageFlags.ColorAttachmentBit;
             }
 
-            if (format.IsImageCompatible && isMsImageStorageSupported)
+            if (format.IsImageCompatible() && (isMsImageStorageSupported || !target.IsMultisample))
             {
                 usage |= ImageUsageFlags.StorageBit;
             }
@@ -339,7 +339,7 @@ namespace Ryujinx.Graphics.Vulkan
 
         public static SampleCountFlags ConvertToSampleCountFlags(SampleCountFlags supportedSampleCounts, uint samples)
         {
-            if (samples is 0 or > ((uint)SampleCountFlags.Count64Bit))
+            if (samples is 0 or > (uint)SampleCountFlags.Count64Bit)
             {
                 return SampleCountFlags.Count1Bit;
             }

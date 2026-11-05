@@ -105,7 +105,6 @@ namespace Ryujinx.Graphics.Vulkan.Queries
                 bool isOcclusion = _type == CounterType.SamplesPassed;
                 _pipeline.BeginQuery(this, _queryPool, needsReset, isOcclusion, isOcclusion && resetSequence != null);
             }
-
             _resetSequence = null;
         }
 
@@ -212,7 +211,6 @@ namespace Ryujinx.Graphics.Vulkan.Queries
             {
                 _api.DestroyQueryPool(_device, _queryPool, null);
             }
-
             _queryPool = default;
         }
     }

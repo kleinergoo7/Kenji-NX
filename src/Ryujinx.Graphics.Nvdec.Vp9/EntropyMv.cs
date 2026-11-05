@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Nvdec.Vp9.Types;
 using Ryujinx.Graphics.Video;
 using System.Diagnostics;
@@ -11,6 +11,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
         /* Symbols for coding which components are zero jointly */
         public const int Joints = 4;
+
 
         public static readonly sbyte[] JointTree =
         [
@@ -40,7 +41,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             return type is MvJointType.Hnzvz or MvJointType.Hnzvnz;
         }
 
-        private static readonly byte[] _logInBase2 =
+        private static readonly byte[] LogInBase2 =
         [
             0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5,
             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6,
@@ -83,7 +84,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
         {
             MvClassType c = z >= Class0Size * 4096
                 ? MvClassType.Class10
-                : (MvClassType)_logInBase2[z >> 3];
+                : (MvClassType)LogInBase2[z >> 3];
             if (!offset.IsNull)
             {
                 offset.Value = z - ClassBase(c);
@@ -94,18 +95,18 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
         private static void IncComponent(int v, ref Vp9BackwardUpdates compCounts, int compIndex, int incr, int usehp)
         {
-            int o = 0;
+            int s, z, c, o = 0, d, e, f;
             Debug.Assert(v != 0); /* should not be zero */
-            int s = v < 0 ? 1 : 0;
+            s = v < 0 ? 1 : 0;
             compCounts.Sign[compIndex][s] += (uint)incr;
-            int z = (s != 0 ? -v : v) - 1 /* magnitude - 1 */;
+            z = (s != 0 ? -v : v) - 1; /* magnitude - 1 */
 
-            int c = (int)GetClass(z, new Ptr<int>(ref o));
+            c = (int)GetClass(z, new Ptr<int>(ref o));
             compCounts.Classes[compIndex][c] += (uint)incr;
 
-            int d = o >> 3 /* int mv data */;
-            int f = (o >> 1) & 3 /* fractional pel mv data */;
-            int e = o & 1 /* high precision mv data */;
+            d = o >> 3; /* int mv data */
+            f = (o >> 1) & 3; /* fractional pel mv data */
+            e = o & 1; /* high precision mv data */
 
             if (c == (int)MvClassType.Class0)
             {

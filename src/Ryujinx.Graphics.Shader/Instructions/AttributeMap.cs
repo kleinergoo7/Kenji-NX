@@ -1,7 +1,6 @@
 using Ryujinx.Graphics.Shader.IntermediateRepresentation;
 using Ryujinx.Graphics.Shader.Translation;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using static Ryujinx.Graphics.Shader.IntermediateRepresentation.OperandHelper;
 
 namespace Ryujinx.Graphics.Shader.Instructions
@@ -47,8 +46,8 @@ namespace Ryujinx.Graphics.Shader.Instructions
             }
         }
 
-        private static readonly ReadOnlyDictionary<int, AttributeEntry> _attributes;
-        private static readonly ReadOnlyDictionary<int, AttributeEntry> _attributesPerPatch;
+        private static readonly IReadOnlyDictionary<int, AttributeEntry> _attributes;
+        private static readonly IReadOnlyDictionary<int, AttributeEntry> _attributesPerPatch;
 
         static AttributeMap()
         {
@@ -56,7 +55,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
             _attributesPerPatch = CreatePerPatchMap();
         }
 
-        private static ReadOnlyDictionary<int, AttributeEntry> CreateMap()
+        private static IReadOnlyDictionary<int, AttributeEntry> CreateMap()
         {
             Dictionary<int, AttributeEntry> map = new();
 
@@ -80,10 +79,10 @@ namespace Ryujinx.Graphics.Shader.Instructions
             Add(map, 0x3a0, AggregateType.Array | AggregateType.S32, IoVariable.ViewportMask, StagesMask.Fragment, StagesMask.VertexTessellationGeometry);
             Add(map, 0x3fc, AggregateType.Bool, IoVariable.FrontFacing, StagesMask.Fragment, StagesMask.None);
 
-            return map.AsReadOnly();
+            return map;
         }
 
-        private static ReadOnlyDictionary<int, AttributeEntry> CreatePerPatchMap()
+        private static IReadOnlyDictionary<int, AttributeEntry> CreatePerPatchMap()
         {
             Dictionary<int, AttributeEntry> map = new();
 
@@ -91,7 +90,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
             Add(map, 0x010, AggregateType.Vector2 | AggregateType.FP32, IoVariable.TessellationLevelInner, StagesMask.TessellationEvaluation, StagesMask.TessellationControl);
             Add(map, 0x018, AggregateType.Vector4 | AggregateType.FP32, IoVariable.UserDefined, StagesMask.TessellationEvaluation, StagesMask.TessellationControl, 31, 0x200);
 
-            return map.AsReadOnly();
+            return map;
         }
 
         private static void Add(
@@ -276,12 +275,8 @@ namespace Ryujinx.Graphics.Shader.Instructions
         {
             location = 0;
 
-            if (!_attributes.TryGetValue(offset, out AttributeEntry entry))
-            {
-                return IoVariable.Invalid;
-            }
-
-            if (((StagesMask)(1 << (int)definitions.Stage) & entry.OutputMask) == StagesMask.None)
+            if (!_attributes.TryGetValue(offset, out AttributeEntry entry) ||
+                ((StagesMask)(1 << (int)definitions.Stage) & entry.OutputMask) == StagesMask.None)
             {
                 return IoVariable.Invalid;
             }
@@ -327,9 +322,9 @@ namespace Ryujinx.Graphics.Shader.Instructions
                 return false;
             }
 
-            return stage is ShaderStage.TessellationControl or
-                   ShaderStage.TessellationEvaluation or
-                   ShaderStage.Geometry;
+            return stage is ShaderStage.TessellationControl
+                or ShaderStage.TessellationEvaluation
+                or ShaderStage.Geometry;
         }
 
         public static bool HasInvocationId(ShaderStage stage, bool isOutput)

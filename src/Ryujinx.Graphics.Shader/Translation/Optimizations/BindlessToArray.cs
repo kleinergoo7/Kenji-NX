@@ -158,7 +158,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                     }
                 }
 
-                if (handleAsgOp.Inst != Instruction.Load ||
+                if (handleAsgOp is not { Inst: Instruction.Load } ||
                     handleAsgOp.StorageKind != StorageKind.ConstantBuffer ||
                     handleAsgOp.SourcesCount != 4)
                 {

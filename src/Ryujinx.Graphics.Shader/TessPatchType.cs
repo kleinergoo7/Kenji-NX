@@ -9,9 +9,9 @@ namespace Ryujinx.Graphics.Shader
 
     static class TessPatchTypeExtensions
     {
-        extension(TessPatchType patchType)
+        public static string ToGlsl(this TessPatchType type)
         {
-            public string Glsl => patchType switch
+            return type switch
             {
                 TessPatchType.Isolines => "isolines",
                 TessPatchType.Quads => "quads",

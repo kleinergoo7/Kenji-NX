@@ -59,7 +59,7 @@ namespace Ryujinx.Graphics.OpenGL
             nint message,
             nint userParam)
         {
-            string msg = Marshal.PtrToStringUTF8(message).Replace('\n', ' ');
+            string msg = Marshal.PtrToStringUTF8(message)?.Replace('\n', ' ');
 
             switch (type)
             {
@@ -84,7 +84,6 @@ namespace Ryujinx.Graphics.OpenGL
                     {
                         Logger.Debug?.Print(LogClass.Gpu, $"{type} {severity}: {msg}", "GLDEBUG");
                     }
-
                     break;
             }
         }

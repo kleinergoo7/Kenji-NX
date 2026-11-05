@@ -127,10 +127,25 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
 
         /// <summary>
         /// Writes (or Releases) a GPU semaphore value to guest memory.
+        /// v1.1 (Switch 2 enablement): Ampere releases are sixteen bytes
+        /// (payload + timestamp), legacy releases are four bytes.
         /// </summary>
         private void ReleaseSemaphore()
         {
-            _channel.MemoryManager.Write(_state.State.SemaphoreAddress.Pack(), _state.State.SemaphorePayload);
+            if (_channel.UsesAmpereShaders)
+            {
+                CounterData counterData = new()
+                {
+                    Counter = (ulong)_state.State.SemaphorePayload,
+                    Timestamp = _context.GetTimestamp(),
+                };
+
+                _channel.MemoryManager.Write(_state.State.SemaphoreAddress.Pack(), counterData);
+            }
+            else
+            {
+                _channel.MemoryManager.Write(_state.State.SemaphoreAddress.Pack(), _state.State.SemaphorePayload);
+            }
 
             _context.AdvanceSequence();
         }

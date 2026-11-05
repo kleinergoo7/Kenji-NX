@@ -74,7 +74,7 @@ namespace Ryujinx.Graphics.Vulkan.Effects
             int dispatchX = BitUtils.DivRoundUp(view.Width, IPostProcessingEffect.LocalGroupSize);
             int dispatchY = BitUtils.DivRoundUp(view.Height, IPostProcessingEffect.LocalGroupSize);
 
-            _pipeline.SetImage(ShaderStage.Compute, 0, _texture.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
+            _pipeline.SetImage(ShaderStage.Compute, 0, _texture?.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
             _pipeline.DispatchCompute(dispatchX, dispatchY, 1);
 
             _pipeline.ComputeBarrier();

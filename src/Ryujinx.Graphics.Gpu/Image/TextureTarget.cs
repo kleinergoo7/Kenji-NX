@@ -46,7 +46,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                     case TextureTarget.Texture1D:
                         return Target.Texture1D;
                     case TextureTarget.Texture2D:
-                        return Target.Texture2D;
                     case TextureTarget.Texture2DRect:
                         return Target.Texture2D;
                     case TextureTarget.Texture3D:

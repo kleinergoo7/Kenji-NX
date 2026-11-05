@@ -96,7 +96,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             {
                 ref TableEntry entry = ref _table[i];
 
-                Hash128 hash = Hash128.ComputeHash(mc[..entry.Length]);
+                Hash128 hash = XXHash128.ComputeHash(mc[..entry.Length]);
                 if (hash == entry.Hash)
                 {
                     if (IsMacroHLESupported(caps, entry.Name))

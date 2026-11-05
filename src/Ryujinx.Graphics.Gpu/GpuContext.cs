@@ -1,8 +1,8 @@
 using Ryujinx.Common;
-using Ryujinx.Common.Configuration;
 using Ryujinx.Graphics.Device;
 using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Gpu.Engine.GPFifo;
+using Ryujinx.Graphics.Gpu.Image;
 using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.Graphics.Gpu.Shader;
 using Ryujinx.Graphics.Gpu.Synchronization;
@@ -45,6 +45,8 @@ namespace Ryujinx.Graphics.Gpu
         /// Presentation window.
         /// </summary>
         public Window Window { get; }
+
+        public DiskTextureStorage DiskTextureStorage { get; }
 
         /// <summary>
         /// Internal sequence number, used to avoid needless resource data updates
@@ -93,23 +95,16 @@ namespace Ryujinx.Graphics.Gpu
         internal SupportBufferUpdater SupportBufferUpdater { get; }
 
         /// <summary>
-        /// Enabled dirty hacks.
-        /// Used for workarounds to emulator bugs we can't fix/don't know how to fix yet.
-        /// </summary>
-        internal DirtyHacks DirtyHacks { get; }
-
-
-        /// <summary>
         /// Host hardware capabilities.
         /// </summary>
         internal Capabilities Capabilities;
 
         /// <summary>
-        /// True when the guest driver is a Switch 2 (Ampere/NVN2) driver.
-        /// Such streams bind Ampere classes and run the Turing+ MME macro ISA.
-        /// Set by the nvdrv layer once it sees an Ampere GPU device.
+        /// Whether any bound engine class ID is a T239 (Ampere) stepping.
+        /// v1.1 (Switch 2 enablement): latched when a channel binds engine class
+        /// 51095 (0xC797), 51136 (0xC7C0) or 51125 (0xC7B5).
         /// </summary>
-        public bool IsNx2Ampere { get; set; }
+        public bool IsAmpere { get; internal set; }
 
         /// <summary>
         /// Event for signalling shader cache loading progress.
@@ -128,7 +123,7 @@ namespace Ryujinx.Graphics.Gpu
         /// Creates a new instance of the GPU emulation context.
         /// </summary>
         /// <param name="renderer">Host renderer</param>
-        public GpuContext(IRenderer renderer, DirtyHacks hacks)
+        public GpuContext(IRenderer renderer)
         {
             Renderer = renderer;
 
@@ -137,6 +132,8 @@ namespace Ryujinx.Graphics.Gpu
             Synchronization = new SynchronizationManager();
 
             Window = new Window(this);
+
+            DiskTextureStorage = new DiskTextureStorage();
 
             HostInitalized = new ManualResetEvent(false);
             _gpuReadyEvent = new ManualResetEvent(false);
@@ -150,8 +147,6 @@ namespace Ryujinx.Graphics.Gpu
             PhysicalMemoryRegistry = new ConcurrentDictionary<ulong, PhysicalMemory>();
 
             SupportBufferUpdater = new SupportBufferUpdater(renderer);
-
-            DirtyHacks = hacks;
 
             _firstTimestamp = ConvertNanosecondsToTicks((ulong)PerformanceCounter.ElapsedNanoseconds);
         }
@@ -179,10 +174,7 @@ namespace Ryujinx.Graphics.Gpu
                 throw new ArgumentException("The PID is invalid or the process was not registered", nameof(pid));
             }
 
-            return new MemoryManager(physicalMemory, cpuMemorySize)
-            {
-                Nx2IdentityMapping = IsNx2Ampere,
-            };
+            return new MemoryManager(physicalMemory, cpuMemorySize);
         }
 
         /// <summary>
@@ -303,6 +295,8 @@ namespace Ryujinx.Graphics.Gpu
             {
                 physicalMemory.ShaderCache.Initialize(cancellationToken);
             }
+
+            DiskTextureStorage.Initialize();
 
             _gpuReadyEvent.Set();
         }
@@ -438,7 +432,7 @@ namespace Ryujinx.Graphics.Gpu
                         SyncActions.RemoveAt(i--);
                     }
                 }
-
+                
                 for (int i = 0; i < SyncpointActions.Count; i++)
                 {
                     if (SyncpointActions[i].SyncAction(syncPoint))

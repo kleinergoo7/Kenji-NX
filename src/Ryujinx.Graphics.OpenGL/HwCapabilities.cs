@@ -73,7 +73,7 @@ namespace Ryujinx.Graphics.OpenGL
         public static bool SupportsTextureShadowLod => _supportsTextureShadowLod.Value;
         public static bool SupportsViewportSwizzle => _supportsViewportSwizzle.Value;
 
-        public static bool SupportsMismatchingViewFormat => _gpuVendor.Value is not GpuVendor.AmdWindows and not GpuVendor.IntelWindows;
+        public static bool SupportsMismatchingViewFormat => _gpuVendor.Value != GpuVendor.AmdWindows && _gpuVendor.Value != GpuVendor.IntelWindows;
         public static bool SupportsNonConstantTextureOffset => _gpuVendor.Value == GpuVendor.Nvidia;
         public static bool RequiresSyncFlush => _gpuVendor.Value == GpuVendor.AmdWindows || IsIntel;
 

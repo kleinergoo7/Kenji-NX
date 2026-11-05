@@ -34,7 +34,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
                 operation.Dest = null;
 
-                LinkedListNode<INode> newNode = node.List.AddBefore(node, new Operation(Instruction.Call, 0, floatValue, callArgs));
+                LinkedListNode<INode> newNode = node.List?.AddBefore(node, new Operation(Instruction.Call, 0, floatValue, callArgs));
 
                 Utils.DeleteNode(node, operation);
 
@@ -53,7 +53,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
                 Operand[] callArgs = [Const(functionId), operation.GetSource(0), resultLow, resultHigh];
 
-                LinkedListNode<INode> newNode = node.List.AddBefore(node, new Operation(Instruction.Call, 0, (Operand)null, callArgs));
+                LinkedListNode<INode> newNode = node.List?.AddBefore(node, new Operation(Instruction.Call, 0, (Operand)null, callArgs));
 
                 Utils.DeleteNode(node, operation);
 

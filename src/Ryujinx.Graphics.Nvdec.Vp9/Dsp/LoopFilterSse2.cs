@@ -1,4 +1,4 @@
-using Ryujinx.Common.Memory;
+﻿using Ryujinx.Common.Memory;
 using System;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -133,7 +133,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
 
             Vector128<byte> ff = Sse2.CompareEqual(zero, zero);
-            Vector128<byte> q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0;
+            Vector128<byte> q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0, ps1Ps0, qs1Qs0;
+            Vector128<byte> mask, hev;
 
             p3P2 = Sse2.UnpackLow(Sse2.LoadScalarVector128((long*)(s.ToPointer() - (3 * pitch))),
                 Sse2.LoadScalarVector128((long*)(s.ToPointer() - (4 * pitch)))).AsByte();
@@ -148,8 +149,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             q1Q0 = Sse2.UnpackHigh(q0P0.AsInt64(), q1P1.AsInt64()).AsByte();
             q2Q1 = Sse2.UnpackLow(Sse2.ShiftRightLogical128BitLane(q1P1, 8).AsInt64(), q3Q2.AsInt64()).AsByte();
 
-            FilterHevMask(q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0, limitV, threshV, out Vector128<byte> hev, out Vector128<byte> mask);
-            Filter4(p1P0, q1Q0, hev, mask, ff, out Vector128<byte> ps1Ps0, out Vector128<byte> qs1Qs0);
+            FilterHevMask(q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0, limitV, threshV, out hev, out mask);
+            Filter4(p1P0, q1Q0, hev, mask, ff, out ps1Ps0, out qs1Qs0);
 
             Sse.StoreHigh((float*)(s.ToPointer() - (2 * pitch)), ps1Ps0.AsSingle()); // *op1
             Sse2.StoreScalar((long*)(s.ToPointer() - (1 * pitch)), ps1Ps0.AsInt64()); // *op0
@@ -177,7 +178,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
 
             Vector128<byte> ff = Sse2.CompareEqual(zero, zero);
             Vector128<byte> x0, x1, x2, x3;
-            Vector128<byte> q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0;
+            Vector128<byte> q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0, ps1Ps0, qs1Qs0;
+            Vector128<byte> mask, hev;
 
             // 00 10 01 11 02 12 03 13 04 14 05 15 06 16 07 17
             q1Q0 = Sse2.UnpackLow(
@@ -228,8 +230,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             p2P1 = Sse2.UnpackLow(q1P1.AsInt64(), p3P2.AsInt64()).AsByte();
             q2Q1 = Sse2.UnpackLow(Sse2.ShiftRightLogical128BitLane(q1P1, 8).AsInt64(), q3Q2.AsInt64()).AsByte();
 
-            FilterHevMask(q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0, limitV, threshV, out Vector128<byte> hev, out Vector128<byte> mask);
-            Filter4(p1P0, q1Q0, hev, mask, ff, out Vector128<byte> ps1Ps0, out Vector128<byte> qs1Qs0);
+            FilterHevMask(q1P1, q0P0, p3P2, p2P1, p1P0, q3Q2, q2Q1, q1Q0, limitV, threshV, out hev, out mask);
+            Filter4(p1P0, q1Q0, hev, mask, ff, out ps1Ps0, out qs1Qs0);
 
             // Transpose 8x4 to 4x8
             // qs1qs0: 20 21 22 23 24 25 26 27  30 31 32 33 34 34 36 37
@@ -1260,7 +1262,6 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 flat = Sse2.CompareEqual(flat, zero);
                 flat = Sse2.And(flat, mask);
             }
-
             {
                 Vector128<short> four = Vector128.Create((short)4);
                 ArrayPtr<byte> src = s;
@@ -1552,7 +1553,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        private static unsafe void Transpose8X16(
+        private static unsafe void Transpose8x16(
             ArrayPtr<byte> in0,
             ArrayPtr<byte> in1,
             int inP,
@@ -1632,15 +1633,15 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             int inP,
             ReadOnlySpan<ArrayPtr<byte>> dst,
             int outP,
-            int num8X8ToTranspose)
+            int num8x8ToTranspose)
         {
-            int idx8X8 = 0;
+            int idx8x8 = 0;
             Vector128<byte> x0, x1, x2, x3, x4, x5, x6, x7;
 
             do
             {
-                ArrayPtr<byte> input = src[idx8X8];
-                ArrayPtr<byte> output = dst[idx8X8];
+                ArrayPtr<byte> input = src[idx8x8];
+                ArrayPtr<byte> output = dst[idx8x8];
 
                 x0 = Sse2.LoadScalarVector128((long*)(input.ToPointer() + (0 * inP)))
                     .AsByte(); // 00 01 02 03 04 05 06 07
@@ -1696,7 +1697,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
 
                 Sse2.StoreScalar((long*)(output.ToPointer() + (6 * outP)), x7.AsInt64()); // 06 16 26 36 46 56 66 76
                 Sse2.StoreHigh((double*)(output.ToPointer() + (7 * outP)), x7.AsDouble()); // 07 17 27 37 47 57 67 77
-            } while (++idx8X8 < num8X8ToTranspose);
+            } while (++idx8x8 < num8x8ToTranspose);
         }
 
         public static unsafe void LpfVertical4Dual(
@@ -1715,7 +1716,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             Span<ArrayPtr<byte>> dst = stackalloc ArrayPtr<byte>[2];
 
             // Transpose 8x16
-            Transpose8X16(s.Slice(-4), s.Slice(-4 + (pitch * 8)), pitch, tDst, 16);
+            Transpose8x16(s.Slice(-4), s.Slice(-4 + (pitch * 8)), pitch, tDst, 16);
 
             // Loop filtering
             LpfHorizontal4Dual(tDst.Slice(4 * 16), 16, blimit0, limit0, thresh0, blimit1, limit1, thresh1);
@@ -1769,7 +1770,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             Span<ArrayPtr<byte>> dst = stackalloc ArrayPtr<byte>[2];
 
             // Transpose 8x16
-            Transpose8X16(s.Slice(-4), s.Slice(-4 + (pitch * 8)), pitch, tDst, 16);
+            Transpose8x16(s.Slice(-4), s.Slice(-4 + (pitch * 8)), pitch, tDst, 16);
 
             // Loop filtering
             LpfHorizontal8Dual(tDst.Slice(4 * 16), 16, blimit0, limit0, thresh0, blimit1, limit1, thresh1);
@@ -1822,15 +1823,15 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             ArrayPtr<byte> tDst = new((byte*)tDstStorage, 256);
 
             // Transpose 16x16
-            Transpose8X16(s.Slice(-8), s.Slice(-8 + (8 * pitch)), pitch, tDst, 16);
-            Transpose8X16(s, s.Slice(8 * pitch), pitch, tDst.Slice(8 * 16), 16);
+            Transpose8x16(s.Slice(-8), s.Slice(-8 + (8 * pitch)), pitch, tDst, 16);
+            Transpose8x16(s, s.Slice(8 * pitch), pitch, tDst.Slice(8 * 16), 16);
 
             // Loop filtering
             LpfHorizontal16Dual(tDst.Slice(8 * 16), 16, blimit, limit, thresh);
 
             // Transpose back
-            Transpose8X16(tDst, tDst.Slice(8 * 16), 16, s.Slice(-8), pitch);
-            Transpose8X16(tDst.Slice(8), tDst.Slice(8 + (8 * 16)), 16, s.Slice(-8 + (8 * pitch)), pitch);
+            Transpose8x16(tDst, tDst.Slice(8 * 16), 16, s.Slice(-8), pitch);
+            Transpose8x16(tDst.Slice(8), tDst.Slice(8 + (8 * 16)), 16, s.Slice(-8 + (8 * pitch)), pitch);
         }
     }
 }

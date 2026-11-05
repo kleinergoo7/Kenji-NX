@@ -9,9 +9,9 @@ namespace Ryujinx.Graphics.Shader
 
     static class TessSpacingExtensions
     {
-        extension(TessSpacing spacing)
+        public static string ToGlsl(this TessSpacing spacing)
         {
-            public string Glsl => spacing switch
+            return spacing switch
             {
                 TessSpacing.FractionalEventSpacing => "fractional_even_spacing",
                 TessSpacing.FractionalOddSpacing => "fractional_odd_spacing",

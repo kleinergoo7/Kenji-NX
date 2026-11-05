@@ -44,10 +44,10 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             9, 9, 9, 9, 9, 9, 9, 9, 9, 10
         ];
 
-        public readonly bool UseHp()
+        public bool UseHp()
         {
-            const int KMvRefThresh = 64; // Threshold for use of high-precision 1/8 mv
-            return Math.Abs(Row) < KMvRefThresh && Math.Abs(Col) < KMvRefThresh;
+            const int kMvRefThresh = 64; // Threshold for use of high-precision 1/8 mv
+            return Math.Abs(Row) < kMvRefThresh && Math.Abs(Col) < kMvRefThresh;
         }
 
         public static bool JointVertical(MvJointType type)
@@ -100,7 +100,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             else
             {
                 Span<Array2<uint>> bitsSpan = counts.Bits[comp].AsSpan();
-
+                
                 int b = c + Constants.Class0Bits - 1; // Number of bits
                 for (int i = 0; i < b; ++i)
                 {
@@ -112,7 +112,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             }
         }
 
-        public readonly MvJointType GetJoint()
+        public MvJointType GetJoint()
         {
             if (Row == 0)
             {
@@ -122,7 +122,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             return Col == 0 ? MvJointType.Hzvnz : MvJointType.Hnzvnz;
         }
 
-        internal readonly void Inc(Ptr<Vp9BackwardUpdates> counts)
+        internal void Inc(Ptr<Vp9BackwardUpdates> counts)
         {
             if (!counts.IsNull)
             {
@@ -175,7 +175,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             }
         }
 
-        public readonly bool IsValid()
+        public bool IsValid()
         {
             return Row is > Constants.MvLow and < Constants.MvUpp &&
                    Col is > Constants.MvLow and < Constants.MvUpp;

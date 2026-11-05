@@ -103,6 +103,12 @@ namespace Ryujinx.Graphics.Gpu.Shader
         public bool YNegateEnabled;
 
         /// <summary>
+        /// Indicates that Ampere shaders are used (T239).
+        /// v1.1 (Switch 2 enablement): appended at the end to keep disk shader cache compatibility.
+        /// </summary>
+        public bool UsesAmpereShaders;
+
+        /// <summary>
         /// Creates a new graphics state from this state that can be used for shader generation.
         /// </summary>
         /// <param name="hostSupportsAlphaTest">Indicates if the host API supports alpha test operations</param>

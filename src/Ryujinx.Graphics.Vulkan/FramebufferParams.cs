@@ -1,8 +1,6 @@
 using Ryujinx.Graphics.GAL;
 using Silk.NET.Vulkan;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using Format = Ryujinx.Graphics.GAL.Format;
 using VkFormat = Silk.NET.Vulkan.Format;
 
@@ -34,11 +32,34 @@ namespace Ryujinx.Graphics.Vulkan
         public bool HasDepthStencil { get; private set; }
         public int ColorAttachmentsCount => AttachmentsCount - (HasDepthStencil ? 1 : 0);
 
+        public bool SetVirtualSize(uint width, uint height, uint layers)
+        {
+            if (AttachmentsCount != 0)
+            {
+                return false;
+            }
+
+            width = Math.Max(1u, width);
+            height = Math.Max(1u, height);
+            layers = Math.Max(1u, layers);
+
+            if (Width == width && Height == height && Layers == layers)
+            {
+                return false;
+            }
+
+            Width = width;
+            Height = height;
+            Layers = layers;
+
+            return true;
+        }
+
         public FramebufferParams(Device device, TextureView view, uint width, uint height)
         {
             Format format = view.Info.Format;
 
-            bool isDepthStencil = format.IsDepthOrStencil;
+            bool isDepthStencil = format.IsDepthOrStencil();
 
             _device = device;
             _attachments = [view.GetImageViewForAttachment()];
@@ -62,8 +83,8 @@ namespace Ryujinx.Graphics.Vulkan
             AttachmentSamples = [(uint)view.Info.Samples];
             AttachmentFormats = [view.VkFormat];
             AttachmentIndices = isDepthStencil ? [] : [0];
-            AttachmentIntegerFormatMask = format.IsInt ? 1u : 0u;
-            LogicOpsAllowed = !format.IsFloatOrSrgb;
+            AttachmentIntegerFormatMask = format.IsInteger() ? 1u : 0u;
+            LogicOpsAllowed = !format.IsFloatOrSrgb();
 
             AttachmentsCount = 1;
             _totalCount = 1;
@@ -127,12 +148,12 @@ namespace Ryujinx.Graphics.Vulkan
 
                     Format format = texture.Info.Format;
 
-                    if (format.IsInt)
+                    if (format.IsInteger())
                     {
                         attachmentIntegerFormatMask |= 1u << bindIndex;
                     }
 
-                    allFormatsFloatOrSrgb &= format.IsFloatOrSrgb;
+                    allFormatsFloatOrSrgb &= format.IsFloatOrSrgb();
 
                     width = Math.Min(width, (uint)texture.Width);
                     height = Math.Min(height, (uint)texture.Height);
@@ -178,11 +199,11 @@ namespace Ryujinx.Graphics.Vulkan
             AttachmentsCount = count;
             _totalCount = colors.Length;
         }
-
+        
         public FramebufferParams Update(ReadOnlySpan<ITexture> colors, ITexture depthStencil)
         {
             int colorsCount = 0;
-
+            
             foreach (ITexture color in colors)
             {
                 if (IsValidTextureView(color))
@@ -192,7 +213,7 @@ namespace Ryujinx.Graphics.Vulkan
             }
 
             int count = colorsCount + (IsValidTextureView(depthStencil) ? 1 : 0);
-
+            
             Array.Clear(_attachments);
             Array.Clear(_colors);
 
@@ -225,7 +246,7 @@ namespace Ryujinx.Graphics.Vulkan
             Array.Clear(AttachmentSamples);
             Array.Clear(AttachmentFormats);
             Array.Clear(AttachmentIndices);
-
+            
             if (AttachmentSamples.Length < count)
             {
                 uint[] attachmentSamples = AttachmentSamples;
@@ -244,7 +265,7 @@ namespace Ryujinx.Graphics.Vulkan
                 Array.Resize(ref attachmentIndices, colorsCount);
                 AttachmentIndices = attachmentIndices;
             }
-
+            
             uint width = uint.MaxValue;
             uint height = uint.MaxValue;
             uint layers = uint.MaxValue;
@@ -272,12 +293,12 @@ namespace Ryujinx.Graphics.Vulkan
 
                     Format format = texture.Info.Format;
 
-                    if (format.IsInt)
+                    if (format.IsInteger())
                     {
                         attachmentIntegerFormatMask |= 1u << bindIndex;
                     }
 
-                    allFormatsFloatOrSrgb &= format.IsFloatOrSrgb;
+                    allFormatsFloatOrSrgb &= format.IsFloatOrSrgb();
 
                     width = Math.Min(width, (uint)texture.Width);
                     height = Math.Min(height, (uint)texture.Height);
@@ -352,12 +373,12 @@ namespace Ryujinx.Graphics.Vulkan
             {
                 Format format = _colors[index].Info.Format;
 
-                if (format.IsSignedInt)
+                if (format.IsSint())
                 {
                     return ComponentType.SignedInteger;
                 }
 
-                if (format.IsUnsignedInt)
+                if (format.IsUint())
                 {
                     return ComponentType.UnsignedInteger;
                 }
@@ -443,7 +464,7 @@ namespace Ryujinx.Graphics.Vulkan
             if (_colors != null)
             {
                 int count = ColorAttachmentsCount;
-
+                
                 for (int i = 0; i < count; i++)
                 {
                     TextureView color = _colors[i];
@@ -462,7 +483,7 @@ namespace Ryujinx.Graphics.Vulkan
             if (_colors != null)
             {
                 int count = ColorAttachmentsCount;
-
+                
                 for (int i = 0; i < count; i++)
                 {
                     TextureView color = _colors[i];

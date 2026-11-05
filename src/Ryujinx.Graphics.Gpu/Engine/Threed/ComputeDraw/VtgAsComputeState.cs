@@ -175,8 +175,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed.ComputeDraw
                 int vbStride = vertexBuffer.UnpackStride();
                 ulong vbSize = GetVertexBufferSize(address, endAddress.Pack(), vbStride, _indexed, instanced, _firstVertex, _count);
 
+                ulong oldVbSize = vbSize;
+
                 ulong attributeOffset = (ulong)vertexAttrib.UnpackOffset();
-                int componentSize = format.ScalarSize;
+                int componentSize = format.GetScalarSize();
 
                 address += attributeOffset;
 

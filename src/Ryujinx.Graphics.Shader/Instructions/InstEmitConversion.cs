@@ -242,15 +242,9 @@ namespace Ryujinx.Graphics.Shader.Instructions
             bool negate)
         {
             bool isSignedInt =
-                srcType is ISrcFmt.S8 or
-                ISrcFmt.S16 or
-                ISrcFmt.S32 or
-                ISrcFmt.S64;
+                srcType is ISrcFmt.S8 or ISrcFmt.S16 or ISrcFmt.S32 or ISrcFmt.S64;
             bool isSmallInt =
-                srcType is ISrcFmt.U16 or
-                ISrcFmt.S16 or
-                ISrcFmt.U8 or
-                ISrcFmt.S8;
+                srcType is ISrcFmt.U16 or ISrcFmt.S16 or ISrcFmt.U8 or ISrcFmt.S8;
 
             // TODO: Handle S/U64.
 
@@ -302,18 +296,11 @@ namespace Ryujinx.Graphics.Shader.Instructions
             }
 
             bool srcIsSignedInt =
-                srcType is ISrcDstFmt.S8 or
-                ISrcDstFmt.S16 or
-                ISrcDstFmt.S32;
+                srcType is ISrcDstFmt.S8 or ISrcDstFmt.S16 or ISrcDstFmt.S32;
             bool dstIsSignedInt =
-                dstType is ISrcDstFmt.S8 or
-                ISrcDstFmt.S16 or
-                ISrcDstFmt.S32;
+                dstType is ISrcDstFmt.S8 or ISrcDstFmt.S16 or ISrcDstFmt.S32;
             bool srcIsSmallInt =
-                srcType is ISrcDstFmt.U16 or
-                ISrcDstFmt.S16 or
-                ISrcDstFmt.U8 or
-                ISrcDstFmt.S8;
+                srcType is ISrcDstFmt.U16 or ISrcDstFmt.S16 or ISrcDstFmt.U8 or ISrcDstFmt.S8;
 
             if (srcIsSmallInt)
             {

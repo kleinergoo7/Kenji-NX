@@ -1,5 +1,6 @@
 using Ryujinx.Graphics.GAL;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Ryujinx.Graphics.Gpu.Image
 {
@@ -9,6 +10,7 @@ namespace Ryujinx.Graphics.Gpu.Image
     static class FormatTable
     {
 #pragma warning disable IDE0055 // Disable formatting
+        [SuppressMessage("Design", "CA1069: Enums values should not be duplicated")]
         private enum TextureFormat : uint
         {
             // Formats
@@ -247,6 +249,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             A5B5G5R1Unorm                    = A5B5G5R1          | RUnorm | GUnorm | BUnorm | AUnorm,        // 0x24913
         }
 
+        [SuppressMessage("Design", "CA1069: Enums values should not be duplicated")]
         private enum VertexAttributeFormat : uint
         {
             // Width
@@ -358,7 +361,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             A2B10G10R10Sint     = (A2B10G10R10 << 21)  | (Sint << 27),    // 0x1e000000
             A2B10G10R10Uscaled  = (A2B10G10R10 << 21)  | (Uscaled << 27), // 0x2e000000
             A2B10G10R10Sscaled  = (A2B10G10R10 << 21)  | (Sscaled << 27), // 0x36000000
-            A8B8G8R8Uint        = (A8B8G8R8 << 21)     | (Uint << 27),    // 0x25E00040
+            A8B8G8R8Uint        = (A8B8G8R8 << 21)     | (Uint << 27),    // 0x25e00040
         }
 
         private static readonly Dictionary<TextureFormat, FormatInfo> _textureFormats = new()
@@ -662,7 +665,7 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             bool found = _textureFormats.TryGetValue((TextureFormat)encoded, out format);
 
-            if (found && isPacked && !format.Format.IsDepthOrStencil)
+            if (found && isPacked && !format.Format.IsDepthOrStencil())
             {
                 // If the packed flag is set, then the components of the pixel are tightly packed into the
                 // GPU registers on the shader.

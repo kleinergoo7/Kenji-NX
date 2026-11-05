@@ -553,6 +553,11 @@ namespace Ryujinx.Graphics.Gpu.Shader
                 return false;
             }
 
+            if (graphicsState.UsesAmpereShaders != GraphicsState.UsesAmpereShaders)
+            {
+                return false;
+            }
+
             bool thisA2cDitherEnable = GraphicsState.AlphaToCoverageEnable && GraphicsState.AlphaToCoverageDitherEnable;
             bool otherA2cDitherEnable = graphicsState.AlphaToCoverageEnable && graphicsState.AlphaToCoverageDitherEnable;
 
@@ -582,7 +587,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             {
                 Span<AttributeType> attributeTypesSpan = graphicsState.AttributeTypes.AsSpan();
                 Span<AttributeType> gAttributeTypesSpan = GraphicsState.AttributeTypes.AsSpan();
-
+                
                 for (int index = 0; index < attributeTypesSpan.Length; index++)
                 {
                     AttributeType lType = FilterAttributeType(channel, attributeTypesSpan[index]);
@@ -641,7 +646,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             type &= ~(AttributeType.Packed | AttributeType.PackedRgb10A2Signed);
 
             if (channel.Capabilities.SupportsScaledVertexFormats &&
-                (type == AttributeType.Sscaled || type == AttributeType.Uscaled))
+                type is AttributeType.Sscaled or AttributeType.Uscaled)
             {
                 type = AttributeType.Float;
             }
@@ -660,6 +665,11 @@ namespace Ryujinx.Graphics.Gpu.Shader
         public bool MatchesCompute(GpuChannel channel, ref GpuChannelPoolState poolState, GpuChannelComputeState computeState, bool checkTextures)
         {
             if (computeState.HasUnalignedStorageBuffer != ComputeState.HasUnalignedStorageBuffer)
+            {
+                return false;
+            }
+
+            if (computeState.UsesAmpereShaders != ComputeState.UsesAmpereShaders)
             {
                 return false;
             }
@@ -733,7 +743,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             int constantBufferUsePerStageMask = _constantBufferUsePerStage;
 
             Span<uint> constantBufferUseSpan = ConstantBufferUse.AsSpan();
-
+            
             while (constantBufferUsePerStageMask != 0)
             {
                 int index = BitOperations.TrailingZeroCount(constantBufferUsePerStageMask);
@@ -883,7 +893,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             int constantBufferUsePerStageMask = specState._constantBufferUsePerStage;
 
             Span<uint> constantBufferUseSpan = specState.ConstantBufferUse.AsSpan();
-
+            
             while (constantBufferUsePerStageMask != 0)
             {
                 int index = BitOperations.TrailingZeroCount(constantBufferUsePerStageMask);
@@ -986,7 +996,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             dataWriter.Write(ref _constantBufferUsePerStage);
 
             int constantBufferUsePerStageMask = _constantBufferUsePerStage;
-
+            
             Span<uint> constantBufferUseSpan = ConstantBufferUse.AsSpan();
 
             while (constantBufferUsePerStageMask != 0)
@@ -1002,8 +1012,11 @@ namespace Ryujinx.Graphics.Gpu.Shader
 
             if (hasPipelineState)
             {
-                ProgramPipelineState pipelineState = PipelineState.Value;
-                dataWriter.WriteWithMagicAndSize(ref pipelineState, PgpsMagic);
+                if (PipelineState != null)
+                {
+                    ProgramPipelineState pipelineState = PipelineState.Value;
+                    dataWriter.WriteWithMagicAndSize(ref pipelineState, PgpsMagic);
+                }
             }
 
             if ((_queriedState & QueriedStateFlags.TransformFeedback) == QueriedStateFlags.TransformFeedback)

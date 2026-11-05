@@ -9,7 +9,6 @@ using Ryujinx.Graphics.GAL.Multithreading.Resources.Programs;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace Ryujinx.Graphics.GAL.Multithreading
@@ -78,7 +77,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
         {
             _baseRenderer = renderer;
 
-            renderer.ScreenCaptured += (sender, info) => ScreenCaptured?.Invoke(this, info);
+            renderer.ScreenCaptured += (_, info) => ScreenCaptured?.Invoke(this, info);
             renderer.SetInterruptAction(Interrupt);
 
             Pipeline = new ThreadedPipeline(this);
@@ -126,7 +125,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
 
                 if (Volatile.Read(ref _interruptAction) != null)
                 {
-                    _interruptAction();
+                    _interruptAction?.Invoke();
                     _interruptRun.Set();
 
                     Interlocked.Exchange(ref _interruptAction, null);
@@ -195,14 +194,11 @@ namespace Ryujinx.Graphics.GAL.Multithreading
         {
             // The reference table is sized so that it will never overflow, so long as the references are taken after the command is allocated.
 
-            // make sure increment is thread safe
-            int index = Interlocked.Increment(ref _refProducerPtr) - 1;
-
-            index %= _refQueue.Length;
+            int index = _refProducerPtr;
 
             _refQueue[index] = obj;
 
-            _refProducerPtr %= _refQueue.Length;
+            _refProducerPtr = (_refProducerPtr + 1) % _refQueue.Length;
 
             return index;
         }
@@ -534,14 +530,9 @@ namespace Ryujinx.Graphics.GAL.Multithreading
             _running = false;
             _galWorkAvailable.Set();
 
-            if (_gpuThread is { IsAlive: true })
+            if (_gpuThread != null && _gpuThread.IsAlive)
             {
                 _gpuThread.Join();
-            }
-
-            if (_backendThread is { IsAlive: true })
-            {
-                _backendThread.Join();
             }
 
             // Dispose the renderer.

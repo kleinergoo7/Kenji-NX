@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -181,8 +181,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static bool? GetCaptureOptionBool(CaptureOption option)
         {
-            if (Api is null)
-                return false;
+            if (Api is null) return false;
 
             uint returnVal = GetCaptureOptionU32(option);
             if (returnVal == uint.MaxValue)
@@ -220,8 +219,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void SetFocusToggleKeys(ReadOnlySpan<InputButton> buttons)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             fixed (InputButton* ptr = buttons)
             {
@@ -236,8 +234,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void SetCaptureKeys(ReadOnlySpan<InputButton> buttons)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             fixed (InputButton* ptr = buttons)
             {
@@ -253,8 +250,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void RemoveHooks()
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             Api->RemoveHooks();
         }
@@ -267,8 +263,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void UnloadCrashHandler()
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             Api->UnloadCrashHandler();
         }
@@ -280,8 +275,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void TriggerCapture()
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             Api->TriggerCapture();
         }
@@ -294,11 +288,9 @@ namespace Ryujinx.Graphics.RenderDocApi
         /// <returns>An immutable array of structs representing RenderDoc Captures.</returns>
         public static ImmutableArray<Capture> GetCaptures()
         {
-            if (Api is null)
-                return [];
+            if (Api is null) return [];
             int captureCount = CaptureCount;
-            if (captureCount is 0)
-                return [];
+            if (captureCount is 0) return [];
 
             ImmutableArray<Capture>.Builder captures = ImmutableArray.CreateBuilder<Capture>(captureCount);
 
@@ -319,8 +311,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static Capture? GetCapture(int index)
         {
-            if (Api is null)
-                return null;
+            if (Api is null) return null;
 
             int length = 0;
             if (Api->GetCapture(index, null, &length, null) == 0)
@@ -347,8 +338,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static bool LaunchReplayUI(bool connectTargetControl, string? commandLine = null)
         {
-            if (Api is null)
-                return false;
+            if (Api is null) return false;
 
             if (commandLine == null)
             {
@@ -370,8 +360,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void SetActiveWindow(nint hDevice, nint hWindow)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             Api->SetActiveWindow((void*)hDevice, (void*)hWindow);
         }
@@ -384,8 +373,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static void StartFrameCapture(nint hDevice, nint hWindow)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             Api->StartFrameCapture((void*)hDevice, (void*)hWindow);
         }
@@ -399,8 +387,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 0)]
         public static bool EndFrameCapture(nint hDevice, nint hWindow)
         {
-            if (Api is null)
-                return false;
+            if (Api is null) return false;
 
             return Api->EndFrameCapture((void*)hDevice, (void*)hWindow) != 0;
         }
@@ -415,8 +402,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 1)]
         public static void TriggerMultiFrameCapture(uint numFrames)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             AssertAtLeast(1, 1);
             Api->TriggerMultiFrameCapture(numFrames);
@@ -432,8 +418,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         /// <remarks>Requires RenderDoc API version 1.2</remarks>
         public static void SetMostRecentCaptureFileComments(string comments)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             AssertAtLeast(1, 2);
 
@@ -455,8 +440,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 2)]
         public static void SetCaptureFileComments(string? fileName, string comments)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             AssertAtLeast(1, 2);
 
@@ -491,8 +475,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 4)]
         public static bool DiscardFrameCapture(nint hDevice, nint hWindow)
         {
-            if (Api is null)
-                return false;
+            if (Api is null) return false;
 
             AssertAtLeast(1, 4);
             return Api->DiscardFrameCapture((void*)hDevice, (void*)hWindow) != 0;
@@ -511,8 +494,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 5)]
         public static bool ShowReplayUI()
         {
-            if (Api is null)
-                return false;
+            if (Api is null) return false;
 
             AssertAtLeast(1, 5);
             return Api->ShowReplayUI() != 0;
@@ -534,8 +516,7 @@ namespace Ryujinx.Graphics.RenderDocApi
         [RenderDocApiVersion(1, 6)]
         public static void SetCaptureTitle(string title)
         {
-            if (Api is null)
-                return;
+            if (Api is null) return;
 
             AssertAtLeast(1, 6);
             fixed (byte* ptr = title.ToNullTerminatedByteArray())
@@ -632,10 +613,10 @@ namespace Ryujinx.Graphics.RenderDocApi
             if (Version.Build < patch)
                 goto fail;
 
-        success:
+            success:
             return;
 
-        fail:
+            fail:
             Version minVersion =
                 typeof(RenderDoc).GetMethod(callee)!.GetCustomAttribute<RenderDocApiVersionAttribute>()!.MinVersion;
             throw new NotSupportedException(

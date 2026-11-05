@@ -60,6 +60,21 @@ namespace Ryujinx.Graphics.Gpu.Engine
         }
 
         /// <summary>
+        /// Reads a register taking the shadow state into account (v1.1 addition).
+        /// Offsets at or above 512 read from the shadow state.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadWithShadowRamControl(int offset)
+        {
+            if (offset >= 0x200)
+            {
+                return _shadowState.Read(offset);
+            }
+
+            return _state.Read(offset);
+        }
+
+        /// <summary>
         /// Writes a value to a register.
         /// </summary>
         /// <param name="offset">Register offset in bytes</param>
@@ -85,8 +100,7 @@ namespace Ryujinx.Graphics.Gpu.Engine
             {
                 _state.WriteWithRedundancyCheck(offset, value, out changed);
             }
-            else if (shadowRamControl is SetMmeShadowRamControlMode.MethodTrack or
-                     SetMmeShadowRamControlMode.MethodTrackWithFilter)
+            else if (shadowRamControl is SetMmeShadowRamControlMode.MethodTrack or SetMmeShadowRamControlMode.MethodTrackWithFilter)
             {
                 _shadowState.Write(offset, value);
                 _state.WriteWithRedundancyCheck(offset, value, out changed);

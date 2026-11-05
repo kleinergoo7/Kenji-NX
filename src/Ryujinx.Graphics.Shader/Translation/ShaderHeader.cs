@@ -33,12 +33,10 @@ namespace Ryujinx.Graphics.Shader.Translation
             {
                 return X;
             }
-
             if (Y != PixelImap.Unused)
             {
                 return Y;
             }
-
             if (Z != PixelImap.Unused)
             {
                 return Z;

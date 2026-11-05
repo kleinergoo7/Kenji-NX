@@ -83,7 +83,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl
             {
                 if (context.Definitions.Stage == ShaderStage.Geometry)
                 {
-                    string inPrimitive = context.Definitions.InputTopology.GlslString;
+                    string inPrimitive = context.Definitions.InputTopology.ToGlslString();
 
                     context.AppendLine($"layout (invocations = {context.Definitions.ThreadsPerInputPrimitive}, {inPrimitive}) in;");
 
@@ -98,7 +98,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl
                     }
                     else
                     {
-                        string outPrimitive = context.Definitions.OutputTopology.GlslString;
+                        string outPrimitive = context.Definitions.OutputTopology.ToGlslString();
                         int maxOutputVertices = context.Definitions.MaxOutputVertices;
 
                         context.AppendLine($"layout ({outPrimitive}, max_vertices = {maxOutputVertices}) out;");
@@ -123,8 +123,8 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl
                         tessCw = !tessCw;
                     }
 
-                    string patchType = context.Definitions.TessPatchType.Glsl;
-                    string spacing = context.Definitions.TessSpacing.Glsl;
+                    string patchType = context.Definitions.TessPatchType.ToGlsl();
+                    string spacing = context.Definitions.TessSpacing.ToGlsl();
                     string windingOrder = tessCw ? "cw" : "ccw";
 
                     context.AppendLine($"layout ({patchType}, {spacing}, {windingOrder}) in;");
@@ -351,7 +351,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl
                     arrayDecl = "[]";
                 }
 
-                string samplerTypeName = definition.Separate ? definition.Type.GlslTextureTypeName : definition.Type.GlslSamplerTypeName;
+                string samplerTypeName = definition.Separate ? definition.Type.ToGlslTextureType() : definition.Type.ToGlslSamplerType();
 
                 string layout = string.Empty;
 
@@ -379,7 +379,7 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl
                     arrayDecl = "[]";
                 }
 
-                string imageTypeName = definition.Type.GetGlslImageTypeName(definition.Format.GetComponentType());
+                string imageTypeName = definition.Type.ToGlslImageType(definition.Format.GetComponentType());
 
                 if (definition.Flags.HasFlag(TextureUsageFlags.ImageCoherent))
                 {
@@ -629,9 +629,9 @@ namespace Ryujinx.Graphics.Shader.CodeGen.Glsl
             }
             else
             {
-                return stage is ShaderStage.TessellationControl or
-                       ShaderStage.TessellationEvaluation or
-                       ShaderStage.Geometry;
+                return stage is ShaderStage.TessellationControl
+                    or ShaderStage.TessellationEvaluation
+                    or ShaderStage.Geometry;
             }
         }
 

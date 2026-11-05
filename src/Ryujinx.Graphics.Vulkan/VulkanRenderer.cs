@@ -1,6 +1,4 @@
-using Gommon;
 using Ryujinx.Common.Configuration;
-using Ryujinx.Common.Helper;
 using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Shader;
@@ -41,6 +39,7 @@ namespace Ryujinx.Graphics.Vulkan
         internal KhrSwapchain SwapchainApi { get; private set; }
         internal ExtConditionalRendering ConditionalRenderingApi { get; private set; }
         internal ExtExtendedDynamicState ExtendedDynamicStateApi { get; private set; }
+        internal ExtExtendedDynamicState2 ExtendedDynamicState2Api { get; private set; }
         internal KhrPushDescriptor PushDescriptorApi { get; private set; }
         internal ExtTransformFeedback TransformFeedbackApi { get; private set; }
         internal KhrDrawIndirectCount DrawIndirectCountApi { get; private set; }
@@ -94,6 +93,7 @@ namespace Ryujinx.Graphics.Vulkan
         internal bool IsIntelLinux { get; private set; }
         internal bool IsAmdGcn { get; private set; }
         internal bool IsAmdRdna3 { get; private set; }
+        internal bool IsFeedbackLoopDevice { get; private set; }
         internal bool IsNvidiaPreTuring { get; private set; }
         internal bool IsIntelArc { get; private set; }
         internal bool IsQualcommProprietary { get; private set; }
@@ -112,9 +112,9 @@ namespace Ryujinx.Graphics.Vulkan
 
         public event EventHandler<ScreenCaptureImageInfo> ScreenCaptured;
 
-        public VulkanRenderer(Vk api, Func<Instance, Vk, SurfaceKHR> getSurface, Func<string[]> requiredExtensionsFunc, string preferredGpuId)
+        public VulkanRenderer(Vk api, Func<Instance, Vk, SurfaceKHR> surfaceFunc, Func<string[]> requiredExtensionsFunc, string preferredGpuId)
         {
-            _getSurface = getSurface;
+            _getSurface = surfaceFunc;
             _getRequiredExtensions = requiredExtensionsFunc;
             _preferredGpuId = preferredGpuId;
             Api = api;
@@ -122,18 +122,16 @@ namespace Ryujinx.Graphics.Vulkan
             Textures = [];
             Samplers = [];
 
-            // Any device running on MacOS is using MoltenVK, even Intel and AMD vendors.
-            if (IsMoltenVk = OperatingSystem.IsMacOS())
+            if (OperatingSystem.IsMacOS())
+            {
                 MVKInitialization.Initialize();
+
+                // Any device running on MacOS is using MoltenVK, even Intel and AMD vendors.
+                IsMoltenVk = true;
+            }
 
             SupportsMTL31 = OperatingSystem.IsMacOSVersionAtLeast(14);
         }
-
-        public static VulkanRenderer Create(
-            string preferredGpuId,
-            Func<Instance, Vk, SurfaceKHR> getSurface,
-            Func<string[]> getRequiredExtensions
-        ) => new(Vk.GetApi(), getSurface, getRequiredExtensions, preferredGpuId);
 
         private unsafe void LoadFeatures(uint maxQueueCount, uint queueFamilyIndex)
         {
@@ -147,6 +145,11 @@ namespace Ryujinx.Graphics.Vulkan
             if (Api.TryGetDeviceExtension(_instance.Instance, _device, out ExtExtendedDynamicState extendedDynamicStateApi))
             {
                 ExtendedDynamicStateApi = extendedDynamicStateApi;
+            }
+
+            if (Api.TryGetDeviceExtension(_instance.Instance, _device, out ExtExtendedDynamicState2 extendedDynamicState2Api))
+            {
+                ExtendedDynamicState2Api = extendedDynamicState2Api;
             }
 
             if (Api.TryGetDeviceExtension(_instance.Instance, _device, out KhrPushDescriptor pushDescriptorApi))
@@ -251,6 +254,11 @@ namespace Ryujinx.Graphics.Vulkan
                 SType = StructureType.PhysicalDevicePrimitiveTopologyListRestartFeaturesExt,
             };
 
+            PhysicalDeviceExtendedDynamicState2FeaturesEXT featuresExtendedDynamicState2 = new()
+            {
+                SType = StructureType.PhysicalDeviceExtendedDynamicState2FeaturesExt,
+            };
+
             PhysicalDeviceRobustness2FeaturesEXT featuresRobustness2 = new()
             {
                 SType = StructureType.PhysicalDeviceRobustness2FeaturesExt,
@@ -289,6 +297,12 @@ namespace Ryujinx.Graphics.Vulkan
             if (_physicalDevice.IsDeviceExtensionPresent("VK_EXT_primitive_topology_list_restart"))
             {
                 features2.PNext = &featuresPrimitiveTopologyListRestart;
+            }
+
+            if (_physicalDevice.IsDeviceExtensionPresent(ExtExtendedDynamicState2.ExtensionName))
+            {
+                featuresExtendedDynamicState2.PNext = features2.PNext;
+                features2.PNext = &featuresExtendedDynamicState2;
             }
 
             if (_physicalDevice.IsDeviceExtensionPresent("VK_EXT_robustness2"))
@@ -374,11 +388,7 @@ namespace Ryujinx.Graphics.Vulkan
             IsIntelWindows = Vendor == Vendor.Intel && OperatingSystem.IsWindows();
             IsIntelLinux = Vendor == Vendor.Intel && OperatingSystem.IsLinux();
             IsTBDR =
-                Vendor is Vendor.Apple or
-                Vendor.Qualcomm or
-                Vendor.ARM or
-                Vendor.Broadcom or
-                Vendor.ImgTec;
+                Vendor is Vendor.Apple or Vendor.Qualcomm or Vendor.ARM or Vendor.Broadcom or Vendor.ImgTec;
 
             GpuVendor = VendorUtils.GetNameFromId(properties.VendorID);
             GpuDriver = hasDriverProperties && !OperatingSystem.IsMacOS() ?
@@ -395,15 +405,17 @@ namespace Ryujinx.Graphics.Vulkan
 
             GpuVersion = $"Vulkan v{ParseStandardVulkanVersion(properties.ApiVersion)}";
 
-            IsAmdGcn = !IsMoltenVk && Vendor == Vendor.Amd && Patterns.AmdGcn.IsMatch(GpuRenderer);
+            IsAmdGcn = !IsMoltenVk && Vendor == Vendor.Amd && VendorUtils.AmdGcnRegex().IsMatch(GpuRenderer);
 
-            IsAmdRdna3 = Vendor == Vendor.Amd && (Patterns.AmdRdna3.IsMatch(GpuRenderer)
+            IsAmdRdna3 = Vendor == Vendor.Amd && (VendorUtils.AmdRdna3Regex().IsMatch(GpuRenderer)
                                                   // ROG Ally (X) Device IDs
-                                                  || properties.DeviceID is 0x15BF or 0x15C8);
+                                                  || properties.DeviceID is 0x15BF or 0x15C8 or 0x150E);
+
+            IsFeedbackLoopDevice = IsAmdRdna3;
 
             if (Vendor == Vendor.Nvidia)
             {
-                Match match = Patterns.NvidiaConsumerClass.Match(GpuRenderer);
+                Match match = VendorUtils.NvidiaConsumerClassRegex().Match(GpuRenderer);
 
                 if (match != null && int.TryParse(match.Groups[2].Value, out int gpuNumber))
                 {
@@ -416,7 +428,7 @@ namespace Ryujinx.Graphics.Vulkan
             }
             else if (Vendor == Vendor.Intel)
             {
-                IsIntelArc = GpuRenderer.StartsWithIgnoreCase("Intel(R) Arc(TM)");
+                IsIntelArc = GpuRenderer.StartsWith("Intel(R) Arc(TM)", StringComparison.OrdinalIgnoreCase);
             }
 
             IsQualcommProprietary = hasDriverProperties && driverProperties.DriverID == DriverId.QualcommProprietary;
@@ -432,6 +444,10 @@ namespace Ryujinx.Graphics.Vulkan
                 properties.Limits.FramebufferColorSampleCounts &
                 properties.Limits.FramebufferDepthSampleCounts &
                 properties.Limits.FramebufferStencilSampleCounts;
+
+            // Temporarily disable this, can be added back at a later date, make it easy to re-enable. 
+            // Disabled because currently causing Device Lost error on NVIDIA. 
+            featuresExtendedDynamicState2.ExtendedDynamicState2PatchControlPoints = false;
 
             Capabilities = new HardwareCapabilities(
                 _physicalDevice.IsDeviceExtensionPresent("VK_EXT_index_type_uint8"),
@@ -449,6 +465,8 @@ namespace Ryujinx.Graphics.Vulkan
                 features2.Features.ShaderStorageImageMultisample,
                 _physicalDevice.IsDeviceExtensionPresent(ExtConditionalRendering.ExtensionName),
                 _physicalDevice.IsDeviceExtensionPresent(ExtExtendedDynamicState.ExtensionName),
+                featuresExtendedDynamicState2,
+                _physicalDevice.PhysicalDeviceProperties.Limits.MaxTessellationPatchSize,
                 features2.Features.MultiViewport && !(IsMoltenVk && Vendor == Vendor.Amd), // Workaround for AMD on MoltenVK issue
                 featuresRobustness2.NullDescriptor || IsMoltenVk,
                 supportsPushDescriptors,
@@ -464,14 +482,16 @@ namespace Ryujinx.Graphics.Vulkan
                 _physicalDevice.IsDeviceExtensionPresent("VK_NV_viewport_array2"),
                 _physicalDevice.IsDeviceExtensionPresent(ExtExternalMemoryHost.ExtensionName),
                 supportsDepthClipControl && featuresDepthClipControl.DepthClipControl,
-                supportsAttachmentFeedbackLoop && featuresAttachmentFeedbackLoop.AttachmentFeedbackLoopLayout,
-                supportsDynamicAttachmentFeedbackLoop && featuresDynamicAttachmentFeedbackLoop.AttachmentFeedbackLoopDynamicState,
+                _physicalDevice.PhysicalDeviceFeatures.WideLines,
+                supportsAttachmentFeedbackLoop && featuresAttachmentFeedbackLoop.AttachmentFeedbackLoopLayout && IsFeedbackLoopDevice,
+                supportsDynamicAttachmentFeedbackLoop && featuresDynamicAttachmentFeedbackLoop.AttachmentFeedbackLoopDynamicState && IsFeedbackLoopDevice,
                 propertiesSubgroup.SubgroupSize,
                 supportedSampleCounts,
                 portabilityFlags,
                 vertexBufferAlignment,
                 properties.Limits.SubTexelPrecisionBits,
-                minResourceAlignment);
+                minResourceAlignment,
+                _physicalDevice.PhysicalDeviceProperties.Limits.MinTexelBufferOffsetAlignment);
 
             IsSharedMemory = MemoryAllocator.IsDeviceMemoryShared(_physicalDevice);
 
@@ -576,7 +596,7 @@ namespace Ryujinx.Graphics.Vulkan
         public IProgram CreateProgram(ShaderSource[] sources, ShaderInfo info)
         {
             ProgramCount++;
-
+            
             bool isCompute = sources.Length == 1 && sources[0].Stage == ShaderStage.Compute;
 
             if (info.State.HasValue || isCompute)
@@ -781,6 +801,7 @@ namespace Ryujinx.Graphics.Vulkan
                 supportsGeometryShader: Capabilities.SupportsGeometryShader,
                 supportsGeometryShaderPassthrough: Capabilities.SupportsGeometryShaderPassthrough,
                 supportsTransformFeedback: Capabilities.SupportsTransformFeedback,
+                supportsImageBufferPixelAlignment: false,
                 supportsImageLoadFormatted: features2.Features.ShaderStorageImageReadWithoutFormat,
                 supportsLayerVertexTessellation: featuresVk12.ShaderOutputLayer,
                 supportsMismatchingViewFormat: true,
@@ -791,10 +812,10 @@ namespace Ryujinx.Graphics.Vulkan
                 supportsShaderBallot: false,
                 supportsShaderBarrierDivergence: Vendor != Vendor.Intel,
                 supportsShaderFloat64: Capabilities.SupportsShaderFloat64,
-
                 supportsShaderNonUniformIndexing:
                     featuresVk12.ShaderSampledImageArrayNonUniformIndexing &&
                     featuresVk12.ShaderStorageImageArrayNonUniformIndexing,
+                supportsTextureBufferPixelAlignment: false,
                 supportsTextureGatherOffsets: features2.Features.ShaderImageGatherExtended,
                 supportsTextureShadowLod: false,
                 supportsVertexStoreAndAtomics: features2.Features.VertexPipelineStoresAndAtomics,
@@ -803,6 +824,10 @@ namespace Ryujinx.Graphics.Vulkan
                 supportsViewportSwizzle: false,
                 supportsIndirectParameters: true,
                 supportsDepthClipControl: Capabilities.SupportsDepthClipControl,
+                supportsExtendedDynamicState: Capabilities.SupportsExtendedDynamicState,
+                supportsExtendedDynamicState2: Capabilities.SupportsExtendedDynamicState2.ExtendedDynamicState2,
+                supportsLogicOpDynamicState: Capabilities.SupportsExtendedDynamicState2.ExtendedDynamicState2LogicOp,
+                supportsPatchControlPointsDynamicState: Capabilities.SupportsExtendedDynamicState2.ExtendedDynamicState2PatchControlPoints,
                 uniformBufferSetIndex: PipelineBase.UniformSetIndex,
                 storageBufferSetIndex: PipelineBase.StorageSetIndex,
                 textureSetIndex: PipelineBase.TextureSetIndex,
@@ -930,7 +955,7 @@ namespace Ryujinx.Graphics.Vulkan
                     driverUuidString = driverUuidString[..terminatorIndex];
                 }
 
-                if (Patterns.IntelWindowsDriverVersion.IsMatch(driverUuidString))
+                if (VendorUtils.IntelWindowsDriverVersionRegex().IsMatch(driverUuidString))
                 {
                     driverVersion = driverUuidString;
 
@@ -966,12 +991,7 @@ namespace Ryujinx.Graphics.Vulkan
 
         private void PrintGpuInformation()
         {
-            string gpuInfoMessage = $"{GpuRenderer} ({GpuVersion}, Driver: {GpuDriver} {GpuDriverVersion})";
-            if (!GpuRenderer.StartsWithIgnoreCase(GpuVendor))
-                gpuInfoMessage = gpuInfoMessage.Prepend(GpuVendor);
-
-            Logger.Notice.Print(LogClass.Gpu, gpuInfoMessage);
-
+            Logger.Notice.Print(LogClass.Gpu, $"{GpuVendor} {GpuRenderer} ({GpuVersion}, Driver: {GpuDriver} {GpuDriverVersion})");
             Logger.Notice.Print(LogClass.Gpu, $"GPU Memory: {GetTotalGPUMemory() / (1024 * 1024)} MiB");
         }
 

@@ -1,5 +1,4 @@
 using Ryujinx.Graphics.Shader.Decoders;
-using Ryujinx.Graphics.Shader.Decoders.Ampere;
 using Ryujinx.Graphics.Shader.IntermediateRepresentation;
 using System;
 using System.Linq;
@@ -33,36 +32,12 @@ namespace Ryujinx.Graphics.Shader.Translation
             ShaderDefinitions definitions;
             DecodedProgram program;
 
-            bool compute = options.Flags.HasFlag(TranslationFlags.Compute);
-
-            // Native SM86 programs are lowered on the fly, so the shader cache and disk cache
-            // still hash and compare the raw guest bytes (the header and the native code).
-            AmpereGpuAccessor ampereAccessor = null;
-
-            if (gpuAccessor.IsNx2Ampere)
-            {
-                ampereAccessor = AmpereGpuAccessor.Create(gpuAccessor, address, !compute, out string error);
-
-                if (ampereAccessor != null)
-                {
-                    gpuAccessor = ampereAccessor;
-                }
-                else
-                {
-                    gpuAccessor.Log($"Ampere shader at 0x{address:X}: {error}; decoding raw code.");
-                }
-            }
-
-            Func<uint, uint?> nativeAddressMap = ampereAccessor != null
-                ? ampereAccessor.FindNativeAddress
-                : null;
-
-            if (compute)
+            if (options.Flags.HasFlag(TranslationFlags.Compute))
             {
                 definitions = CreateComputeDefinitions(gpuAccessor);
                 localMemorySize = gpuAccessor.QueryComputeLocalMemorySize();
 
-                program = Decoder.Decode(definitions, gpuAccessor, address, nativeAddressMap);
+                program = Decoder.Decode(definitions, gpuAccessor, address);
             }
             else
             {
@@ -71,7 +46,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 definitions = CreateGraphicsDefinitions(gpuAccessor, header);
                 localMemorySize = GetLocalMemorySize(header);
 
-                program = Decoder.Decode(definitions, gpuAccessor, address + HeaderSize, nativeAddressMap);
+                program = Decoder.Decode(definitions, gpuAccessor, address + HeaderSize);
             }
 
             ulong maxEndAddress = 0;
@@ -87,11 +62,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 }
             }
 
-            // The lowered code layout is not the guest layout, so report the native program
-            // size. Cached shader bytes must cover the whole native program.
-            int size = ampereAccessor != null
-                ? (int)ampereAccessor.NativeSize + (compute ? 0 : HeaderSize)
-                : (int)maxEndAddress + (compute ? 0 : HeaderSize);
+            int size = (int)maxEndAddress + (options.Flags.HasFlag(TranslationFlags.Compute) ? 0 : HeaderSize);
 
             return new TranslatorContext(address, size, localMemorySize, definitions, gpuAccessor, options, program);
         }

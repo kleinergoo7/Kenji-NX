@@ -24,22 +24,20 @@ namespace Ryujinx.Graphics.Shader.IntermediateRepresentation
     {
         public static bool IsInputOrOutput(this StorageKind storageKind)
         {
-            return storageKind is StorageKind.Input or
-                   StorageKind.InputPerPatch or
-                   StorageKind.Output or
-                   StorageKind.OutputPerPatch;
+            return storageKind is StorageKind.Input
+                or StorageKind.InputPerPatch
+                or StorageKind.Output
+                or StorageKind.OutputPerPatch;
         }
 
         public static bool IsOutput(this StorageKind storageKind)
         {
-            return storageKind is StorageKind.Output or
-                   StorageKind.OutputPerPatch;
+            return storageKind is StorageKind.Output or StorageKind.OutputPerPatch;
         }
 
         public static bool IsPerPatch(this StorageKind storageKind)
         {
-            return storageKind is StorageKind.InputPerPatch or
-                   StorageKind.OutputPerPatch;
+            return storageKind is StorageKind.InputPerPatch or StorageKind.OutputPerPatch;
         }
     }
 }

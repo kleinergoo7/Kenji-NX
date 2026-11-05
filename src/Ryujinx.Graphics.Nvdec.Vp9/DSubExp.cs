@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace Ryujinx.Graphics.Nvdec.Vp9
 {
@@ -14,7 +14,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             return (v & 1) != 0 ? m - ((v + 1) >> 1) : m + (v >> 1);
         }
 
-        private static readonly byte[] _invMapTable =
+        private static readonly byte[] InvMapTable =
         [
             7, 20, 33, 46, 59, 72, 85, 98, 111, 124, 137, 150, 163, 176, 189, 202, 215, 228, 241, 254, 1, 2, 3, 4,
             5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34,
@@ -32,9 +32,9 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
         public static int InvRemapProb(int v, int m)
         {
-            Debug.Assert(v < _invMapTable.Length / sizeof(byte));
+            Debug.Assert(v < InvMapTable.Length / sizeof(byte));
 
-            v = _invMapTable[v];
+            v = InvMapTable[v];
             m--;
             if (m << 1 <= Prob.MaxProb)
             {

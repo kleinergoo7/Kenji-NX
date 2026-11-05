@@ -87,7 +87,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Iwht4X416Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Iwht4x416Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             /* 4-point reversible, orthonormal inverse Walsh-Hadamard in 3.5 adds,
                0.5 shifts per pixel. */
@@ -114,8 +114,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 op[1] = WrapLow(b1);
                 op[2] = WrapLow(c1);
                 op[3] = WrapLow(d1);
-                ip = ip[4..];
-                op = op[4..];
+                ip = ip.Slice(4);
+                op = op.Slice(4);
             }
 
             Span<int> ip2 = output;
@@ -137,13 +137,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 dest[stride * 2] = ClipPixelAdd(dest[stride * 2], WrapLow(c1));
                 dest[stride * 3] = ClipPixelAdd(dest[stride * 3], WrapLow(d1));
 
-                ip2 = ip2[1..];
-                dest = dest[1..];
+                ip2 = ip2.Slice(1);
+                dest = dest.Slice(1);
             }
         }
 
         [SkipLocalsInit]
-        public static void Iwht4X41Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Iwht4x41Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             long a1, e1;
             Span<int> tmp = stackalloc int[4];
@@ -165,8 +165,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 dest[stride * 1] = ClipPixelAdd(dest[stride * 1], e1);
                 dest[stride * 2] = ClipPixelAdd(dest[stride * 2], e1);
                 dest[stride * 3] = ClipPixelAdd(dest[stride * 3], e1);
-                ip2 = ip2[1..];
-                dest = dest[1..];
+                ip2 = ip2.Slice(1);
+                dest = dest.Slice(1);
             }
         }
 
@@ -180,7 +180,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
 
             if ((x0 | x1 | x2 | x3) == 0)
             {
-                output[..4].Clear();
+                output.Slice(0, 4).Clear();
                 return;
             }
 
@@ -233,7 +233,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct4X416Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct4x416Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[4 * 4];
             Span<int> outptr = output;
@@ -244,8 +244,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 4; ++i)
             {
                 Idct4(input, outptr);
-                input = input[4..];
-                outptr = outptr[4..];
+                input = input.Slice(4);
+                outptr = outptr.Slice(4);
             }
 
             // Columns
@@ -265,7 +265,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void Idct4X41Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct4x41Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             long a1;
             int output = WrapLow(DctConstRoundShift((short)input[0] * CosPi1664));
@@ -279,7 +279,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 dest[1] = ClipPixelAdd(dest[1], a1);
                 dest[2] = ClipPixelAdd(dest[2], a1);
                 dest[3] = ClipPixelAdd(dest[3], a1);
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
@@ -297,7 +297,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
 
             if ((x0 | x1 | x2 | x3 | x4 | x5 | x6 | x7) == 0)
             {
-                output[..8].Clear();
+                output.Slice(0, 8).Clear();
                 return;
             }
 
@@ -419,7 +419,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct8X864Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct8x864Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[8 * 8];
             Span<int> outptr = output;
@@ -430,8 +430,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 8; ++i)
             {
                 Idct8(input, outptr);
-                input = input[8..];
-                outptr = outptr[8..];
+                input = input.Slice(8);
+                outptr = outptr.Slice(8);
             }
 
             // Then transform columns
@@ -452,7 +452,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct8X812Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct8x812Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[8 * 8];
             Span<int> outptr = output;
@@ -466,8 +466,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 4; ++i)
             {
                 Idct8(input, outptr);
-                input = input[8..];
-                outptr = outptr[8..];
+                input = input.Slice(8);
+                outptr = outptr.Slice(8);
             }
 
             // Then transform columns
@@ -487,7 +487,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void Idct8X81Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct8x81Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             long a1;
             int output = WrapLow(DctConstRoundShift((short)input[0] * CosPi1664));
@@ -501,7 +501,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                     dest[i] = ClipPixelAdd(dest[i], a1);
                 }
 
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
@@ -528,7 +528,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
 
             if ((x0 | x1 | x2 | x3 | x4 | x5 | x6 | x7 | x8 | x9 | x10 | x11 | x12 | x13 | x14 | x15) == 0)
             {
-                output[..16].Clear();
+                output.Slice(0, 16).Clear();
                 return;
             }
 
@@ -843,7 +843,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct16X16256Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct16x16256Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[16 * 16];
             Span<int> outptr = output;
@@ -854,8 +854,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 16; ++i)
             {
                 Idct16(input, outptr);
-                input = input[16..];
-                outptr = outptr[16..];
+                input = input.Slice(16);
+                outptr = outptr.Slice(16);
             }
 
             // Then transform columns
@@ -876,7 +876,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct16X1638Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct16x1638Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[16 * 16];
             Span<int> outptr = output;
@@ -890,8 +890,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 8; ++i)
             {
                 Idct16(input, outptr);
-                input = input[16..];
-                outptr = outptr[16..];
+                input = input.Slice(16);
+                outptr = outptr.Slice(16);
             }
 
             // Then transform columns
@@ -912,7 +912,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct16X1610Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct16x1610Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[16 * 16];
             Span<int> outptr = output;
@@ -926,8 +926,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 4; ++i)
             {
                 Idct16(input, outptr);
-                input = input[16..];
-                outptr = outptr[16..];
+                input = input.Slice(16);
+                outptr = outptr.Slice(16);
             }
 
             // Then transform columns
@@ -947,7 +947,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void Idct16X161Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct16x161Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             long a1;
             int output = WrapLow(DctConstRoundShift((short)input[0] * CosPi1664));
@@ -961,7 +961,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                     dest[i] = ClipPixelAdd(dest[i], a1);
                 }
 
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
@@ -1336,7 +1336,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct32X321024Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct32x321024Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[32 * 32];
             Span<int> outptr = output;
@@ -1358,11 +1358,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 }
                 else
                 {
-                    outptr[..32].Clear();
+                    outptr.Slice(0, 32).Clear();
                 }
 
-                input = input[32..];
-                outptr = outptr[32..];
+                input = input.Slice(32);
+                outptr = outptr.Slice(32);
             }
 
             // Columns
@@ -1383,7 +1383,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct32X32135Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct32x32135Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[32 * 32];
             Span<int> outptr = output;
@@ -1397,8 +1397,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 16; ++i)
             {
                 Idct32(input, outptr);
-                input = input[32..];
-                outptr = outptr[32..];
+                input = input.Slice(32);
+                outptr = outptr.Slice(32);
             }
 
             // Columns
@@ -1419,7 +1419,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void Idct32X3234Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct32x3234Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             Span<int> output = stackalloc int[32 * 32];
             Span<int> outptr = output;
@@ -1433,8 +1433,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 8; ++i)
             {
                 Idct32(input, outptr);
-                input = input[32..];
-                outptr = outptr[32..];
+                input = input.Slice(32);
+                outptr = outptr.Slice(32);
             }
 
             // Columns
@@ -1454,7 +1454,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void Idct32X321Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
+        public static void Idct32x321Add(ReadOnlySpan<int> input, Span<byte> dest, int stride)
         {
             long a1;
             int output = WrapLow(DctConstRoundShift((short)input[0] * CosPi1664));
@@ -1469,12 +1469,12 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                     dest[i] = ClipPixelAdd(dest[i], a1);
                 }
 
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
         [SkipLocalsInit]
-        public static void HighbdIwht4X416Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIwht4x416Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             /* 4-point reversible, orthonormal inverse Walsh-Hadamard in 3.5 adds,
                0.5 shifts per pixel. */
@@ -1501,8 +1501,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 op[1] = HighbdWrapLow(b1, bd);
                 op[2] = HighbdWrapLow(c1, bd);
                 op[3] = HighbdWrapLow(d1, bd);
-                ip = ip[4..];
-                op = op[4..];
+                ip = ip.Slice(4);
+                op = op.Slice(4);
             }
 
             ReadOnlySpan<int> ip2 = output;
@@ -1524,13 +1524,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 dest[stride * 2] = HighbdClipPixelAdd(dest[stride * 2], HighbdWrapLow(c1, bd), bd);
                 dest[stride * 3] = HighbdClipPixelAdd(dest[stride * 3], HighbdWrapLow(d1, bd), bd);
 
-                ip2 = ip2[1..];
-                dest = dest[1..];
+                ip2 = ip2.Slice(1);
+                dest = dest.Slice(1);
             }
         }
 
         [SkipLocalsInit]
-        public static void HighbdIwht4X41Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIwht4x41Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             long a1, e1;
             Span<int> tmp = stackalloc int[4];
@@ -1552,8 +1552,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 dest[stride * 1] = HighbdClipPixelAdd(dest[stride * 1], e1, bd);
                 dest[stride * 2] = HighbdClipPixelAdd(dest[stride * 2], e1, bd);
                 dest[stride * 3] = HighbdClipPixelAdd(dest[stride * 3], e1, bd);
-                ip2 = ip2[1..];
-                dest = dest[1..];
+                ip2 = ip2.Slice(1);
+                dest = dest.Slice(1);
             }
         }
 
@@ -1568,13 +1568,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 4) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..4].Clear();
+                output.Slice(0, 4).Clear();
                 return;
             }
 
             if ((x0 | x1 | x2 | x3) == 0)
             {
-                output[..4].Clear();
+                output.Slice(0, 4).Clear();
                 return;
             }
 
@@ -1611,7 +1611,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 4) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..4].Clear();
+                output.Slice(0, 4).Clear();
                 return;
             }
 
@@ -1633,7 +1633,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct4X416Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct4x416Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[4 * 4];
             Span<int> outptr = output;
@@ -1644,8 +1644,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 4; ++i)
             {
                 HighbdIdct4(input, outptr, bd);
-                input = input[4..];
-                outptr = outptr[4..];
+                input = input.Slice(4);
+                outptr = outptr.Slice(4);
             }
 
             // Columns
@@ -1665,7 +1665,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void HighbdIdct4X41Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct4x41Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             long a1;
             int output = HighbdWrapLow(DctConstRoundShift(input[0] * (long)CosPi1664), bd);
@@ -1679,7 +1679,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 dest[1] = HighbdClipPixelAdd(dest[1], a1, bd);
                 dest[2] = HighbdClipPixelAdd(dest[2], a1, bd);
                 dest[3] = HighbdClipPixelAdd(dest[3], a1, bd);
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
@@ -1698,13 +1698,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 8) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..8].Clear();
+                output.Slice(0, 8).Clear();
                 return;
             }
 
             if ((x0 | x1 | x2 | x3 | x4 | x5 | x6 | x7) == 0)
             {
-                output[..8].Clear();
+                output.Slice(0, 8).Clear();
                 return;
             }
 
@@ -1777,7 +1777,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 8) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..8].Clear();
+                output.Slice(0, 8).Clear();
                 return;
             }
 
@@ -1824,7 +1824,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct8X864Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct8x864Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[8 * 8];
             Span<int> outptr = output;
@@ -1835,8 +1835,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 8; ++i)
             {
                 HighbdIdct8(input, outptr, bd);
-                input = input[8..];
-                outptr = outptr[8..];
+                input = input.Slice(8);
+                outptr = outptr.Slice(8);
             }
 
             // Then transform columns
@@ -1857,7 +1857,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct8X812Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct8x812Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[8 * 8];
             Span<int> outptr = output;
@@ -1871,8 +1871,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 4; ++i)
             {
                 HighbdIdct8(input, outptr, bd);
-                input = input[8..];
-                outptr = outptr[8..];
+                input = input.Slice(8);
+                outptr = outptr.Slice(8);
             }
 
             // Then transform columns
@@ -1892,7 +1892,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void VpxHighbdidct8X81AddC(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void VpxHighbdidct8x81AddC(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             long a1;
             int output = HighbdWrapLow(DctConstRoundShift(input[0] * (long)CosPi1664), bd);
@@ -1906,7 +1906,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                     dest[i] = HighbdClipPixelAdd(dest[i], a1, bd);
                 }
 
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
@@ -1933,13 +1933,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 16) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..16].Clear();
+                output.Slice(0, 16).Clear();
                 return;
             }
 
             if ((x0 | x1 | x2 | x3 | x4 | x5 | x6 | x7 | x8 | x9 | x10 | x11 | x12 | x13 | x14 | x15) == 0)
             {
-                output[..16].Clear();
+                output.Slice(0, 16).Clear();
                 return;
             }
 
@@ -2095,7 +2095,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 16) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..16].Clear();
+                output.Slice(0, 16).Clear();
                 return;
             }
 
@@ -2261,7 +2261,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct16X16256Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct16x16256Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[16 * 16];
             Span<int> outptr = output;
@@ -2272,8 +2272,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 16; ++i)
             {
                 HighbdIdct16(input, outptr, bd);
-                input = input[16..];
-                outptr = outptr[16..];
+                input = input.Slice(16);
+                outptr = outptr.Slice(16);
             }
 
             // Then transform columns
@@ -2294,7 +2294,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct16X1638Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct16x1638Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[16 * 16];
             Span<int> outptr = output;
@@ -2308,8 +2308,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 8; ++i)
             {
                 HighbdIdct16(input, outptr, bd);
-                input = input[16..];
-                outptr = outptr[16..];
+                input = input.Slice(16);
+                outptr = outptr.Slice(16);
             }
 
             // Then transform columns
@@ -2325,13 +2325,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 for (int j = 0; j < 16; ++j)
                 {
                     destT[i] = HighbdClipPixelAdd(destT[i], BitUtils.RoundPowerOfTwo(tempOut[j], 6), bd);
-                    destT = destT[stride..];
+                    destT = destT.Slice(stride);
                 }
             }
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct16X1610Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct16x1610Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[16 * 16];
             Span<int> outptr = output;
@@ -2345,8 +2345,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 4; ++i)
             {
                 HighbdIdct16(input, outptr, bd);
-                input = input[16..];
-                outptr = outptr[16..];
+                input = input.Slice(16);
+                outptr = outptr.Slice(16);
             }
 
             // Then transform columns
@@ -2366,7 +2366,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void HighbdIdct16X161Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct16x161Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             long a1;
             int output = HighbdWrapLow(DctConstRoundShift(input[0] * (long)CosPi1664), bd);
@@ -2380,7 +2380,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                     dest[i] = HighbdClipPixelAdd(dest[i], a1, bd);
                 }
 
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
 
@@ -2394,7 +2394,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             if (DetectInvalidHighbdInput(input, 32) != 0)
             {
                 Debug.Assert(false, "invalid highbd txfm input");
-                output[..32].Clear();
+                output.Slice(0, 32).Clear();
                 return;
             }
 
@@ -2762,7 +2762,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct32X321024Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct32x321024Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[32 * 32];
             Span<int> outptr = output;
@@ -2784,11 +2784,11 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 }
                 else
                 {
-                    outptr[..32].Clear();
+                    outptr.Slice(0, 32).Clear();
                 }
 
-                input = input[32..];
-                outptr = outptr[32..];
+                input = input.Slice(32);
+                outptr = outptr.Slice(32);
             }
 
             // Columns
@@ -2809,7 +2809,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct32X32135Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct32x32135Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[32 * 32];
             Span<int> outptr = output;
@@ -2823,8 +2823,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 16; ++i)
             {
                 HighbdIdct32(input, outptr, bd);
-                input = input[32..];
-                outptr = outptr[32..];
+                input = input.Slice(32);
+                outptr = outptr.Slice(32);
             }
 
             // Columns
@@ -2840,13 +2840,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                 for (int j = 0; j < 32; ++j)
                 {
                     destT[i] = HighbdClipPixelAdd(destT[i], BitUtils.RoundPowerOfTwo(tempOut[j], 6), bd);
-                    destT = destT[stride..];
+                    destT = destT.Slice(stride);
                 }
             }
         }
 
         [SkipLocalsInit]
-        public static void HighbdIdct32X3234Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct32x3234Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             Span<int> output = stackalloc int[32 * 32];
             Span<int> outptr = output;
@@ -2860,8 +2860,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             for (int i = 0; i < 8; ++i)
             {
                 HighbdIdct32(input, outptr, bd);
-                input = input[32..];
-                outptr = outptr[32..];
+                input = input.Slice(32);
+                outptr = outptr.Slice(32);
             }
 
             // Columns
@@ -2881,7 +2881,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
             }
         }
 
-        public static void HighbdIdct32X321Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
+        public static void HighbdIdct32x321Add(ReadOnlySpan<int> input, Span<ushort> dest, int stride, int bd)
         {
             int a1;
             int output = HighbdWrapLow(DctConstRoundShift(input[0] * (long)CosPi1664), bd);
@@ -2896,7 +2896,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Dsp
                     dest[i] = HighbdClipPixelAdd(dest[i], a1, bd);
                 }
 
-                dest = dest[stride..];
+                dest = dest.Slice(stride);
             }
         }
     }

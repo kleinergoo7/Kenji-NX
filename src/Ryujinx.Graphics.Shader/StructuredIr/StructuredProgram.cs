@@ -236,8 +236,7 @@ namespace Ryujinx.Graphics.Shader.StructuredIr
 
                     dest.VarType = destElemType;
 
-                    context.AddNode(new AstAssignment(dest, new AstOperation(Instruction.VectorExtract, StorageKind.None, false,
-                        [destVec, index], 2)));
+                    context.AddNode(new AstAssignment(dest, new AstOperation(Instruction.VectorExtract, StorageKind.None, false, new[] { destVec, index }, 2)));
                 }
             }
             else if (operation.Dest != null)

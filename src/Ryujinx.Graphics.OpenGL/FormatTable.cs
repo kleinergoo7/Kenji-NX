@@ -228,9 +228,7 @@ namespace Ryujinx.Graphics.OpenGL
 
         public static bool IsPackedDepthStencil(Format format)
         {
-            return format is Format.D24UnormS8Uint or
-                   Format.D32FloatS8Uint or
-                   Format.S8UintD24Unorm;
+            return format is Format.D24UnormS8Uint or Format.D32FloatS8Uint or Format.S8UintD24Unorm;
         }
 
         public static bool IsDepthOnly(Format format)

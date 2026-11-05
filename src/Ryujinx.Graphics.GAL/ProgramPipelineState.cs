@@ -51,17 +51,31 @@ namespace Ryujinx.Graphics.GAL
         public StencilTestDescriptor StencilTest;
         public FrontFace FrontFace;
         public Face CullMode;
+
+        /// <summary>
+        /// Whether face culling is enabled (v1.1 addition).
+        /// </summary>
         public bool CullEnable;
 
         public PolygonModeMask BiasEnable;
 
-        public float LineWidth;
+        public bool AlphaToCoverageEnable;
+        public bool AlphaToOneEnable;
+
         // TODO: Polygon mode.
         public bool DepthClampEnable;
         public bool RasterizerDiscard;
         public PrimitiveTopology Topology;
         public bool PrimitiveRestartEnable;
         public uint PatchControlPoints;
+
+        public float DepthBiasUnits;
+
+        /// <summary>
+        /// Line width for smooth lines (v1.1 addition).
+        /// </summary>
+        public float LineWidth;
+        public float DepthBiasFactor;
 
         public DepthMode DepthMode;
 

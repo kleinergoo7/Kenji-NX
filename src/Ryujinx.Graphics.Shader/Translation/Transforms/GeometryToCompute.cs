@@ -45,7 +45,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
 
                             Operand vertexElemOffset = GenerateVertexOffset(context.ResourceManager, node, inputOffset, primVertex);
 
-                            newNode = node.List.AddBefore(node, new Operation(
+                            newNode = node.List?.AddBefore(node, new Operation(
                                 Instruction.Load,
                                 StorageKind.StorageBuffer,
                                 operation.Dest,
@@ -80,7 +80,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                     {
                         if (TryGetOffset(context.ResourceManager, operation, StorageKind.Output, out int outputOffset))
                         {
-                            newNode = node.List.AddBefore(node, new Operation(
+                            newNode = node.List?.AddBefore(node, new Operation(
                                 Instruction.Load,
                                 StorageKind.LocalMemory,
                                 operation.Dest,
@@ -91,7 +91,6 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                             context.GpuAccessor.Log($"Invalid output \"{(IoVariable)operation.GetSource(0).Value}\".");
                         }
                     }
-
                     break;
                 case Instruction.Store:
                     if (operation.StorageKind == StorageKind.Output)
@@ -100,7 +99,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                         {
                             Operand value = operation.GetSource(operation.SourcesCount - 1);
 
-                            newNode = node.List.AddBefore(node, new Operation(
+                            newNode = node.List?.AddBefore(node, new Operation(
                                 Instruction.Store,
                                 StorageKind.LocalMemory,
                                 (Operand)null,
@@ -111,7 +110,6 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                             context.GpuAccessor.Log($"Invalid output \"{(IoVariable)operation.GetSource(0).Value}\".");
                         }
                     }
-
                     break;
             }
 
@@ -136,7 +134,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                 definitions.MaxOutputVertices * definitions.ThreadsPerInputPrimitive,
                 definitions.ThreadsPerInputPrimitive);
             Operand outputBaseVertex = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Add, outputBaseVertex, new[] { baseVertexOffset, outputPrimVertex }));
+            node.List?.AddBefore(node, new Operation(Instruction.Add, outputBaseVertex, new[] { baseVertexOffset, outputPrimVertex }));
 
             Operand outputPrimIndex = IncrementLocalMemory(node, resourceManager.LocalGeometryOutputIndexCountMemoryId);
             Operand baseIndexOffset = GenerateBaseOffset(
@@ -145,16 +143,16 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                 definitions.GetGeometryOutputIndexBufferStride(),
                 definitions.ThreadsPerInputPrimitive);
             Operand outputBaseIndex = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Add, outputBaseIndex, new[] { baseIndexOffset, outputPrimIndex }));
+            node.List?.AddBefore(node, new Operation(Instruction.Add, outputBaseIndex, new[] { baseIndexOffset, outputPrimIndex }));
 
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Store,
                 StorageKind.StorageBuffer,
                 null,
                 new[] { Const(ibOutputBinding), Const(0), outputBaseIndex, outputBaseVertex }));
 
             Operand baseOffset = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Multiply, baseOffset, new[] { outputBaseVertex, Const(stride) }));
+            node.List?.AddBefore(node, new Operation(Instruction.Multiply, baseOffset, new[] { outputBaseVertex, Const(stride) }));
 
             LinkedListNode<INode> newNode = node;
 
@@ -165,7 +163,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                 if (offset > 0)
                 {
                     vertexOffset = Local();
-                    node.List.AddBefore(node, new Operation(Instruction.Add, vertexOffset, new[] { baseOffset, Const(offset) }));
+                    node.List?.AddBefore(node, new Operation(Instruction.Add, vertexOffset, new[] { baseOffset, Const(offset) }));
                 }
                 else
                 {
@@ -173,13 +171,13 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                 }
 
                 Operand value = Local();
-                node.List.AddBefore(node, new Operation(
+                node.List?.AddBefore(node, new Operation(
                     Instruction.Load,
                     StorageKind.LocalMemory,
                     value,
                     new[] { Const(resourceManager.LocalVertexDataMemoryId), Const(offset) }));
 
-                newNode = node.List.AddBefore(node, new Operation(
+                newNode = node.List?.AddBefore(node, new Operation(
                     Instruction.Store,
                     StorageKind.StorageBuffer,
                     null,
@@ -200,9 +198,9 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
                 definitions.GetGeometryOutputIndexBufferStride(),
                 definitions.ThreadsPerInputPrimitive);
             Operand outputBaseIndex = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Add, outputBaseIndex, new[] { baseIndexOffset, outputPrimIndex }));
+            node.List?.AddBefore(node, new Operation(Instruction.Add, outputBaseIndex, new[] { baseIndexOffset, outputPrimIndex }));
 
-            return node.List.AddBefore(node, new Operation(
+            return node.List?.AddBefore(node, new Operation(
                 Instruction.Store,
                 StorageKind.StorageBuffer,
                 null,
@@ -215,16 +213,16 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
             GeneratePrimitiveId(resourceManager, node, primitiveId);
 
             Operand baseOffset = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Multiply, baseOffset, new[] { primitiveId, Const(stride) }));
+            node.List?.AddBefore(node, new Operation(Instruction.Multiply, baseOffset, new[] { primitiveId, Const(stride) }));
 
             Operand invocationId = Local();
             GenerateInvocationId(node, invocationId);
 
             Operand invocationOffset = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Multiply, invocationOffset, new[] { invocationId, Const(stride / threadsPerInputPrimitive) }));
+            node.List?.AddBefore(node, new Operation(Instruction.Multiply, invocationOffset, new[] { invocationId, Const(stride / threadsPerInputPrimitive) }));
 
             Operand combinedOffset = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Add, combinedOffset, new[] { baseOffset, invocationOffset }));
+            node.List?.AddBefore(node, new Operation(Instruction.Add, combinedOffset, new[] { baseOffset, invocationOffset }));
 
             return combinedOffset;
         }
@@ -232,16 +230,16 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
         private static Operand IncrementLocalMemory(LinkedListNode<INode> node, int memoryId)
         {
             Operand oldValue = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.LocalMemory,
                 oldValue,
                 new[] { Const(memoryId) }));
 
             Operand newValue = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Add, newValue, new[] { oldValue, Const(1) }));
+            node.List?.AddBefore(node, new Operation(Instruction.Add, newValue, new[] { oldValue, Const(1) }));
 
-            node.List.AddBefore(node, new Operation(Instruction.Store, StorageKind.LocalMemory, null, new[] { Const(memoryId), newValue }));
+            node.List?.AddBefore(node, new Operation(Instruction.Store, StorageKind.LocalMemory, null, new[] { Const(memoryId), newValue }));
 
             return oldValue;
         }
@@ -255,34 +253,34 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
             int vertexInfoCbBinding = resourceManager.Reservations.VertexInfoConstantBufferBinding;
 
             Operand vertexCount = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.ConstantBuffer,
                 vertexCount,
                 new[] { Const(vertexInfoCbBinding), Const((int)VertexInfoBufferField.VertexCounts), Const(0) }));
 
             Operand primInputVertex = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.LocalMemory,
                 primInputVertex,
                 new[] { Const(resourceManager.LocalTopologyRemapMemoryId), primVertex }));
 
             Operand instanceIndex = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.Input,
                 instanceIndex,
                 new[] { Const((int)IoVariable.GlobalId), Const(1) }));
 
             Operand baseVertex = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Multiply, baseVertex, new[] { instanceIndex, vertexCount }));
+            node.List?.AddBefore(node, new Operation(Instruction.Multiply, baseVertex, new[] { instanceIndex, vertexCount }));
 
             Operand vertexIndex = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Add, vertexIndex, new[] { baseVertex, primInputVertex }));
+            node.List?.AddBefore(node, new Operation(Instruction.Add, vertexIndex, new[] { baseVertex, primInputVertex }));
 
             Operand vertexBaseOffset = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Multiply,
                 vertexBaseOffset,
                 new[] { vertexIndex, Const(resourceManager.Reservations.InputSizePerInvocation) }));
@@ -293,7 +291,7 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
             {
                 vertexElemOffset = Local();
 
-                node.List.AddBefore(node, new Operation(Instruction.Add, vertexElemOffset, new[] { vertexBaseOffset, Const(elementOffset) }));
+                node.List?.AddBefore(node, new Operation(Instruction.Add, vertexElemOffset, new[] { vertexBaseOffset, Const(elementOffset) }));
             }
             else
             {
@@ -308,35 +306,35 @@ namespace Ryujinx.Graphics.Shader.Translation.Transforms
             int vertexInfoCbBinding = resourceManager.Reservations.VertexInfoConstantBufferBinding;
 
             Operand vertexCount = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.ConstantBuffer,
                 vertexCount,
                 new[] { Const(vertexInfoCbBinding), Const((int)VertexInfoBufferField.VertexCounts), Const(0) }));
 
             Operand vertexIndex = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.Input,
                 vertexIndex,
                 new[] { Const((int)IoVariable.GlobalId), Const(0) }));
 
             Operand instanceIndex = Local();
-            node.List.AddBefore(node, new Operation(
+            node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.Input,
                 instanceIndex,
                 new[] { Const((int)IoVariable.GlobalId), Const(1) }));
 
             Operand baseVertex = Local();
-            node.List.AddBefore(node, new Operation(Instruction.Multiply, baseVertex, new[] { instanceIndex, vertexCount }));
+            node.List?.AddBefore(node, new Operation(Instruction.Multiply, baseVertex, new[] { instanceIndex, vertexCount }));
 
-            return node.List.AddBefore(node, new Operation(Instruction.Add, dest, new[] { baseVertex, vertexIndex }));
+            return node.List?.AddBefore(node, new Operation(Instruction.Add, dest, new[] { baseVertex, vertexIndex }));
         }
 
         private static LinkedListNode<INode> GenerateInvocationId(LinkedListNode<INode> node, Operand dest)
         {
-            return node.List.AddBefore(node, new Operation(
+            return node.List?.AddBefore(node, new Operation(
                 Instruction.Load,
                 StorageKind.Input,
                 dest,

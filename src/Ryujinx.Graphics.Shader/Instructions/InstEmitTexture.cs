@@ -227,7 +227,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
                 }
             }
 
-            int coordsCount = type.Dimensions;
+            int coordsCount = type.GetDimensions();
 
             for (int index = 0; index < coordsCount; index++)
             {
@@ -260,9 +260,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
                 type |= SamplerType.Shadow;
             }
 
-            if ((lodMode == Lod.Lz ||
-                 lodMode == Lod.Ll ||
-                 lodMode == Lod.Lla) && !isMultisample && type != SamplerType.TextureBuffer)
+            if (lodMode is Lod.Lz or Lod.Ll or Lod.Lla && !isMultisample && type != SamplerType.TextureBuffer)
             {
                 sourcesList.Add(lodValue);
 
@@ -504,7 +502,6 @@ namespace Ryujinx.Graphics.Shader.Instructions
 
                             sourcesList.Add(ConstF(0));
                         }
-
                         break;
 
                     case TldsTarget.Texture1DLodLevel:
@@ -558,7 +555,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
 
                 if ((flags & TextureFlags.Offset) != 0)
                 {
-                    AddTextureOffset(type.Dimensions, 4, 4);
+                    AddTextureOffset(type.GetDimensions(), 4, 4);
                 }
             }
             else if (texsType == TexsType.Tld4s)
@@ -583,7 +580,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
 
                 if (tld4sOp.Aoffi)
                 {
-                    AddTextureOffset(type.Dimensions, 8, 6);
+                    AddTextureOffset(type.GetDimensions(), 8, 6);
 
                     flags |= TextureFlags.Offset;
                 }
@@ -695,10 +692,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
             }
 
             bool isArray =
-                dimensions is TexDim.Array1d or
-                TexDim.Array2d or
-                TexDim.Array3d or
-                TexDim.ArrayCube;
+                dimensions is TexDim.Array1d or TexDim.Array2d or TexDim.Array3d or TexDim.ArrayCube;
 
             Operand arrayIndex = isArray ? Ra() : null;
 
@@ -714,7 +708,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
                 flags |= TextureFlags.Bindless;
             }
 
-            int coordsCount = type.Dimensions;
+            int coordsCount = type.GetDimensions();
 
             for (int index = 0; index < coordsCount; index++)
             {
@@ -847,13 +841,10 @@ namespace Ryujinx.Graphics.Shader.Instructions
 
             SamplerType type = ConvertSamplerType(dimensions);
 
-            int coordsCount = type.Dimensions;
+            int coordsCount = type.GetDimensions();
 
             bool isArray =
-                dimensions is TexDim.Array1d or
-                TexDim.Array2d or
-                TexDim.Array3d or
-                TexDim.ArrayCube;
+                dimensions is TexDim.Array1d or TexDim.Array2d or TexDim.Array3d or TexDim.ArrayCube;
 
             Operand arrayIndex = isArray ? Ra() : null;
 
@@ -942,6 +933,26 @@ namespace Ryujinx.Graphics.Shader.Instructions
                 return;
             }
 
+            Operand Ra()
+            {
+                if (srcA > RegisterConsts.RegisterZeroIndex)
+                {
+                    return Const(0);
+                }
+
+                return context.Copy(Register(srcA++, RegisterType.Gpr));
+            }
+
+            Operand Rb()
+            {
+                if (srcB > RegisterConsts.RegisterZeroIndex)
+                {
+                    return Const(0);
+                }
+
+                return context.Copy(Register(srcB++, RegisterType.Gpr));
+            }
+
             TextureFlags flags = TextureFlags.Derivatives;
 
             List<Operand> sourcesList = [];
@@ -955,7 +966,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
 
             SamplerType type = ConvertSamplerType(dimensions);
 
-            int coordsCount = type.Dimensions;
+            int coordsCount = type.GetDimensions();
 
             for (int index = 0; index < coordsCount; index++)
             {
@@ -974,10 +985,7 @@ namespace Ryujinx.Graphics.Shader.Instructions
             Operand packedParams = Ra();
 
             bool isArray =
-                dimensions is TexDim.Array1d or
-                TexDim.Array2d or
-                TexDim.Array3d or
-                TexDim.ArrayCube;
+                dimensions is TexDim.Array1d or TexDim.Array2d or TexDim.Array3d or TexDim.ArrayCube;
 
             if (isArray)
             {
@@ -1031,28 +1039,6 @@ namespace Ryujinx.Graphics.Shader.Instructions
             }
 
             EmitTextureSample(context, type, flags, imm, componentMask, dests, sources);
-
-            return;
-
-            Operand Ra()
-            {
-                if (srcA > RegisterConsts.RegisterZeroIndex)
-                {
-                    return Const(0);
-                }
-
-                return context.Copy(Register(srcA++, RegisterType.Gpr));
-            }
-
-            Operand Rb()
-            {
-                if (srcB > RegisterConsts.RegisterZeroIndex)
-                {
-                    return Const(0);
-                }
-
-                return context.Copy(Register(srcB++, RegisterType.Gpr));
-            }
         }
 
         private static void EmitTxq(
@@ -1146,7 +1132,6 @@ namespace Ryujinx.Graphics.Shader.Instructions
                             context.Copy(d, context.TextureQuerySize(type, flags, setAndBinding, compIndex, sources));
                         }
                     }
-
                     break;
 
                 case TexQuery.TexHeaderTextureType:
@@ -1178,7 +1163,6 @@ namespace Ryujinx.Graphics.Shader.Instructions
                             context.Copy(d, context.TextureQuerySamples(type, flags, setAndBinding, sources));
                         }
                     }
-
                     break;
 
                 default:

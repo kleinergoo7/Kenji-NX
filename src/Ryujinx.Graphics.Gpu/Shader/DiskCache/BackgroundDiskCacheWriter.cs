@@ -108,7 +108,6 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
                     {
                         Logger.Error?.Print(LogClass.Gpu, $"Error writing shader to disk cache. {ioException.Message}");
                     }
-
                     break;
             }
         }

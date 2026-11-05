@@ -77,7 +77,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             _flushLock = new ReaderWriterLockSlim();
             _useMirrors = gd.IsTBDR;
-
+            
             _decrementReferenceCount = _buffer.DecrementReferenceCount;
         }
 
@@ -293,7 +293,7 @@ namespace Ryujinx.Graphics.Vulkan
             if (_pendingData != null)
             {
                 _mirrors.Clear();
-            }
+            };
         }
 
         public void ClearMirrors(CommandBufferScoped cbs, int offset, int size)
@@ -313,7 +313,7 @@ namespace Ryujinx.Graphics.Vulkan
                 {
                     _gd.PipelineInternal.Rebind(_buffer, offset, size);
                 }
-            }
+            };
         }
 
         public void UseMirrors()
@@ -368,13 +368,10 @@ namespace Ryujinx.Graphics.Vulkan
             }
         }
 
-        public BufferHandle Handle
+        public BufferHandle GetHandle()
         {
-            get
-            {
-                ulong handle = _bufferHandle;
-                return Unsafe.As<ulong, BufferHandle>(ref handle);
-            }
+            ulong handle = _bufferHandle;
+            return Unsafe.As<ulong, BufferHandle>(ref handle);
         }
 
         public nint Map(int offset, int mappingSize)

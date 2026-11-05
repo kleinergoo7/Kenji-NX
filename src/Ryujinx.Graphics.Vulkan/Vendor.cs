@@ -1,4 +1,5 @@
 using Silk.NET.Vulkan;
+using System.Text.RegularExpressions;
 
 namespace Ryujinx.Graphics.Vulkan
 {
@@ -15,8 +16,20 @@ namespace Ryujinx.Graphics.Vulkan
         Unknown,
     }
 
-    static class VendorUtils
+    static partial class VendorUtils
     {
+        [GeneratedRegex("Radeon (((HD|R(5|7|9|X)) )?((M?[2-6]\\d{2}(\\D|$))|([7-8]\\d{3}(\\D|$))|Fury|Nano))|(Pro Duo)")]
+        public static partial Regex AmdGcnRegex();
+
+        [GeneratedRegex("Radeon ([7-8](\\d{2}\\d?)[MS]|PRO [VW]7(\\d{2}\\d?)|RX 7\\d{3}([MS]?| XTX?| GRE)?)")]
+        public static partial Regex AmdRdna3Regex();
+        
+        [GeneratedRegex("NVIDIA GeForce (R|G)?TX? (\\d{3}\\d?)M?")]
+        public static partial Regex NvidiaConsumerClassRegex();
+
+        [GeneratedRegex(@"^\d+\.\d+\.\d+\.\d+$")]
+        internal static partial Regex IntelWindowsDriverVersionRegex();
+
         public static Vendor FromId(uint id)
         {
             return id switch

@@ -48,9 +48,10 @@ namespace Ryujinx.Graphics.Gpu.Image
     {
         private const int MinCountForDeletion = 32;
         private const int MaxCapacity = 2048;
+        private const ulong MiB = 1024 * 1024;
         private const ulong GiB = 1024 * 1024 * 1024;
         private ulong MaxTextureSizeCapacity = 2 * GiB;
-        private const ulong MinTextureSizeCapacity = 512 * 1024 * 1024;
+        private const ulong MinTextureSizeCapacity = 512 * MiB;
         private const ulong DefaultTextureSizeCapacity = 1 * GiB;
 
         private const float MemoryScaleFactor = 0.50f;
@@ -83,7 +84,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             MaxTextureSizeCapacity =
                 context.Capabilities.MaximumGpuMemory == 0 || cpuMemorySizeGiB < 6 && MaximumGpuMemoryGiB < 6
                     ? DefaultTextureSizeCapacity
-                    : cpuMemorySizeGiB < 12
+                    : cpuMemorySizeGiB < 10
                         ? TextureSizeCapacity
                         : cpuMemorySize;
 
@@ -164,24 +165,27 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// </summary>
         private void RemoveLeastUsedTexture()
         {
-            Texture oldestTexture = _textures.First.Value;
+            Texture oldestTexture = _textures.First?.Value;
 
-            _totalSize -= oldestTexture.Size;
-
-            if (!oldestTexture.CheckModified(false))
+            if (oldestTexture != null)
             {
-                // The texture must be flushed if it falls out of the auto delete cache.
-                // Flushes out of the auto delete cache do not trigger write tracking,
-                // as it is expected that other overlapping textures exist that have more up-to-date contents.
+                _totalSize -= oldestTexture.Size;
 
-                oldestTexture.Group.SynchronizeDependents(oldestTexture);
-                oldestTexture.FlushModified(false);
+                if (!oldestTexture.CheckModified(false))
+                {
+                    // The texture must be flushed if it falls out of the auto delete cache.
+                    // Flushes out of the auto delete cache do not trigger write tracking,
+                    // as it is expected that other overlapping textures exist that have more up-to-date contents.
+
+                    oldestTexture.Group.SynchronizeDependents(oldestTexture);
+                    oldestTexture.FlushModified(false);
+                }
+
+                _textures.RemoveFirst();
+
+                oldestTexture.DecrementReferenceCount();
+                oldestTexture.CacheNode = null;
             }
-
-            _textures.RemoveFirst();
-
-            oldestTexture.DecrementReferenceCount();
-            oldestTexture.CacheNode = null;
         }
 
         /// <summary>
@@ -190,11 +194,11 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <param name="texture">The texture to be removed from the cache</param>
         /// <param name="flush">True to remove the texture if it was on the cache</param>
         /// <returns>True if the texture was found and removed, false otherwise</returns>
-        public bool Remove(Texture texture, bool flush)
+        public void Remove(Texture texture, bool flush)
         {
             if (texture.CacheNode == null)
             {
-                return false;
+                return;
             }
 
             // Remove our reference to this texture.
@@ -209,7 +213,7 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             texture.CacheNode = null;
 
-            return texture.DecrementReferenceCount();
+            texture.DecrementReferenceCount();
         }
 
         /// <summary>
@@ -225,10 +229,8 @@ namespace Ryujinx.Graphics.Gpu.Image
                 {
                     return entry.Texture;
                 }
-                else
-                {
-                    _shortCacheLookup.Remove(descriptor);
-                }
+
+                _shortCacheLookup.Remove(descriptor);
             }
 
             return null;

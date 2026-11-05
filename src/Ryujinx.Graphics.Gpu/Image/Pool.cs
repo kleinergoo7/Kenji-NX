@@ -248,7 +248,6 @@ namespace Ryujinx.Graphics.Gpu.Image
 
                 Items = null;
             }
-
             _memoryTracking.Dispose();
         }
     }

@@ -152,7 +152,7 @@ namespace Ryujinx.Graphics.Vulkan.Effects
             int dispatchY = (height + (threadGroupWorkRegionDim - 1)) / threadGroupWorkRegionDim;
 
             _pipeline.SetUniformBuffers([new BufferAssignment(2, buffer.Range)]);
-            _pipeline.SetImage(ShaderStage.Compute, 0, _intermediaryTexture.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
+            _pipeline.SetImage(ShaderStage.Compute, 0, _intermediaryTexture?.GetView(FormatTable.ConvertRgba8SrgbToUnorm(view.Info.Format)));
             _pipeline.DispatchCompute(dispatchX, dispatchY, 1);
             _pipeline.ComputeBarrier();
 

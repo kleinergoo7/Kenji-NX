@@ -10,6 +10,12 @@ namespace Ryujinx.Graphics.Shader
         public ReadOnlyCollection<TextureDescriptor> Textures { get; }
         public ReadOnlyCollection<TextureDescriptor> Images { get; }
 
+        /// <summary>
+        /// Table store descriptors (T239).
+        /// v1.1 (Switch 2 enablement) addition; empty when unused.
+        /// </summary>
+        public ReadOnlyCollection<TableStore> TableStores { get; }
+
         public ShaderStage Stage { get; }
         public int GeometryVerticesPerPrimitive { get; }
         public int GeometryMaxOutputVertices { get; }
@@ -35,7 +41,8 @@ namespace Ryujinx.Graphics.Shader
             bool usesDrawParameters,
             bool usesRtLayer,
             byte clipDistancesWritten,
-            int fragmentOutputMap)
+            int fragmentOutputMap,
+            TableStore[] tableStores = null)
         {
             CBuffers = Array.AsReadOnly(cBuffers);
             SBuffers = Array.AsReadOnly(sBuffers);
@@ -52,6 +59,7 @@ namespace Ryujinx.Graphics.Shader
             UsesRtLayer = usesRtLayer;
             ClipDistancesWritten = clipDistancesWritten;
             FragmentOutputMap = fragmentOutputMap;
+            TableStores = Array.AsReadOnly(tableStores ?? System.Array.Empty<TableStore>());
         }
     }
 }

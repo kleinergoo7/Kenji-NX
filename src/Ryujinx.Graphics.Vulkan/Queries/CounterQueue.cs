@@ -51,7 +51,7 @@ namespace Ryujinx.Graphics.Vulkan.Queries
 
             _current = new CounterQueueEvent(this, type, 0);
 
-            _consumerThread = new Thread(EventConsumer) { Name = "CPU.CounterQueue." + (int)type };
+            _consumerThread = new Thread(EventConsumer);
             _consumerThread.Start();
         }
 
@@ -198,7 +198,6 @@ namespace Ryujinx.Graphics.Vulkan.Queries
                     {
                         return; // If not blocking, then return when we encounter an event that is not ready yet.
                     }
-
                     _events.Dequeue();
                 }
             }

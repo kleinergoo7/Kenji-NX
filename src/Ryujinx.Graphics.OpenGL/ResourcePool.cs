@@ -108,7 +108,6 @@ namespace Ryujinx.Graphics.OpenGL
                         texture.View.Dispose();
                     }
                 }
-
                 _textures.Clear();
             }
         }

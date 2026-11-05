@@ -31,7 +31,6 @@ namespace Ryujinx.Graphics.OpenGL.Queries
                 long defaultValue = DefaultValue;
                 GL.BufferStorage(BufferTarget.QueryBuffer, sizeof(long), (nint)(&defaultValue), BufferStorageFlags.MapReadBit | BufferStorageFlags.MapWriteBit | BufferStorageFlags.MapPersistentBit);
             }
-
             _bufferMap = GL.MapBufferRange(BufferTarget.QueryBuffer, nint.Zero, sizeof(long), MapBufferAccessMask.MapReadBit | MapBufferAccessMask.MapWriteBit | MapBufferAccessMask.MapPersistentBit);
         }
 

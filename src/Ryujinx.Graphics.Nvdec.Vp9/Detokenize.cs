@@ -17,10 +17,10 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
         private static int GetCoefContext(ReadOnlySpan<short> neighbors, ReadOnlySpan<byte> tokenCache, int c)
         {
-            const int MaxNeighbors = 2;
+            const int maxNeighbors = 2;
 
-            return (1 + tokenCache[neighbors[(MaxNeighbors * c) + 0]] +
-                    tokenCache[neighbors[(MaxNeighbors * c) + 1]]) >> 1;
+            return (1 + tokenCache[neighbors[(maxNeighbors * c) + 0]] +
+                    tokenCache[neighbors[(maxNeighbors * c) + 1]]) >> 1;
         }
 
         private static int DecodeCoefs(
@@ -42,13 +42,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             ReadOnlySpan<Array6<Array3<byte>>> coefProbs = fc.CoefProbs[(int)txSize][(int)type][refr].AsSpan();
             Span<byte> tokenCache = stackalloc byte[32 * 32];
             ReadOnlySpan<byte> bandTranslate = Luts.GetBandTranslate(txSize);
-            int dqShift = txSize == TxSize.Tx32X32 ? 1 : 0;
+            int dqShift = txSize == TxSize.Tx32x32 ? 1 : 0;
             int v;
             short dqv = dq[0];
             ReadOnlySpan<byte> cat6Prob = xd.Bd == 12
                 ? Luts.Cat6ProbHigh12
                 : xd.Bd == 10
-                    ? Luts.Cat6ProbHigh12[2..]
+                    ? Luts.Cat6ProbHigh12.Slice(2)
                     : Luts.Cat6Prob;
             int cat6Bits = xd.Bd == 12 ? 18 : xd.Bd == 10 ? 16 : 14;
             // Keep value, range, and count as locals.  The compiler produces better
@@ -56,7 +56,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             ulong value = r.Value;
             uint range = r.Range;
             int count = r.Count;
-
+            
             ReadOnlySpan<Array6<Array4<uint>>> coefSpan = counts.Coef[(int)txSize][(int)type][refr].AsSpan();
             ReadOnlySpan<Array6<uint>> eobBranchSpan = counts.EobBranch[(int)txSize][(int)type][refr].AsSpan();
 
@@ -64,7 +64,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             {
                 int val = -1;
                 band = bandTranslate[0];
-                bandTranslate = bandTranslate[1..];
+                bandTranslate = bandTranslate.Slice(1);
                 ReadOnlySpan<byte> prob = coefProbs[band][ctx].AsSpan();
                 if (!xd.Counts.IsNull)
                 {
@@ -101,7 +101,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
 
                     ctx = GetCoefContext(nb, tokenCache, c);
                     band = bandTranslate[0];
-                    bandTranslate = bandTranslate[1..];
+                    bandTranslate = bandTranslate.Slice(1);
                     prob = coefProbs[band][ctx].AsSpan();
                 }
 
@@ -237,15 +237,15 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             ref MacroBlockDPlane pd = ref xd.Plane[plane];
             Span<short> dequant = pd.SegDequant[segId].AsSpan();
             int eob;
-            Span<sbyte> a = pd.AboveContext.AsSpan()[x..];
-            Span<sbyte> l = pd.LeftContext.AsSpan()[y..];
+            Span<sbyte> a = pd.AboveContext.AsSpan().Slice(x);
+            Span<sbyte> l = pd.LeftContext.AsSpan().Slice(y);
             int ctx;
             int ctxShiftA = 0;
             int ctxShiftL = 0;
 
             switch (txSize)
             {
-                case TxSize.Tx4X4:
+                case TxSize.Tx4x4:
                     ctx = a[0] != 0 ? 1 : 0;
                     ctx += l[0] != 0 ? 1 : 0;
                     eob = DecodeCoefs(
@@ -260,8 +260,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                         ref r);
                     a[0] = l[0] = (sbyte)(eob > 0 ? 1 : 0);
                     break;
-                case TxSize.Tx8X8:
-                    GetCtxShift(ref xd, ref ctxShiftA, ref ctxShiftL, x, y, 1 << (int)TxSize.Tx8X8);
+                case TxSize.Tx8x8:
+                    GetCtxShift(ref xd, ref ctxShiftA, ref ctxShiftL, x, y, 1 << (int)TxSize.Tx8x8);
                     ctx = MemoryMarshal.Cast<sbyte, ushort>(a)[0] != 0 ? 1 : 0;
                     ctx += MemoryMarshal.Cast<sbyte, ushort>(l)[0] != 0 ? 1 : 0;
                     eob = DecodeCoefs(
@@ -277,8 +277,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     MemoryMarshal.Cast<sbyte, ushort>(a)[0] = (ushort)((eob > 0 ? 0x0101 : 0) >> ctxShiftA);
                     MemoryMarshal.Cast<sbyte, ushort>(l)[0] = (ushort)((eob > 0 ? 0x0101 : 0) >> ctxShiftL);
                     break;
-                case TxSize.Tx16X16:
-                    GetCtxShift(ref xd, ref ctxShiftA, ref ctxShiftL, x, y, 1 << (int)TxSize.Tx16X16);
+                case TxSize.Tx16x16:
+                    GetCtxShift(ref xd, ref ctxShiftA, ref ctxShiftL, x, y, 1 << (int)TxSize.Tx16x16);
                     ctx = MemoryMarshal.Cast<sbyte, uint>(a)[0] != 0 ? 1 : 0;
                     ctx += MemoryMarshal.Cast<sbyte, uint>(l)[0] != 0 ? 1 : 0;
                     eob = DecodeCoefs(
@@ -294,8 +294,8 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     MemoryMarshal.Cast<sbyte, uint>(a)[0] = (uint)((eob > 0 ? 0x01010101 : 0) >> ctxShiftA);
                     MemoryMarshal.Cast<sbyte, uint>(l)[0] = (uint)((eob > 0 ? 0x01010101 : 0) >> ctxShiftL);
                     break;
-                case TxSize.Tx32X32:
-                    GetCtxShift(ref xd, ref ctxShiftA, ref ctxShiftL, x, y, 1 << (int)TxSize.Tx32X32);
+                case TxSize.Tx32x32:
+                    GetCtxShift(ref xd, ref ctxShiftA, ref ctxShiftL, x, y, 1 << (int)TxSize.Tx32x32);
                     // NOTE: Casting to ulong here is safe because the default memory
                     // alignment is at least 8 bytes and the Tx32x32 is aligned on 8 byte
                     // boundaries.

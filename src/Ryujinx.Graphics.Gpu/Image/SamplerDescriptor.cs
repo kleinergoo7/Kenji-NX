@@ -73,7 +73,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             return (AddressMode)(Word0 & 7);
         }
 
-        // <summary>
+        /// <summary>
         /// Unpacks the texture wrap mode along the Y axis.
         /// </summary>
         /// <returns>The texture wrap mode enum</returns>
@@ -82,7 +82,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             return (AddressMode)((Word0 >> 3) & 7);
         }
 
-        // <summary>
+        /// <summary>
         /// Unpacks the texture wrap mode along the Z axis.
         /// </summary>
         /// <returns>The texture wrap mode enum</returns>
@@ -175,7 +175,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                         case SamplerMinFilter.Linear:
                             return MinFilter.Linear;
                     }
-
                     break;
 
                 case SamplerMipFilter.Nearest:
@@ -186,7 +185,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                         case SamplerMinFilter.Linear:
                             return MinFilter.LinearMipmapNearest;
                     }
-
                     break;
 
                 case SamplerMipFilter.Linear:
@@ -197,7 +195,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                         case SamplerMinFilter.Linear:
                             return MinFilter.LinearMipmapLinear;
                     }
-
                     break;
             }
 

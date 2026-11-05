@@ -35,6 +35,11 @@ namespace Ryujinx.Graphics.Shader.Translation
         internal TranslationOptions Options { get; }
 
         private bool IsTransformFeedbackEmulated => !GpuAccessor.QueryHostSupportsTransformFeedback() && GpuAccessor.QueryTransformFeedbackEnabled();
+        /// <summary>
+        /// Number of instructions the translator could not translate (v1.1 addition).
+        /// </summary>
+        public int UnsupportedInstructionCount { get; private set; }
+
         public bool HasStore => _program.UsedFeatures.HasFlag(FeatureFlags.Store) || (IsTransformFeedbackEmulated && Definitions.LastInVertexPipeline);
 
         public bool LayerOutputWritten { get; private set; }
@@ -173,6 +178,24 @@ namespace Ryujinx.Graphics.Shader.Translation
         {
             Definitions.LastInVertexPipeline = true;
         }
+
+        /// <summary>
+        /// Records an unsupported instruction encountered during translation (v1.1 addition).
+        /// </summary>
+        internal void ReportUnsupportedInstruction()
+        {
+            UnsupportedInstructionCount++;
+        }
+
+        /// <summary>
+        /// Links the vertex stage to the next stage (v1.1 addition, used for geometry passthrough).
+        /// </summary>
+        public void SetVertexShader(TranslatorContext vertexShader)
+        {
+            _linkedVertexShader = vertexShader;
+        }
+
+        private TranslatorContext _linkedVertexShader;
 
         public void SetNextStage(TranslatorContext nextStage)
         {
@@ -340,7 +363,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 _ => 1
             };
 
-            ShaderProgramInfo info = new ShaderProgramInfo(
+            ShaderProgramInfo info = new(
                 resourceManager.GetConstantBufferDescriptors(),
                 resourceManager.GetStorageBufferDescriptors(),
                 resourceManager.GetTextureDescriptors(),
@@ -356,7 +379,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 clipDistancesWritten,
                 originalDefinitions.OmapTargets);
 
-            HostCapabilities hostCapabilities = new HostCapabilities(
+            HostCapabilities hostCapabilities = new(
                 GpuAccessor.QueryHostReducedPrecision(),
                 GpuAccessor.QueryHostSupportsFragmentShaderInterlock(),
                 GpuAccessor.QueryHostSupportsFragmentShaderOrderingIntel(),
@@ -366,9 +389,10 @@ namespace Ryujinx.Graphics.Shader.Translation
                 GpuAccessor.QueryHostSupportsShaderFloat64(),
                 GpuAccessor.QueryHostSupportsShaderNonUniformIndexing(),
                 GpuAccessor.QueryHostSupportsTextureShadowLod(),
-                GpuAccessor.QueryHostSupportsViewportMask());
+                GpuAccessor.QueryHostSupportsViewportMask(),
+                GpuAccessor.QueryStorageImageExtendedFormats());
 
-            CodeGenParameters parameters = new CodeGenParameters(attributeUsage, definitions, resourceManager.Properties, hostCapabilities, GpuAccessor, Options.TargetApi);
+            CodeGenParameters parameters = new(attributeUsage, definitions, resourceManager.Properties, hostCapabilities, GpuAccessor, Options.TargetApi);
 
             return Options.TargetLanguage switch
             {
@@ -384,10 +408,9 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             if (IsTransformFeedbackEmulated)
             {
-                StructureType tfeDataStruct = new(new StructureField[]
-                {
-                    new(AggregateType.Array | AggregateType.U32, "data", 0)
-                });
+                StructureType tfeDataStruct = new([
+                    new StructureField(AggregateType.Array | AggregateType.U32, "data", 0)
+                ]);
 
                 for (int i = 0; i < ResourceReservations.TfeBuffersCount; i++)
                 {
@@ -403,10 +426,9 @@ namespace Ryujinx.Graphics.Shader.Translation
                 BufferDefinition vertexInfoBuffer = new(BufferLayout.Std140, 0, vertexInfoCbBinding, "vb_info", VertexInfoBuffer.GetStructureType());
                 resourceManager.Properties.AddOrUpdateConstantBuffer(vertexInfoBuffer);
 
-                StructureType vertexOutputStruct = new(new StructureField[]
-                {
-                    new(AggregateType.Array | AggregateType.FP32, "data", 0)
-                });
+                StructureType vertexOutputStruct = new([
+                    new StructureField(AggregateType.Array | AggregateType.FP32, "data", 0)
+                ]);
 
                 int vertexOutputSbBinding = resourceManager.Reservations.VertexOutputStorageBufferBinding;
                 BufferDefinition vertexOutputBuffer = new(BufferLayout.Std430, 1, vertexOutputSbBinding, "vertex_output", vertexOutputStruct);
@@ -440,10 +462,9 @@ namespace Ryujinx.Graphics.Shader.Translation
                     BufferDefinition geometryVbOutputBuffer = new(BufferLayout.Std430, 1, geometryVbOutputSbBinding, "geometry_vb_output", vertexOutputStruct);
                     resourceManager.Properties.AddOrUpdateStorageBuffer(geometryVbOutputBuffer);
 
-                    StructureType geometryIbOutputStruct = new(new StructureField[]
-                    {
-                        new(AggregateType.Array | AggregateType.U32, "data", 0)
-                    });
+                    StructureType geometryIbOutputStruct = new([
+                        new StructureField(AggregateType.Array | AggregateType.U32, "data", 0)
+                    ]);
 
                     int geometryIbOutputSbBinding = resourceManager.Reservations.GeometryIndexOutputStorageBufferBinding;
                     BufferDefinition geometryIbOutputBuffer = new(BufferLayout.Std430, 1, geometryIbOutputSbBinding, "geometry_ib_output", geometryIbOutputStruct);
@@ -487,8 +508,8 @@ namespace Ryujinx.Graphics.Shader.Translation
 
         public ShaderProgram GenerateVertexPassthroughForCompute()
         {
-            AttributeUsage attributeUsage = new AttributeUsage(GpuAccessor);
-            ResourceManager resourceManager = new ResourceManager(ShaderStage.Vertex, GpuAccessor);
+            AttributeUsage attributeUsage = new(GpuAccessor);
+            ResourceManager resourceManager = new(ShaderStage.Vertex, GpuAccessor);
 
             ResourceReservations reservations = GetResourceReservations();
 
@@ -500,16 +521,15 @@ namespace Ryujinx.Graphics.Shader.Translation
                 resourceManager.Properties.AddOrUpdateConstantBuffer(vertexInfoBuffer);
             }
 
-            StructureType vertexInputStruct = new(new StructureField[]
-            {
-                new(AggregateType.Array | AggregateType.FP32, "data", 0)
-            });
+            StructureType vertexInputStruct = new([
+                new StructureField(AggregateType.Array | AggregateType.FP32, "data", 0)
+            ]);
 
             int vertexDataSbBinding = reservations.VertexOutputStorageBufferBinding;
             BufferDefinition vertexOutputBuffer = new(BufferLayout.Std430, 1, vertexDataSbBinding, "vb_input", vertexInputStruct);
             resourceManager.Properties.AddOrUpdateStorageBuffer(vertexOutputBuffer);
 
-            EmitterContext context = new EmitterContext();
+            EmitterContext context = new();
 
             Operand vertexIndex = Options.TargetApi == TargetApi.OpenGL
                 ? context.Load(StorageKind.Input, IoVariable.VertexId)
@@ -556,17 +576,17 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             Operation[] operations = context.GetOperations();
             ControlFlowGraph cfg = ControlFlowGraph.Create(operations);
-            Function function = new Function(cfg.Blocks, "main", false, 0, 0);
+            Function function = new(cfg.Blocks, "main", false, 0, 0);
 
             TransformFeedbackOutput[] transformFeedbackOutputs = GetTransformFeedbackOutputs(GpuAccessor, out ulong transformFeedbackVecMap);
 
-            ShaderDefinitions definitions = new ShaderDefinitions(ShaderStage.Vertex, transformFeedbackVecMap, transformFeedbackOutputs)
+            ShaderDefinitions definitions = new(ShaderStage.Vertex, transformFeedbackVecMap, transformFeedbackOutputs)
             {
                 LastInVertexPipeline = true
             };
 
             return Generate(
-                new[] { function },
+                [function],
                 attributeUsage,
                 definitions,
                 definitions,
@@ -605,10 +625,10 @@ namespace Ryujinx.Graphics.Shader.Translation
                     break;
             }
 
-            AttributeUsage attributeUsage = new AttributeUsage(GpuAccessor);
-            ResourceManager resourceManager = new ResourceManager(ShaderStage.Geometry, GpuAccessor);
+            AttributeUsage attributeUsage = new(GpuAccessor);
+            ResourceManager resourceManager = new(ShaderStage.Geometry, GpuAccessor);
 
-            EmitterContext context = new EmitterContext();
+            EmitterContext context = new();
 
             for (int v = 0; v < maxOutputVertices; v++)
             {
@@ -651,9 +671,9 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             Operation[] operations = context.GetOperations();
             ControlFlowGraph cfg = ControlFlowGraph.Create(operations);
-            Function function = new Function(cfg.Blocks, "main", false, 0, 0);
+            Function function = new(cfg.Blocks, "main", false, 0, 0);
 
-            ShaderDefinitions definitions = new ShaderDefinitions(
+            ShaderDefinitions definitions = new(
                 ShaderStage.Geometry,
                 GpuAccessor.QueryGraphicsState(),
                 false,
@@ -662,7 +682,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 maxOutputVertices);
 
             return Generate(
-                new[] { function },
+                [function],
                 attributeUsage,
                 definitions,
                 definitions,

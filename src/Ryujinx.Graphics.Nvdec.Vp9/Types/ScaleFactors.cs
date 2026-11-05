@@ -38,7 +38,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             int h,
             int bd);
 
-        private static readonly unsafe ConvolveFn[][][] _predictX16Y16 =
+        private static readonly unsafe ConvolveFn[][][] PredictX16Y16 =
         [
             [
                 [ConvolveCopy, ConvolveAvg],
@@ -50,7 +50,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             ]
         ];
 
-        private static readonly unsafe ConvolveFn[][][] _predictX16 =
+        private static readonly unsafe ConvolveFn[][][] PredictX16 =
         [
             [
                 [ScaledVert, ScaledAvgVert], [ScaledVert, ScaledAvgVert]
@@ -58,19 +58,19 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             [[Scaled2D, ScaledAvg2D], [Scaled2D, ScaledAvg2D]]
         ];
 
-        private static readonly unsafe ConvolveFn[][][] _predictY16 =
+        private static readonly unsafe ConvolveFn[][][] PredictY16 =
         [
             [[ScaledHoriz, ScaledAvgHoriz], [Scaled2D, ScaledAvg2D]],
             [[ScaledHoriz, ScaledAvgHoriz], [Scaled2D, ScaledAvg2D]]
         ];
 
-        private static readonly unsafe ConvolveFn[][][] _predict =
+        private static readonly unsafe ConvolveFn[][][] Predict =
         [
             [[Scaled2D, ScaledAvg2D], [Scaled2D, ScaledAvg2D]],
             [[Scaled2D, ScaledAvg2D], [Scaled2D, ScaledAvg2D]]
         ];
 
-        private static readonly unsafe HighbdConvolveFn[][][] _highbdPredictX16Y16 =
+        private static readonly unsafe HighbdConvolveFn[][][] HighbdPredictX16Y16 =
         [
             [
                 [HighbdConvolveCopy, HighbdConvolveAvg],
@@ -82,7 +82,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             ]
         ];
 
-        private static readonly unsafe HighbdConvolveFn[][][] _highbdPredictX16 =
+        private static readonly unsafe HighbdConvolveFn[][][] HighbdPredictX16 =
         [
             [
                 [HighbdConvolve8Vert, HighbdConvolve8AvgVert],
@@ -94,7 +94,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             ]
         ];
 
-        private static readonly unsafe HighbdConvolveFn[][][] _highbdPredictY16 =
+        private static readonly unsafe HighbdConvolveFn[][][] HighbdPredictY16 =
         [
             [
                 [HighbdConvolve8Horiz, HighbdConvolve8AvgHoriz],
@@ -106,7 +106,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             ]
         ];
 
-        private static readonly unsafe HighbdConvolveFn[][][] _highbdPredict =
+        private static readonly unsafe HighbdConvolveFn[][][] HighbdPredict =
         [
             [
                 [HighbdConvolve8, HighbdConvolve8Avg],
@@ -123,18 +123,18 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public int XStepQ4;
         public int YStepQ4;
 
-        public readonly int ScaleValueX(int val)
+        public int ScaleValueX(int val)
         {
             return IsScaled() ? ScaledX(val) : val;
         }
 
-        public readonly int ScaleValueY(int val)
+        public int ScaleValueY(int val)
         {
             return IsScaled() ? ScaledY(val) : val;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly unsafe void InterPredict(
+        public unsafe void InterPredict(
             int horiz,
             int vert,
             int avg,
@@ -155,13 +155,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 if (YStepQ4 == 16)
                 {
                     // No scaling in either direction.
-                    _predictX16Y16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
+                    PredictX16Y16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
                         h);
                 }
                 else
                 {
                     // No scaling in x direction. Must always scale in the y direction.
-                    _predictX16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
+                    PredictX16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
                         h);
                 }
             }
@@ -170,19 +170,19 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 if (YStepQ4 == 16)
                 {
                     // No scaling in the y direction. Must always scale in the x direction.
-                    _predictY16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
+                    PredictY16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
                         h);
                 }
                 else
                 {
                     // Must always scale in both directions.
-                    _predict[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w, h);
+                    Predict[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w, h);
                 }
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly unsafe void HighbdInterPredict(
+        public unsafe void HighbdInterPredict(
             int horiz,
             int vert,
             int avg,
@@ -204,13 +204,13 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 if (YStepQ4 == 16)
                 {
                     // No scaling in either direction.
-                    _highbdPredictX16Y16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY,
+                    HighbdPredictX16Y16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY,
                         ys, w, h, bd);
                 }
                 else
                 {
                     // No scaling in x direction. Must always scale in the y direction.
-                    _highbdPredictX16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys,
+                    HighbdPredictX16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys,
                         w, h, bd);
                 }
             }
@@ -219,24 +219,24 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
                 if (YStepQ4 == 16)
                 {
                     // No scaling in the y direction. Must always scale in the x direction.
-                    _highbdPredictY16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys,
+                    HighbdPredictY16[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys,
                         w, h, bd);
                 }
                 else
                 {
                     // Must always scale in both directions.
-                    _highbdPredict[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
+                    HighbdPredict[horiz][vert][avg](src, srcStride, dst, dstStride, kernel, subpelX, xs, subpelY, ys, w,
                         h, bd);
                 }
             }
         }
 
-        private readonly int ScaledX(int val)
+        private int ScaledX(int val)
         {
             return (int)(((long)val * XScaleFp) >> RefScaleShift);
         }
 
-        private readonly int ScaledY(int val)
+        private int ScaledY(int val)
         {
             return (int)(((long)val * YScaleFp) >> RefScaleShift);
         }
@@ -258,12 +258,12 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             return res;
         }
 
-        public readonly bool IsValidScale()
+        public bool IsValidScale()
         {
             return XScaleFp != RefInvalidScale && YScaleFp != RefInvalidScale;
         }
 
-        public readonly bool IsScaled()
+        public bool IsScaled()
         {
             return IsValidScale() && (XScaleFp != RefNoScale || YScaleFp != RefNoScale);
         }

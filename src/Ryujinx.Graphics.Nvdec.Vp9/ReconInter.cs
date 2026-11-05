@@ -98,8 +98,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
             int spelBottom = spelTop - SubpelShifts;
             Mv clampedMv = new()
             {
-                Row = (short)(srcMv.Row * (1 << (1 - ssY))),
-                Col = (short)(srcMv.Col * (1 << (1 - ssX)))
+                Row = (short)(srcMv.Row * (1 << (1 - ssY))), Col = (short)(srcMv.Col * (1 << (1 - ssX)))
             };
 
             Debug.Assert(ssX <= 1);
@@ -133,7 +132,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9
                     res = mi.MvPredQ4(refr);
                     break;
                 default:
-                    Debug.Assert(ssIdx is <= 3 and >= 0);
+                    Debug.Assert(ssIdx <= 3 && ssIdx >= 0);
                     break;
             }
 

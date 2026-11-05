@@ -45,11 +45,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
             }
         }
 
-        public static DecodedProgram Decode(
-            ShaderDefinitions definitions,
-            IGpuAccessor gpuAccessor,
-            ulong startAddress,
-            Func<uint, uint?> nativeAddressMap = null)
+        public static DecodedProgram Decode(ShaderDefinitions definitions, IGpuAccessor gpuAccessor, ulong startAddress)
         {
             Context context = new(gpuAccessor);
             Queue<DecodedFunction> functionsQueue = new();
@@ -189,7 +185,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
                     }
 
                     // Try to find targets for BRX (indirect branch) instructions.
-                    hasNewTarget = FindBrxTargets(context, blocks, GetBlock, nativeAddressMap);
+                    hasNewTarget = FindBrxTargets(context, blocks, GetBlock);
 
                     // If we discovered new branch targets from the BRX instruction,
                     // we need another round of decoding to decode the new blocks.
@@ -396,7 +392,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
 
                     if (perPatch)
                     {
-                        if (attr is >= AttributeConsts.UserAttributePerPatchBase and < AttributeConsts.UserAttributePerPatchEnd)
+                        if (attr >= AttributeConsts.UserAttributePerPatchBase && attr < AttributeConsts.UserAttributePerPatchEnd)
                         {
                             int userAttr = attr - AttributeConsts.UserAttributePerPatchBase;
                             int index = userAttr / 16;
@@ -411,7 +407,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
                             }
                         }
                     }
-                    else if (attr is >= AttributeConsts.UserAttributeBase and < AttributeConsts.UserAttributeEnd)
+                    else if (attr >= AttributeConsts.UserAttributeBase && attr < AttributeConsts.UserAttributeEnd)
                     {
                         int userAttr = attr - AttributeConsts.UserAttributeBase;
                         int index = userAttr / 16;
@@ -440,18 +436,16 @@ namespace Ryujinx.Graphics.Shader.Decoders
                             switch (attr)
                             {
                                 case AttributeConsts.Layer:
-                                    if (definitions.Stage is not ShaderStage.Compute and not ShaderStage.Fragment)
+                                    if (definitions.Stage != ShaderStage.Compute && definitions.Stage != ShaderStage.Fragment)
                                     {
                                         context.SetUsedFeature(FeatureFlags.RtLayer);
                                     }
-
                                     break;
                                 case AttributeConsts.ViewportIndex:
                                     if (definitions.Stage != ShaderStage.Fragment)
                                     {
                                         context.SetUsedFeature(FeatureFlags.ViewportIndex);
                                     }
-
                                     break;
                                 case AttributeConsts.ClipDistance0:
                                 case AttributeConsts.ClipDistance1:
@@ -461,18 +455,16 @@ namespace Ryujinx.Graphics.Shader.Decoders
                                 case AttributeConsts.ClipDistance5:
                                 case AttributeConsts.ClipDistance6:
                                 case AttributeConsts.ClipDistance7:
-                                    if (definitions.Stage.IsVtg)
+                                    if (definitions.Stage.IsVtg())
                                     {
                                         context.SetClipDistanceWritten((attr - AttributeConsts.ClipDistance0) / 4);
                                     }
-
                                     break;
                                 case AttributeConsts.ViewportMask:
                                     if (definitions.Stage != ShaderStage.Fragment)
                                     {
                                         context.SetUsedFeature(FeatureFlags.ViewportMask);
                                     }
-
                                     break;
                             }
                         }
@@ -486,14 +478,12 @@ namespace Ryujinx.Graphics.Shader.Decoders
                                     {
                                         context.SetUsedFeature(FeatureFlags.FragCoordXY);
                                     }
-
                                     break;
                                 case AttributeConsts.InstanceId:
                                     if (definitions.Stage == ShaderStage.Vertex)
                                     {
                                         context.SetUsedFeature(FeatureFlags.InstanceId);
                                     }
-
                                     break;
                             }
                         }
@@ -511,7 +501,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
         {
             InstConditional condOp = new(op.RawOpCode);
 
-            if ((op.Name == InstName.Bra || op.Name == InstName.Exit) && condOp.Ccc != Ccc.T)
+            if (op.Name is InstName.Bra or InstName.Exit && condOp.Ccc != Ccc.T)
             {
                 return false;
             }
@@ -519,11 +509,7 @@ namespace Ryujinx.Graphics.Shader.Decoders
             return condOp.Pred == RegisterConsts.PredicateTrueIndex && !condOp.PredInv;
         }
 
-        private static bool FindBrxTargets(
-            Context context,
-            IEnumerable<Block> blocks,
-            Func<ulong, Block> getBlock,
-            Func<uint, uint?> nativeAddressMap)
+        private static bool FindBrxTargets(Context context, IEnumerable<Block> blocks, Func<ulong, Block> getBlock)
         {
             bool hasNewTarget = false;
 
@@ -552,18 +538,6 @@ namespace Ryujinx.Graphics.Shader.Decoders
                     {
                         uint targetOffset = context.ConstantBuffer1Read(cbBaseOffset + i * 4);
                         ulong targetAddress = baseOffset + targetOffset;
-
-                        // Native Ampere jump tables hold native program counters. The lowered
-                        // BRX keeps base offset zero, so map the entry into the code layout.
-                        if (nativeAddressMap != null && targetAddress <= uint.MaxValue)
-                        {
-                            uint? mappedAddress = nativeAddressMap((uint)targetAddress);
-
-                            if (mappedAddress.HasValue)
-                            {
-                                targetAddress = mappedAddress.Value;
-                            }
-                        }
 
                         if (visited.Add(targetAddress))
                         {

@@ -2,9 +2,10 @@ using Ryujinx.Common;
 using Ryujinx.Graphics.GAL;
 using Silk.NET.Vulkan;
 using System;
+using VulkanFormat = Silk.NET.Vulkan.Format;
 using GALFormat = Ryujinx.Graphics.GAL.Format;
 using PolygonMode = Silk.NET.Vulkan.PolygonMode;
-using VulkanFormat = Silk.NET.Vulkan.Format;
+using PrimitiveTopology = Ryujinx.Graphics.GAL.PrimitiveTopology;
 
 namespace Ryujinx.Graphics.Vulkan
 {
@@ -31,7 +32,7 @@ namespace Ryujinx.Graphics.Vulkan
             int maxColorAttachmentIndex = -1;
 
             bool isNotMsOrSupportsStorage = gd.Capabilities.SupportsShaderStorageImageMultisample ||
-                 !state.DepthStencilFormat.IsImageCompatible;
+                 !state.DepthStencilFormat.IsImageCompatible();
 
             Span<bool> attachmentEnableSpan = state.AttachmentEnable.AsSpan();
             Span<GALFormat> attachmentFormatsSpan = state.AttachmentFormats.AsSpan();
@@ -41,7 +42,7 @@ namespace Ryujinx.Graphics.Vulkan
                 if (attachmentEnableSpan[i])
                 {
                     bool isNotMsOrSupportsStorageAttachments = gd.Capabilities.SupportsShaderStorageImageMultisample ||
-                         !attachmentFormatsSpan[i].IsImageCompatible;
+                         !attachmentFormatsSpan[i].IsImageCompatible();
 
                     attachmentFormats[attachmentCount] = gd.FormatCapabilities.ConvertToVkFormat(attachmentFormatsSpan[i], isNotMsOrSupportsStorageAttachments);
 
@@ -62,7 +63,7 @@ namespace Ryujinx.Graphics.Vulkan
 
                 for (int i = 0; i < attachmentCount; i++)
                 {
-                    //int bindIndex = attachmentIndices[i];
+                    int bindIndex = attachmentIndices[i];
 
                     attachmentDescs[i] = new AttachmentDescription(
                         0,
@@ -164,63 +165,83 @@ namespace Ryujinx.Graphics.Vulkan
 
         public static PipelineState ToVulkanPipelineState(this ProgramPipelineState state, VulkanRenderer gd)
         {
+            PhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2 = gd.Capabilities.SupportsExtendedDynamicState2;
+            bool extendedDynamicState = gd.Capabilities.SupportsExtendedDynamicState;
+
             PipelineState pipeline = new();
-            pipeline.Initialize();
+            pipeline.Initialize(gd.Capabilities);
 
             // It is assumed that Dynamic State is enabled when this conversion is used.
-
-            pipeline.CullMode = state.CullEnable ? state.CullMode.Convert() : CullModeFlags.None;
-
             pipeline.DepthBoundsTestEnable = false; // Not implemented.
 
             pipeline.DepthClampEnable = state.DepthClampEnable;
 
-            pipeline.DepthTestEnable = state.DepthTest.TestEnable;
-            pipeline.DepthWriteEnable = state.DepthTest.WriteEnable;
-            pipeline.DepthCompareOp = state.DepthTest.Func.Convert();
+            pipeline.AlphaToCoverageEnable = state.AlphaToCoverageEnable;
+            pipeline.AlphaToOneEnable = state.AlphaToOneEnable;
+
             pipeline.DepthMode = state.DepthMode == DepthMode.MinusOneToOne;
 
-            pipeline.FrontFace = state.FrontFace.Convert();
-
             pipeline.HasDepthStencil = state.DepthStencilEnable;
-            pipeline.LineWidth = state.LineWidth;
-            pipeline.LogicOpEnable = state.LogicOpEnable;
-            pipeline.LogicOp = state.LogicOp.Convert();
 
-            pipeline.PatchControlPoints = state.PatchControlPoints;
             pipeline.PolygonMode = PolygonMode.Fill; // Not implemented.
-            pipeline.PrimitiveRestartEnable = state.PrimitiveRestartEnable;
-            pipeline.RasterizerDiscardEnable = state.RasterizerDiscard;
-            pipeline.SamplesCount = (uint)state.SamplesCount;
-
-            if (gd.Capabilities.SupportsMultiView)
-            {
-                pipeline.ScissorsCount = Constants.MaxViewports;
-                pipeline.ViewportsCount = Constants.MaxViewports;
-            }
-            else
-            {
-                pipeline.ScissorsCount = 1;
-                pipeline.ViewportsCount = 1;
-            }
-
-            pipeline.DepthBiasEnable = state.BiasEnable != 0;
-
-            // Stencil masks and ref are dynamic, so are 0 in the Vulkan pipeline.
-
-            pipeline.StencilFrontFailOp = state.StencilTest.FrontSFail.Convert();
-            pipeline.StencilFrontPassOp = state.StencilTest.FrontDpPass.Convert();
-            pipeline.StencilFrontDepthFailOp = state.StencilTest.FrontDpFail.Convert();
-            pipeline.StencilFrontCompareOp = state.StencilTest.FrontFunc.Convert();
-
-            pipeline.StencilBackFailOp = state.StencilTest.BackSFail.Convert();
-            pipeline.StencilBackPassOp = state.StencilTest.BackDpPass.Convert();
-            pipeline.StencilBackDepthFailOp = state.StencilTest.BackDpFail.Convert();
-            pipeline.StencilBackCompareOp = state.StencilTest.BackFunc.Convert();
-
-            pipeline.StencilTestEnable = state.StencilTest.TestEnable;
 
             pipeline.Topology = gd.TopologyRemap(state.Topology).Convert();
+
+            if (!extendedDynamicState)
+            {
+                pipeline.DepthCompareOp = state.DepthTest.Func.Convert();
+                pipeline.CullMode = state.CullMode.Convert();
+
+                pipeline.DepthTestEnable = state.DepthTest.TestEnable;
+                pipeline.DepthWriteEnable = state.DepthTest.WriteEnable;
+
+                pipeline.FrontFace = state.FrontFace.Convert();
+
+                if (gd.Capabilities.SupportsMultiView)
+                {
+                    pipeline.ScissorsCount = Constants.MaxViewports;
+                    pipeline.ViewportsCount = Constants.MaxViewports;
+                }
+                else
+                {
+                    pipeline.ScissorsCount = 1;
+                    pipeline.ViewportsCount = 1;
+                }
+
+                pipeline.StencilTestEnable = state.StencilTest.TestEnable;
+
+                pipeline.StencilFrontFailOp = state.StencilTest.FrontSFail.Convert();
+                pipeline.StencilFrontPassOp = state.StencilTest.FrontDpPass.Convert();
+                pipeline.StencilFrontDepthFailOp = state.StencilTest.FrontDpFail.Convert();
+                pipeline.StencilFrontCompareOp = state.StencilTest.FrontFunc.Convert();
+
+                pipeline.StencilBackFailOp = state.StencilTest.BackSFail.Convert();
+                pipeline.StencilBackPassOp = state.StencilTest.BackDpPass.Convert();
+                pipeline.StencilBackDepthFailOp = state.StencilTest.BackDpFail.Convert();
+                pipeline.StencilBackCompareOp = state.StencilTest.BackFunc.Convert();
+            }
+
+            if (!extendedDynamicState2.ExtendedDynamicState2)
+            {
+                pipeline.PrimitiveRestartEnable = state.PrimitiveRestartEnable;
+                pipeline.RasterizerDiscardEnable = state.RasterizerDiscard;
+                pipeline.DepthBiasEnable = (state.BiasEnable != 0) &&
+                    (state.DepthBiasFactor != 0 && state.DepthBiasUnits != 0);
+            }
+
+            if (!extendedDynamicState2.ExtendedDynamicState2LogicOp)
+            {
+                pipeline.LogicOp = state.LogicOp.Convert();
+            }
+
+            if (!extendedDynamicState2.ExtendedDynamicState2PatchControlPoints)
+            {
+                pipeline.PatchControlPoints = state.PatchControlPoints;
+            }
+
+            pipeline.SamplesCount = (uint)state.SamplesCount;
+
+            pipeline.LogicOpEnable = state.LogicOpEnable;
 
             int vaCount = Math.Min(Constants.MaxVertexAttributes, state.VertexAttribCount);
             int vbCount = Math.Min(Constants.MaxVertexBuffers, state.VertexBufferCount);
@@ -242,16 +263,16 @@ namespace Ryujinx.Graphics.Vulkan
 
                 if (!attribute.IsZero && bufferIndex < vbCount)
                 {
-                    vbScalarSizes[bufferIndex - 1] = Math.Max(attribute.Format.ScalarSize, vbScalarSizes[bufferIndex - 1]);
+                    vbScalarSizes[bufferIndex - 1] = Math.Max(attribute.Format.GetScalarSize(), vbScalarSizes[bufferIndex - 1]);
                 }
             }
 
             int descriptorIndex = 1;
-            pipeline.Internal.VertexBindingDescriptions[0] = new VertexInputBindingDescription(0, 0, VertexInputRate.Vertex);
+            pipeline.Internal.VertexBindingDescriptions[0] = new VertexInputBindingDescription(0, extendedDynamicState && (!gd.IsMoltenVk || gd.SupportsMTL31) ? null : 0, VertexInputRate.Vertex);
 
             Span<BufferPipelineDescriptor> vertexBuffersSpan = state.VertexBuffers.AsSpan();
             Span<VertexInputBindingDescription> vertexBindingDescriptionsSpan = pipeline.Internal.VertexBindingDescriptions.AsSpan();
-
+            
             for (int i = 0; i < vbCount; i++)
             {
                 BufferPipelineDescriptor vertexBuffer = vertexBuffersSpan[i];
@@ -270,7 +291,7 @@ namespace Ryujinx.Graphics.Vulkan
                     // TODO: Support divisor > 1
                     vertexBindingDescriptionsSpan[descriptorIndex++] = new VertexInputBindingDescription(
                         (uint)i + 1,
-                        (uint)alignedStride,
+                        extendedDynamicState && (!gd.IsMoltenVk || gd.SupportsMTL31) ? null : (uint)alignedStride,
                         inputRate);
                 }
             }
@@ -280,7 +301,7 @@ namespace Ryujinx.Graphics.Vulkan
             Span<BlendDescriptor> blendDescriptorsSpan = state.BlendDescriptors.AsSpan();
             Span<uint> colorWriteMaskSpan = state.ColorWriteMask.AsSpan();
             Span<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan = pipeline.Internal.ColorBlendAttachmentState.AsSpan();
-
+            
             // NOTE: Viewports, Scissors are dynamic.
 
             for (int i = 0; i < Constants.MaxRenderTargets; i++)
@@ -310,7 +331,7 @@ namespace Ryujinx.Graphics.Vulkan
             int maxColorAttachmentIndex = -1;
             uint attachmentIntegerFormatMask = 0;
             bool allFormatsFloatOrSrgb = true;
-
+            
             Span<bool> attachmentEnableSpan = state.AttachmentEnable.AsSpan();
             Span<GALFormat> attachmentFormatsSpan = state.AttachmentFormats.AsSpan();
             Span<VulkanFormat> pAttachmentFormatsSpan = pipeline.Internal.AttachmentFormats.AsSpan();
@@ -320,23 +341,23 @@ namespace Ryujinx.Graphics.Vulkan
                 if (attachmentEnableSpan[i])
                 {
                     bool isNotMsOrSupportsStorage = gd.Capabilities.SupportsShaderStorageImageMultisample ||
-                         !attachmentFormatsSpan[i].IsImageCompatible;
+                         !attachmentFormatsSpan[i].IsImageCompatible();
 
                     pAttachmentFormatsSpan[attachmentCount++] = gd.FormatCapabilities.ConvertToVkFormat(attachmentFormatsSpan[i], isNotMsOrSupportsStorage);
                     maxColorAttachmentIndex = i;
 
-                    if (attachmentFormatsSpan[i].IsInt)
+                    if (attachmentFormatsSpan[i].IsInteger())
                     {
                         attachmentIntegerFormatMask |= 1u << i;
                     }
 
-                    allFormatsFloatOrSrgb &= attachmentFormatsSpan[i].IsFloatOrSrgb;
+                    allFormatsFloatOrSrgb &= attachmentFormatsSpan[i].IsFloatOrSrgb();
                 }
             }
 
             if (state.DepthStencilEnable)
             {
-                bool isNotMsOrSupportsStorage = !state.DepthStencilFormat.IsImageCompatible ||
+                bool isNotMsOrSupportsStorage = !state.DepthStencilFormat.IsImageCompatible() ||
                      gd.Capabilities.SupportsShaderStorageImageMultisample;
 
                 pAttachmentFormatsSpan[attachmentCount++] = gd.FormatCapabilities.ConvertToVkFormat(state.DepthStencilFormat, isNotMsOrSupportsStorage);

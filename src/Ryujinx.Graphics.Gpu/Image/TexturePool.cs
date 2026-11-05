@@ -199,7 +199,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                 {
                     return ref descriptor;
                 }
-
+                
                 texture = PhysicalMemory.TextureCache.FindShortCache(descriptor);
 
                 if (texture == null)
@@ -217,8 +217,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                     if (texture == null)
                     {
                         _invalidMap.Set(id);
-                        return ref descriptor;
-                    }
+                    return ref descriptor;}
                 }
                 else
                 {
@@ -473,7 +472,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                                 // If this is null, a request was already queued to decrement reference.
                                 texture.DecrementReferenceCount(this, request.ID);
                             }
-
                             continue;
                         }
                     }
@@ -670,7 +668,7 @@ namespace Ryujinx.Graphics.Gpu.Image
                 swizzleB,
                 swizzleA);
 
-            if (formatInfo.Format.IsDepthOrStencil)
+            if (formatInfo.Format.IsDepthOrStencil())
             {
                 swizzleR = SwizzleComponent.Red;
                 swizzleG = SwizzleComponent.Red;
@@ -721,8 +719,8 @@ namespace Ryujinx.Graphics.Gpu.Image
         {
             int maxSize = width;
 
-            if (target is not Target.Texture1D and
-                not Target.Texture1DArray)
+            if (target != Target.Texture1D &&
+                target != Target.Texture1DArray)
             {
                 maxSize = Math.Max(maxSize, height);
             }
@@ -783,8 +781,7 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <returns>True if the swizzle component is equal to the red or green, false otherwise</returns>
         private static bool IsRG(SwizzleComponent component)
         {
-            return component is SwizzleComponent.Red or
-                   SwizzleComponent.Green;
+            return component is SwizzleComponent.Red or SwizzleComponent.Green;
         }
 
         /// <summary>

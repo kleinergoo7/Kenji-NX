@@ -11,23 +11,17 @@ namespace Ryujinx.Graphics.Vulkan
     {
         public ulong Id0;
         public ulong Id1;
+
         public ulong Id2;
         public ulong Id3;
 
-        public ulong Id4;
-        public ulong Id5;
-        public ulong Id6;
-
-        public ulong Id7;
-        public ulong Id8;
-
-        private readonly uint VertexAttributeDescriptionsCount => (byte)((Id5 >> 38) & 0xFF);
-        private readonly uint VertexBindingDescriptionsCount => (byte)((Id5 >> 46) & 0xFF);
-        private readonly uint ColorBlendAttachmentStateCount => (byte)((Id6 >> 8) & 0xFF);
-        private readonly bool HasDepthStencil => ((Id6 >> 63) & 0x1) != 0UL;
+        private readonly uint VertexAttributeDescriptionsCount => (byte)((Id0 >> 38) & 0xFF);
+        private readonly uint VertexBindingDescriptionsCount => (byte)((Id0 >> 46) & 0xFF);
+        private readonly uint ColorBlendAttachmentStateCount => (byte)((Id1 >> 8) & 0xFF);
+        private readonly bool HasDepthStencil => ((Id1 >> 63) & 0x1) != 0UL;
 
         public Array32<VertexInputAttributeDescription> VertexAttributeDescriptions;
-        public Array33<VertexInputBindingDescription> VertexBindingDescriptions;
+        public Array32<VertexInputBindingDescription> VertexBindingDescriptions;
         public Array8<PipelineColorBlendAttachmentState> ColorBlendAttachmentState;
         public Array9<Format> AttachmentFormats;
         public uint AttachmentIntegerFormatMask;
@@ -40,9 +34,7 @@ namespace Ryujinx.Graphics.Vulkan
 
         public bool Equals(ref PipelineUid other)
         {
-            if (!Unsafe.As<ulong, Vector256<byte>>(ref Id0).Equals(Unsafe.As<ulong, Vector256<byte>>(ref other.Id0)) ||
-                !Unsafe.As<ulong, Vector256<byte>>(ref Id4).Equals(Unsafe.As<ulong, Vector256<byte>>(ref other.Id4)) ||
-                !Unsafe.As<ulong, Vector128<byte>>(ref Id7).Equals(Unsafe.As<ulong, Vector128<byte>>(ref other.Id7)))
+            if (!Unsafe.As<ulong, Vector256<byte>>(ref Id0).Equals(Unsafe.As<ulong, Vector256<byte>>(ref other.Id0)))
             {
                 return false;
             }
@@ -80,13 +72,8 @@ namespace Ryujinx.Graphics.Vulkan
             ulong hash64 = Id0 * 23 ^
                            Id1 * 23 ^
                            Id2 * 23 ^
-                           Id3 * 23 ^
-                           Id4 * 23 ^
-                           Id5 * 23 ^
-                           Id6 * 23 ^
-                           Id7 * 23 ^
-                           Id8 * 23;
-
+                           Id3 * 23;
+            
             ReadOnlySpan<VertexInputAttributeDescription> vertexAttributeDescriptionsSpan = VertexAttributeDescriptions.AsSpan();
 
             for (int i = 0; i < (int)VertexAttributeDescriptionsCount; i++)
@@ -96,7 +83,7 @@ namespace Ryujinx.Graphics.Vulkan
                 hash64 ^= vertexAttributeDescriptionsSpan[i].Location * 23;
                 hash64 ^= vertexAttributeDescriptionsSpan[i].Offset * 23;
             }
-
+            
             ReadOnlySpan<VertexInputBindingDescription> vertexBindingDescriptionsSpan = VertexBindingDescriptions.AsSpan();
 
             for (int i = 0; i < (int)VertexBindingDescriptionsCount; i++)
@@ -105,7 +92,7 @@ namespace Ryujinx.Graphics.Vulkan
                 hash64 ^= (uint)vertexBindingDescriptionsSpan[i].InputRate * 23;
                 hash64 ^= vertexBindingDescriptionsSpan[i].Stride * 23;
             }
-
+            
             ReadOnlySpan<PipelineColorBlendAttachmentState> colorBlendAttachmentStateSpan = ColorBlendAttachmentState.AsSpan();
 
             for (int i = 0; i < (int)ColorBlendAttachmentStateCount; i++)
@@ -119,7 +106,7 @@ namespace Ryujinx.Graphics.Vulkan
                 hash64 ^= (uint)colorBlendAttachmentStateSpan[i].AlphaBlendOp * 23;
                 hash64 ^= (uint)colorBlendAttachmentStateSpan[i].ColorWriteMask * 23;
             }
-
+            
             ReadOnlySpan<Format> attachmentFormatsSpan = AttachmentFormats.AsSpan();
 
             for (int i = 0; i < (int)ColorBlendAttachmentStateCount; i++)

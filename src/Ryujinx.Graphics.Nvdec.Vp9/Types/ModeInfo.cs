@@ -30,12 +30,12 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
 
         public PredictionMode GetYMode(int block)
         {
-            return SbType < BlockSize.Block8X8 ? Bmi[block].Mode : Mode;
+            return SbType < BlockSize.Block8x8 ? Bmi[block].Mode : Mode;
         }
 
-        public readonly TxSize GetUvTxSize(ref MacroBlockDPlane pd)
+        public TxSize GetUvTxSize(ref MacroBlockDPlane pd)
         {
-            Debug.Assert(SbType < BlockSize.Block8X8 ||
+            Debug.Assert(SbType < BlockSize.Block8x8 ||
                          Luts.SsSizeLookup[(int)SbType][pd.SubsamplingX][pd.SubsamplingY] != BlockSize.BlockInvalid);
             return Luts.UvTxsizeLookup[(int)SbType][(int)TxSize][pd.SubsamplingX][pd.SubsamplingY];
         }
@@ -50,7 +50,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
             return RefFrame[1] > Constants.IntraFrame;
         }
 
-        private static readonly int[][] _idxNColumnToSubblock =
+        private static readonly int[][] IdxNColumnToSubblock =
         [
             [1, 2], [1, 3], [3, 2], [3, 3]
         ];
@@ -59,15 +59,15 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         // on whether the block_size < 8x8 and we have check_sub_blocks set.
         public Mv GetSubBlockMv(int whichMv, int searchCol, int blockIdx)
         {
-            return blockIdx >= 0 && SbType < BlockSize.Block8X8
-                ? Bmi[_idxNColumnToSubblock[blockIdx][searchCol == 0 ? 1 : 0]].Mv[whichMv]
+            return blockIdx >= 0 && SbType < BlockSize.Block8x8
+                ? Bmi[IdxNColumnToSubblock[blockIdx][searchCol == 0 ? 1 : 0]].Mv[whichMv]
                 : Mv[whichMv];
         }
 
         public Mv MvPredQ4(int idx)
         {
             Span<BModeInfo> bmiSpan = Bmi.AsSpan();
-
+            
             Mv res = new()
             {
                 Row = (short)ReconInter.RoundMvCompQ4(
@@ -83,7 +83,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public Mv MvPredQ2(int idx, int block0, int block1)
         {
             Span<BModeInfo> bmiSpan = Bmi.AsSpan();
-
+            
             Mv res = new()
             {
                 Row = (short)ReconInter.RoundMvCompQ2(
@@ -100,7 +100,7 @@ namespace Ryujinx.Graphics.Nvdec.Vp9.Types
         public Mv ScaleMv(int refr, sbyte thisRefFrame, Span<sbyte> refSignBias)
         {
             Mv mv = Mv[refr];
-
+            
             if (refSignBias[RefFrame[refr]] != refSignBias[thisRefFrame])
             {
                 mv.Row *= -1;

@@ -134,14 +134,18 @@ namespace Ryujinx.Graphics.Vulkan
 
             // Register this render pass with all render target views.
 
-            TextureView[] textures = fb.GetAttachmentViews();
-
-            foreach (TextureView texture in textures)
+            if (hasFramebuffer)
             {
-                texture.AddRenderPass(key, this);
+                TextureView[] textures = fb.GetAttachmentViews();
+
+                foreach (TextureView texture in textures)
+                {
+                    texture.AddRenderPass(key, this);
+                }
+
+                _textures = textures;
             }
 
-            _textures = textures;
             _key = key;
 
             _forcedFences = [];
@@ -185,7 +189,7 @@ namespace Ryujinx.Graphics.Vulkan
                         _forcedFences.RemoveAt(i--);
                         continue;
                     }
-
+                    
                     _forcedFences[i].Texture.QueueWriteToReadBarrier(cbs, AccessFlags.ShaderReadBit, _forcedFences[i].StageFlags);
                 }
             }
