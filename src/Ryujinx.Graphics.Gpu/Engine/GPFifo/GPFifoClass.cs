@@ -344,17 +344,29 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="argument">Method call argument</param>
         public void LoadMmeInstructionRam(int argument)
         {
-            // Switch-2-only build: Turing+ instructions are 96 bits (three words).
-            // The driver names the start method in LoadMmeInstructionRamPointer and
-            // streams words after it; code for method M lives at word offset M * 3,
-            // matching Mesa's mme_tu104 layout.
-            if ((uint)_mmeCodeWriteOffset < (uint)_macroCode.Length)
+            if (_context.IsNx2Ampere)
             {
-                _macroCode[_mmeCodeWriteOffset++] = argument;
-                _mmeCodeGeneration++;
+                // Switch 2 (Turing+) instructions are 96 bits (three words).
+                // The driver names the start method in LoadMmeInstructionRamPointer and
+                // streams words after it; code for method M lives at word offset M * 3,
+                // matching Mesa's mme_tu104 layout.
+                if ((uint)_mmeCodeWriteOffset < (uint)_macroCode.Length)
+                {
+                    _macroCode[_mmeCodeWriteOffset++] = argument;
+                    _mmeCodeGeneration++;
+                }
+
+                return;
             }
 
-            return;
+            // Maxwell: one word per write at the guest's pointer, then advance it.
+            int pointer = (int)_state.State.LoadMmeInstructionRamPointer;
+
+            if ((uint)pointer < (uint)_macroCode.Length)
+            {
+                _macroCode[pointer] = argument;
+                _state.State.LoadMmeInstructionRamPointer = (uint)(pointer + 1);
+            }
         }
 
         /// <summary>
@@ -363,7 +375,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="argument">Method call argument</param>
         public void LoadMmeInstructionRamPointer(int argument)
         {
-            // Switch-2-only build: the pointer register names an instruction index;
+            if (!_context.IsNx2Ampere)
+            {
+                // Maxwell: the pointer register is consumed by DeviceState.Write's
+                // raw store; nothing to do here.
+                return;
+            }
+
+            // Switch 2 (Turing+): the pointer register names an instruction index;
             // the code array is word packed. Clamp hostile indexes so the following
             // writes stay inside the macro RAM.
             _mmeCodeWriteOffset = Math.Clamp(argument, 0, _macroCode.Length / 3) * 3;
