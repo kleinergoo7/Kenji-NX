@@ -62,6 +62,9 @@ namespace Ryujinx.HLE.HOS
             if (System.Environment.GetEnvironmentVariable("NX2_BP_PRODUCER") == "1")
             {
                 ARMeilleure.Translation.Translator.ProbeMissLogAll = true;
+
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                    $"NX2BP factory arm pid={pid} (log-all translation trace on)");
             }
 
             IArmProcessContext processContext;

@@ -22,29 +22,6 @@ namespace ARMeilleure.Translation
     public class Translator
     {
         /// <summary>
-        /// NX2 producer trace (observe-only, env-gated from HLE via
-        /// <c>NX2_BP_PRODUCER=1</c>). When set, dispatcher entries at
-        /// <see cref="ProbeAddrA"/>, <see cref="ProbeAddrB"/> or
-        /// <see cref="ProbeAddrCtl"/> invoke the probes with guest registers.
-        /// Null by default: a single null check per dispatcher iteration.
-        /// Never modifies guest state; HLE only logs and disarms.
-        /// </summary>
-        public static Action<ulong, ulong, ulong, ulong, ulong> ProbeEnter;
-        public static Action<ulong, ulong, ulong> ProbeExit;
-        public static ulong ProbeAddrA;
-        public static ulong ProbeAddrB;
-        public static ulong ProbeAddrCtl;
-
-        /// <summary>
-        /// Translation-demand log (same env gate as the entry probes). A miss in the
-        /// <c>Functions</c> cache means genuine on-demand translation: PTC load, PTC
-        /// background translation and rejit all bypass <c>GetOrTranslate</c>, so with
-        /// PTC disabled a miss proves the function executed (every first execution of
-        /// an unregistered function funnels through the slow-dispatch stub into here).
-        /// </summary>
-        public static bool ProbeMissLog;
-
-        /// <summary>
         /// Log-all mode for the translation-demand trace. Set before any guest code
         /// runs (process creation): every <c>GetOrTranslate</c> miss is logged once,
         /// with no address filtering and no need for the guest base address.
@@ -230,15 +207,6 @@ namespace ARMeilleure.Translation
 
         private ulong ExecuteSingle(State.ExecutionContext context, ulong address)
         {
-            Action<ulong, ulong, ulong, ulong, ulong> probeEnter = ProbeEnter;
-            bool probed = probeEnter != null &&
-                (address == ProbeAddrA || address == ProbeAddrB || address == ProbeAddrCtl);
-
-            if (probed)
-            {
-                probeEnter(address, context.GetX(0), context.GetX(1), context.GetX(30), context.ThreadUid);
-            }
-
             TranslatedFunction func = GetOrTranslate(address, context.ExecutionMode);
 
             Statistics.StartTimer();
@@ -247,11 +215,6 @@ namespace ARMeilleure.Translation
             ulong nextAddr = func.Execute(Stubs.ContextWrapper, context);
 
             Statistics.StopTimer(address);
-
-            if (probed)
-            {
-                ProbeExit?.Invoke(address, context.ThreadUid, nextAddr);
-            }
 
             return nextAddr;
         }
@@ -278,6 +241,10 @@ namespace ARMeilleure.Translation
                     ulong allUid = 0;
                     ulong allX0 = 0, allX1 = 0, allX30 = 0;
                     int plusAc = int.MinValue, plus88 = int.MinValue;
+                    ulong vt = 0, vt38 = 0, vt40 = 0;
+                    long qCount = long.MinValue, qHead = long.MinValue, qState = long.MinValue;
+                    ulong qBuf = 0;
+                    int qCap = int.MinValue;
 
                     try
                     {
@@ -290,13 +257,50 @@ namespace ARMeilleure.Translation
                             allX1 = ctx.GetX(1);
                             allX30 = ctx.GetX(30);
 
-                            try
+                            // Pre-check every address with IsMapped: a direct read of a
+                            // stale/garbage guest register faults INTO the guest
+                            // (InvalidAccess lines, dead threads). try/catch alone
+                            // does not prevent that.
+                            if (allX0 >= 0x10000 && Memory.IsMapped(allX0))
                             {
-                                plusAc = Memory.Read<int>(allX0 + 0xac);
-                                plus88 = Memory.Read<int>(allX0 + 0x88);
-                            }
-                            catch
-                            {
+                                vt = Memory.Read<ulong>(allX0);
+
+                                if (vt >= 0x10000 && Memory.IsMapped(vt + 0x38))
+                                {
+                                    vt38 = Memory.Read<ulong>(vt + 0x38);
+                                }
+
+                                if (vt >= 0x10000 && Memory.IsMapped(vt + 0x40))
+                                {
+                                    vt40 = Memory.Read<ulong>(vt + 0x40);
+                                }
+
+                                ulong acAddr = unchecked(allX0 + 0xac);
+                                ulong h88Addr = unchecked(allX0 + 0x88);
+
+                                if (Memory.IsMapped(acAddr))
+                                {
+                                    plusAc = Memory.Read<int>(acAddr);
+                                }
+
+                                if (Memory.IsMapped(h88Addr))
+                                {
+                                    plus88 = Memory.Read<int>(h88Addr);
+                                }
+
+                                // Queue object is inline at worker+0x28 (FUN_7100a80f24 passes
+                                // param_1+0x28 as LightMessageQueueType*; layout from nnSdk:
+                                // +0x00 buf, +0x08 cap, +0x0c count, +0x10 head, +0x20 state).
+                                ulong q = unchecked(allX0 + 0x28);
+
+                                if (Memory.IsMapped(q) && Memory.IsMapped(q + 0x20))
+                                {
+                                    qBuf = Memory.Read<ulong>(q);
+                                    qCap = Memory.Read<int>(q + 0x8);
+                                    qCount = Memory.Read<int>(q + 0xC);
+                                    qHead = Memory.Read<int>(q + 0x10);
+                                    qState = Memory.Read<int>(q + 0x20);
+                                }
                             }
                         }
                     }
@@ -305,23 +309,7 @@ namespace ARMeilleure.Translation
                     }
 
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
-                        $"NX2TXA miss addr=0x{address:X} mode={mode} threadUid={allUid} x0=0x{allX0:X} x1=0x{allX1:X} lr=0x{allX30:X} x0_ac={plusAc} x0_88={plus88} t={System.Environment.TickCount64}");
-                }
-
-                if (ProbeMissLog && (address == ProbeAddrA || address == ProbeAddrB || address == ProbeAddrCtl))
-                {
-                    ulong threadUid = 0;
-
-                    try
-                    {
-                        threadUid = Instructions.NativeInterface.GetContext()?.ThreadUid ?? 0;
-                    }
-                    catch
-                    {
-                    }
-
-                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
-                        $"NX2TX miss addr=0x{address:X} mode={mode} threadUid={threadUid} t={System.Environment.TickCount64}");
+                        $"NX2TXA miss addr=0x{address:X} mode={mode} threadUid={allUid} x0=0x{allX0:X} x1=0x{allX1:X} lr=0x{allX30:X} x0_vt=0x{vt:X} vt38=0x{vt38:X} vt40=0x{vt40:X} x0_ac={plusAc} x0_88={plus88} qbuf=0x{qBuf:X} qcap={qCap} qcount={qCount} qhead={qHead} qstate={qState} t={System.Environment.TickCount64}");
                 }
 
                 func = Translate(address, mode, highCq: false);

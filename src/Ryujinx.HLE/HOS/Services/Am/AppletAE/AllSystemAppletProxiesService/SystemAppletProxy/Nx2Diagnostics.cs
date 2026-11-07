@@ -355,9 +355,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 {
                     string name = thread.GetThreadName();
 
-                    if (thread.Context == null || name == null ||
-                        !(name.StartsWith("ARes") || name.StartsWith("gear::") ||
-                          name.StartsWith("ParallelDecomp") || name.StartsWith("WorkerMgr")))
+                    if (thread.Context == null || name == null)
                     {
                         continue;
                     }
@@ -372,6 +370,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
                         try
                         {
+                            // IsMapped pre-check: blind reads can fault INTO the guest.
+                            if (!mem.IsMapped(sp + off))
+                            {
+                                break;
+                            }
+
                             q = mem.Read<ulong>(sp + off);
                         }
                         catch
@@ -394,6 +398,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         {
             try
             {
+                if (!mem.IsMapped(q) || !mem.IsMapped(q + 0x28))
+                {
+                    return;
+                }
+
                 if (mem.Read<byte>(q + 0x14) != 1)
                 {
                     return;
@@ -424,16 +433,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     // Worker object base for both families is q-0x28.
                     // FUN_710226b068 sets +0xac (1 start, 2 run, 3 done, 4 waited);
                     // FUN_710235135c/1438 ping-pong +0xe4 (2<->3).
-                    workerState = mem.Read<int>(q - 0x28 + 0xac);
-                    stateE4 = mem.Read<int>(q - 0x28 + 0xe4);
+                    if (q >= 0x10000 + 0x28 && mem.IsMapped(q - 0x28 + 0xac) && mem.IsMapped(q - 0x28 + 0xe4))
+                    {
+                        workerState = mem.Read<int>(q - 0x28 + 0xac);
+                        stateE4 = mem.Read<int>(q - 0x28 + 0xe4);
+                    }
                 }
                 catch
                 {
-                }
-
-                if (threadName == "gear::PrepareThread")
-                {
-                    System.Threading.Volatile.Write(ref Nx2ProducerTrace.LastPrepareQueue, q);
                 }
 
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceAm,
