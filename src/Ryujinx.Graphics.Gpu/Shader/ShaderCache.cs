@@ -8,6 +8,7 @@ using Ryujinx.Graphics.Gpu.Image;
 using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.Graphics.Gpu.Shader.DiskCache;
 using Ryujinx.Graphics.Shader;
+using Ryujinx.Graphics.Shader.Decoders.Ampere;
 using Ryujinx.Graphics.Shader.Translation;
 using System;
 using System.Collections.Generic;
@@ -221,7 +222,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
             GpuAccessor gpuAccessor = new(_context, channel, gpuAccessorState);
             gpuAccessor.InitializeReservedCounts(tfEnabled: false, vertexAsCompute: false);
 
-            TranslatorContext translatorContext = DecodeComputeShader(gpuAccessor, _context.Capabilities.Api, gpuVa);
+            TranslatorContext translatorContext = DecodeComputeShader(LowerAmpere(gpuAccessor, gpuVa, hasHeader: false), _context.Capabilities.Api, gpuVa);
             TranslatedShader translatedShader = TranslateShader(_dumper, channel, translatorContext, cachedGuestCode, asCompute: false);
 
             ShaderSource[] shaderSourcesArray = [CreateShaderSource(translatedShader.Program)];
@@ -345,7 +346,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
                 if (gpuVa != 0)
                 {
                     GpuAccessor gpuAccessor = new(_context, channel, gpuAccessorState, stageIndex, addresses.Geometry != 0);
-                    TranslatorContext currentStage = DecodeGraphicsShader(gpuAccessor, api, DefaultFlags, gpuVa);
+                    TranslatorContext currentStage = DecodeGraphicsShader(LowerAmpere(gpuAccessor, gpuVa, hasHeader: true), api, DefaultFlags, gpuVa);
 
                     if (nextStage != null)
                     {
@@ -354,7 +355,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
 
                     if (stageIndex == 0 && addresses.VertexA != 0)
                     {
-                        translatorContexts[0] = DecodeGraphicsShader(gpuAccessor, api, DefaultFlags | TranslationFlags.VertexA, addresses.VertexA);
+                        translatorContexts[0] = DecodeGraphicsShader(LowerAmpere(gpuAccessor, addresses.VertexA, hasHeader: true), api, DefaultFlags | TranslationFlags.VertexA, addresses.VertexA);
                     }
 
                     gpuAccessors[stageIndex] = gpuAccessor;
@@ -685,6 +686,31 @@ namespace Ryujinx.Graphics.Gpu.Shader
             ReadOnlySpan<byte> memoryCode = memoryManager.GetSpanMapped(gpuVa, shader.Code.Length);
 
             return memoryCode.SequenceEqual(shader.Code);
+        }
+
+        /// <summary>
+        /// Lowers a native Ampere (NX2) program to Maxwell and serves the lowered image to
+        /// the Maxwell frontend. Falls back to the raw accessor when lowering is not
+        /// applicable or fails, so Switch 1 / Maxwell titles are unchanged.
+        /// </summary>
+        private IGpuAccessor LowerAmpere(IGpuAccessor accessor, ulong gpuVa, bool hasHeader)
+        {
+            if (!_context.IsAmpere || gpuVa == 0)
+            {
+                return accessor;
+            }
+
+            AmpereGpuAccessor lowered = AmpereGpuAccessor.Create(accessor, gpuVa, hasHeader, out string error);
+
+            if (lowered == null)
+            {
+                Logger.Warning?.Print(LogClass.Gpu,
+                    $"Ampere shader lowering failed at 0x{gpuVa:X16}: {error}");
+
+                return accessor;
+            }
+
+            return lowered;
         }
 
         /// <summary>
