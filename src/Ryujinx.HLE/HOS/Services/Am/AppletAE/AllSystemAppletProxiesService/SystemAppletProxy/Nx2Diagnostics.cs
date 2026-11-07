@@ -431,6 +431,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 {
                 }
 
+                if (threadName == "gear::PrepareThread")
+                {
+                    System.Threading.Volatile.Write(ref Nx2ProducerTrace.LastPrepareQueue, q);
+                }
+
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceAm,
                     $"NX2Q [{threadName}] q=0x{q:X} buf=0x{buffer:X} cap={capacity} count={count} head={head} state={state} wac={workerState} we4={stateE4}");
 

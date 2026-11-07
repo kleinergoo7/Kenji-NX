@@ -44,6 +44,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel.NvHostGpuDeviceFile.SignalAllNx2Events();
                     INx2GpuSession.SignalAllNx2GpuEvents();
                     Nx2Diagnostics.WatchQueues(System.Threading.Volatile.Read(ref _device));
+                    Nx2ProducerTrace.EnsureArmed(System.Threading.Volatile.Read(ref _device));
 
                     LogProgress();
                 }, null, 16, 16);

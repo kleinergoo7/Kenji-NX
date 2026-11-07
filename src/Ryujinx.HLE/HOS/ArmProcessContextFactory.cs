@@ -56,6 +56,14 @@ namespace Ryujinx.HLE.HOS
 
         public IProcessContext Create(KernelContext context, ulong pid, ulong addressSpaceSize, InvalidAccessHandler invalidAccessHandler, bool for64Bit)
         {
+            // NX2 producer trace: arm the translation-demand log before any guest code
+            // of this process can translate. Runs before the app entry point; per-process
+            // and env-gated, zero cost when NX2_BP_PRODUCER is unset.
+            if (System.Environment.GetEnvironmentVariable("NX2_BP_PRODUCER") == "1")
+            {
+                ARMeilleure.Translation.Translator.ProbeMissLogAll = true;
+            }
+
             IArmProcessContext processContext;
 
             bool isArm64Host = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;

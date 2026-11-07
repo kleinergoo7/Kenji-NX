@@ -21,6 +21,39 @@ namespace ARMeilleure.Translation
 {
     public class Translator
     {
+        /// <summary>
+        /// NX2 producer trace (observe-only, env-gated from HLE via
+        /// <c>NX2_BP_PRODUCER=1</c>). When set, dispatcher entries at
+        /// <see cref="ProbeAddrA"/>, <see cref="ProbeAddrB"/> or
+        /// <see cref="ProbeAddrCtl"/> invoke the probes with guest registers.
+        /// Null by default: a single null check per dispatcher iteration.
+        /// Never modifies guest state; HLE only logs and disarms.
+        /// </summary>
+        public static Action<ulong, ulong, ulong, ulong, ulong> ProbeEnter;
+        public static Action<ulong, ulong, ulong> ProbeExit;
+        public static ulong ProbeAddrA;
+        public static ulong ProbeAddrB;
+        public static ulong ProbeAddrCtl;
+
+        /// <summary>
+        /// Translation-demand log (same env gate as the entry probes). A miss in the
+        /// <c>Functions</c> cache means genuine on-demand translation: PTC load, PTC
+        /// background translation and rejit all bypass <c>GetOrTranslate</c>, so with
+        /// PTC disabled a miss proves the function executed (every first execution of
+        /// an unregistered function funnels through the slow-dispatch stub into here).
+        /// </summary>
+        public static bool ProbeMissLog;
+
+        /// <summary>
+        /// Log-all mode for the translation-demand trace. Set before any guest code
+        /// runs (process creation): every <c>GetOrTranslate</c> miss is logged once,
+        /// with no address filtering and no need for the guest base address.
+        /// Auto-disables at <see cref="ProbeMissLogAllCap"/> lines.
+        /// </summary>
+        public static bool ProbeMissLogAll;
+        public static int ProbeMissLogAllCap = 150000;
+        private static int _probeMissLines;
+
         private readonly IJitMemoryAllocator _allocator;
         private readonly ConcurrentQueue<KeyValuePair<ulong, TranslatedFunction>> _oldFuncs;
 
@@ -197,6 +230,15 @@ namespace ARMeilleure.Translation
 
         private ulong ExecuteSingle(State.ExecutionContext context, ulong address)
         {
+            Action<ulong, ulong, ulong, ulong, ulong> probeEnter = ProbeEnter;
+            bool probed = probeEnter != null &&
+                (address == ProbeAddrA || address == ProbeAddrB || address == ProbeAddrCtl);
+
+            if (probed)
+            {
+                probeEnter(address, context.GetX(0), context.GetX(1), context.GetX(30), context.ThreadUid);
+            }
+
             TranslatedFunction func = GetOrTranslate(address, context.ExecutionMode);
 
             Statistics.StartTimer();
@@ -205,6 +247,11 @@ namespace ARMeilleure.Translation
             ulong nextAddr = func.Execute(Stubs.ContextWrapper, context);
 
             Statistics.StopTimer(address);
+
+            if (probed)
+            {
+                ProbeExit?.Invoke(address, context.ThreadUid, nextAddr);
+            }
 
             return nextAddr;
         }
@@ -226,6 +273,38 @@ namespace ARMeilleure.Translation
         {
             if (!Functions.TryGetValue(address, out TranslatedFunction func))
             {
+                if (ProbeMissLogAll && System.Threading.Interlocked.Increment(ref _probeMissLines) <= ProbeMissLogAllCap)
+                {
+                    ulong allUid = 0;
+
+                    try
+                    {
+                        allUid = Instructions.NativeInterface.GetContext()?.ThreadUid ?? 0;
+                    }
+                    catch
+                    {
+                    }
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2TXA miss addr=0x{address:X} mode={mode} threadUid={allUid} t={System.Environment.TickCount64}");
+                }
+
+                if (ProbeMissLog && (address == ProbeAddrA || address == ProbeAddrB || address == ProbeAddrCtl))
+                {
+                    ulong threadUid = 0;
+
+                    try
+                    {
+                        threadUid = Instructions.NativeInterface.GetContext()?.ThreadUid ?? 0;
+                    }
+                    catch
+                    {
+                    }
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2TX miss addr=0x{address:X} mode={mode} threadUid={threadUid} t={System.Environment.TickCount64}");
+                }
+
                 func = Translate(address, mode, highCq: false);
 
                 TranslatedFunction oldFunc = Functions.GetOrAdd(address, func.GuestSize, func);
