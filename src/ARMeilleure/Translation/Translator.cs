@@ -276,17 +276,36 @@ namespace ARMeilleure.Translation
                 if (ProbeMissLogAll && System.Threading.Interlocked.Increment(ref _probeMissLines) <= ProbeMissLogAllCap)
                 {
                     ulong allUid = 0;
+                    ulong allX0 = 0, allX1 = 0, allX30 = 0;
+                    int plusAc = int.MinValue, plus88 = int.MinValue;
 
                     try
                     {
-                        allUid = Instructions.NativeInterface.GetContext()?.ThreadUid ?? 0;
+                        State.ExecutionContext ctx = Instructions.NativeInterface.GetContext();
+
+                        if (ctx != null)
+                        {
+                            allUid = ctx.ThreadUid;
+                            allX0 = ctx.GetX(0);
+                            allX1 = ctx.GetX(1);
+                            allX30 = ctx.GetX(30);
+
+                            try
+                            {
+                                plusAc = Memory.Read<int>(allX0 + 0xac);
+                                plus88 = Memory.Read<int>(allX0 + 0x88);
+                            }
+                            catch
+                            {
+                            }
+                        }
                     }
                     catch
                     {
                     }
 
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
-                        $"NX2TXA miss addr=0x{address:X} mode={mode} threadUid={allUid} t={System.Environment.TickCount64}");
+                        $"NX2TXA miss addr=0x{address:X} mode={mode} threadUid={allUid} x0=0x{allX0:X} x1=0x{allX1:X} lr=0x{allX30:X} x0_ac={plusAc} x0_88={plus88} t={System.Environment.TickCount64}");
                 }
 
                 if (ProbeMissLog && (address == ProbeAddrA || address == ProbeAddrB || address == ProbeAddrCtl))
