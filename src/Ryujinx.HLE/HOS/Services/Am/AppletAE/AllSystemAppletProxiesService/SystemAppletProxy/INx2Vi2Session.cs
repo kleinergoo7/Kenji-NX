@@ -442,12 +442,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             uint imageId = context.RequestData.ReadUInt32();
 
-            // NX2_EXP_VI2_228_SPLIT=1 (E4, env-gated, default off): 228 CancelClientBuffer must NOT present/composite
-            // increment Presents/sp0/vsync; only return the slot mask. Matches droplet behavior (CancelClientBuffer).
-            // Hypothesis: conflating 228 with 229 drives the present loop; splitting changes timing. Falsifier: no change.
-            if (cmdId == 228 && Environment.GetEnvironmentVariable("NX2_EXP_VI2_228_SPLIT") == "1")
+            // 228 = CancelClientBuffer (per droplet: returns only the slot mask, no present/composite/sp0/vsync).
+            // 229 = PresentClientBuffer (present path below). Conflating them incorrectly advanced Presents/sp0/vsync on
+            // cancels. 228 is observed as 0 in runtime runs, so this is a low-risk correctness fix (reference-backed).
+            if (cmdId == 228)
             {
-                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2_EXP_VI2_228_SPLIT 228 cancel image={imageId} slot={slot} -> mask only (no present/sp0/vsync)");
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2 228 CancelClientBuffer image={imageId} slot={slot} -> mask only (no present/sp0/vsync)");
                 context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
                 context.ResponseData.Write(AllSlotsFreeMask);
                 context.ResponseData.Write(0u);
