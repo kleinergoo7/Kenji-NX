@@ -16,7 +16,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     /// UNMAPPED (no obvious public field found on KThread in this tree; searched _condVar/ArbiterAddress/WaitTimeout).</summary>
     static class Nx2ThreadDump
     {
-        public static bool Enabled => Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1";
+        public static bool Enabled => Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" || Environment.GetEnvironmentVariable("NX2_SVC_COUNT") == "1";
         private static bool _loggedBuild;
         private static int _lastDumpSec = -999;
         private static readonly System.Diagnostics.Stopwatch _procSw = System.Diagnostics.Stopwatch.StartNew();
@@ -31,13 +31,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             if (System.Threading.Interlocked.CompareExchange(ref _timerStarted, 1, 0) != 0) return;
             try
             {
-                string eff = $"NX2_ENV_EFFECTIVE NX2_THREAD_DUMP={Environment.GetEnvironmentVariable("NX2_THREAD_DUMP")} NX2_IPC_COUNT={Environment.GetEnvironmentVariable("NX2_IPC_COUNT")} NX2_METHOD_PROBE={Environment.GetEnvironmentVariable("NX2_METHOD_PROBE")} NX2_SUBMIT_LOG={Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG")} NX2_RUN_DIR={Environment.GetEnvironmentVariable("NX2_RUN_DIR")}";
+                string eff = $"NX2_ENV_EFFECTIVE NX2_THREAD_DUMP={Environment.GetEnvironmentVariable("NX2_THREAD_DUMP")} NX2_IPC_COUNT={Environment.GetEnvironmentVariable("NX2_IPC_COUNT")} NX2_SVC_COUNT={Environment.GetEnvironmentVariable("NX2_SVC_COUNT")} NX2_METHOD_PROBE={Environment.GetEnvironmentVariable("NX2_METHOD_PROBE")} NX2_SUBMIT_LOG={Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG")} NX2_RUN_DIR={Environment.GetEnvironmentVariable("NX2_RUN_DIR")}";
                 Logger.Warning?.Print(LogClass.ServiceAm, eff);
                 try { var dir = Environment.GetEnvironmentVariable("NX2_RUN_DIR") ?? Environment.GetEnvironmentVariable("NX2_LOG_DIR"); if (!string.IsNullOrEmpty(dir)) System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "env_effective.txt"), eff + "\n"); } catch { }
             }
             catch { }
             _timer = new System.Threading.Timer(_ => { try { TimerTick(); } catch { } }, null, 1000, 1000);
-            try { AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { lock (_dumpLock) { DumpAt(_kernel ?? ResolveKernel(), "exit"); Nx2IpcCounters.Dump("exit"); } } catch { } }; } catch { }
+            try { AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { lock (_dumpLock) { DumpAt(_kernel ?? ResolveKernel(), "exit"); Nx2IpcCounters.Dump("exit"); Nx2SvcCounters.Dump("exit"); } } catch { } }; } catch { }
         }
         private static Ryujinx.HLE.HOS.Kernel.KernelContext ResolveKernel() => _kernel;
         private static void TimerTick()
@@ -47,7 +47,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             int sec = (int)_procSw.Elapsed.TotalSeconds;
             if (sec > 0 && sec % 10 == 0 && sec != _lastDumpSec) Nx2IpcCounters.DumpBucket(sec);
             int[] marks = {60,150,240,300,600,900};
-            foreach(int m in marks) if (sec >= m && _lastDumpSec < m) { lock(_dumpLock){ if (_lastDumpSec < m){ _lastDumpSec=m; var k=_kernel??ResolveKernel(); if(k==null) Logger.Warning?.Print(LogClass.ServiceAm,$"NX2_THREAD t={m}s kernel=null (timer)"); DumpAt(k,$"t={m}s"); Nx2IpcCounters.Dump($"t={m}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={m}s"); } } }
+            foreach(int m in marks) if (sec >= m && _lastDumpSec < m) { lock(_dumpLock){ if (_lastDumpSec < m){ _lastDumpSec=m; var k=_kernel??ResolveKernel(); if(k==null) Logger.Warning?.Print(LogClass.ServiceAm,$"NX2_THREAD t={m}s kernel=null (timer)"); DumpAt(k,$"t={m}s"); Nx2IpcCounters.Dump($"t={m}s"); Nx2SvcCounters.Dump($"t={m}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={m}s"); } } }
         }
 
         public static void MaybeLogBuildIdentity()
@@ -55,9 +55,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             if (_loggedBuild) return;
             if (Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") != "1" &&
                 Environment.GetEnvironmentVariable("NX2_IPC_COUNT") != "1" &&
+                Environment.GetEnvironmentVariable("NX2_SVC_COUNT") != "1" &&
                 Environment.GetEnvironmentVariable("NX2_METHOD_PROBE") != "1" &&
-                Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") != "1" &&
-                Environment.GetEnvironmentVariable("NX2_METHOD_PROBE") != "1") return;
+                Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") != "1") return;
             _loggedBuild = true;
             try
             {
@@ -122,7 +122,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             // timer is primary; Tick is fallback/capture
             if ((progressSec == 60 || progressSec == 150 || progressSec == 240 || progressSec == 300 || progressSec == 600 || progressSec == 900) && _lastDumpSec < progressSec)
             {
-                lock(_dumpLock){ if (_lastDumpSec < progressSec){ _lastDumpSec=progressSec; DumpAt(_kernel ?? horizon?.KernelContext ?? ResolveKernel(), $"t={progressSec}s"); Nx2IpcCounters.Dump($"t={progressSec}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={progressSec}s"); } }
+                lock(_dumpLock){ if (_lastDumpSec < progressSec){ _lastDumpSec=progressSec; DumpAt(_kernel ?? horizon?.KernelContext ?? ResolveKernel(), $"t={progressSec}s"); Nx2IpcCounters.Dump($"t={progressSec}s"); Nx2SvcCounters.Dump($"t={progressSec}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={progressSec}s"); } }
             }
         }
     }

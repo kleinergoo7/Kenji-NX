@@ -15,6 +15,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         public void SvcCall(IExecutionContext context, ulong address, int id)
         {
             KThread currentThread = KernelStatic.GetCurrentThread();
+            HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2SvcCounters.Increment((int)currentThread.ThreadUid, id);
 
             if (currentThread.Owner != null &&
                 currentThread.GetUserDisableCount() != 0 &&

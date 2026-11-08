@@ -406,8 +406,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         }
 
         [CommandTipc(228)]
+        public ResultCode CancelClientBuffer(ServiceCtx context) => PresentInternal(context, 228);
+
         [CommandTipc(229)]
-        public ResultCode Present(ServiceCtx context)
+        public ResultCode Present(ServiceCtx context) => PresentInternal(context, 229);
+
+        public ResultCode PresentInternal(ServiceCtx context, uint cmdId)
         {
             // Probe: the NX2 present request carries a GPU fence; the reference
             // emulator reports it as (id=1, value=109+3n). Dump the raw words once
@@ -446,8 +450,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 bool logIt = presentN <= 30 || presentN % 100 == 0;
                 if (logIt)
                 {
+                    // 228 (CancelClientBuffer) and 229 (PresentClientBuffer) share this handler; log cmd to distinguish.
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                        $"NX2PT #{presentN} slot={slot} image={imageId} bufHash=dims=format=nonzero=dump=UNRESOLVED(nx2:vi2 TIPC path, buffer not cheaply wired)");
+                        $"NX2PT #{presentN} cmd={cmdId} slot={slot} image={imageId} bufHash=dims=format=nonzero=dump=UNRESOLVED(nx2:vi2 TIPC path, buffer not cheaply wired)");
                 }
             }
 
@@ -764,21 +769,52 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             Nx2NativeObjects.Unswizzle(source, linear, (int)width, (int)height, pitch, (int)blockHeightLog2);
 
-            // Diagnostic (AGENTS.md section 9): dump the first frames as raw RGBA so a
-            // black screen can be attributed to the guest (black content) or to the
-            // present path (content present but not displayed).
+            RunFrameDumpControlOnce();
+
+            int compositeN = System.Threading.Interlocked.Increment(ref _compositeN);
+            double elapsedS = (System.Diagnostics.Stopwatch.GetTimestamp() - _compositeStartTs) / (double)System.Diagnostics.Stopwatch.Frequency;
+
+            // Per-composite stats + dumps (env-gated, observe-only). NX2_FRAME_DUMP enables dumps+stats.
             if (Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_FRAME_DUMP"))
             {
-                int dumpIndex = System.Threading.Interlocked.Increment(ref _frameDumps);
+                (ulong hash, double nonzeroFrac) = ComputeFrameStats(linear, (int)pixelBytes);
+                bool logStats = compositeN <= 30 || compositeN % 100 == 0;
+                if (logStats)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                        $"NX2 composite stats #{compositeN} t={elapsedS:F1}s image={imageId} addr=0x{address:X} {width}x{height} pitch={pitch} blockLog2={blockHeightLog2} format=RGBA8(non-swizzled) bytes={pixelBytes} nonzero={nonzeroFrac:F6} hash=0x{hash:X16}");
+                }
 
+                // Dumps: first 3 composites (early) + one near 60/300/600s, up to 6 files total.
+                int dumpIndex = System.Threading.Interlocked.Increment(ref _frameDumps);
+                string tag = null;
                 if (dumpIndex <= 3)
                 {
-                    string path = Ryujinx.Common.Nx2LogConfinement.ResolveLogPath($"frame-{dumpIndex}-{(int)width}x{(int)height}.rgba");
+                    tag = $"early-{dumpIndex}";
+                }
+                else if (TryClaimDumpMark(elapsedS, 60.0, ref _dump60))
+                {
+                    tag = "t60s";
+                }
+                else if (TryClaimDumpMark(elapsedS, 300.0, ref _dump300))
+                {
+                    tag = "t300s";
+                }
+                else if (TryClaimDumpMark(elapsedS, 600.0, ref _dump600))
+                {
+                    tag = "t600s";
+                }
+                else
+                {
+                    System.Threading.Interlocked.Decrement(ref _frameDumps);
+                }
 
+                if (tag != null && System.Threading.Volatile.Read(ref _frameDumps) <= 6)
+                {
+                    string path = Ryujinx.Common.Nx2LogConfinement.ResolveLogPath($"frame-{tag}-c{compositeN}-img{imageId}-{(int)width}x{(int)height}.rgba");
                     System.IO.File.WriteAllBytes(path, linear.AsSpan(0, (int)pixelBytes).ToArray());
-
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                        $"NX2 frame dump #{dumpIndex} -> {path} ({(int)width}x{(int)height})");
+                        $"NX2 frame dump {tag} c#{compositeN} -> {path} ({(int)width}x{(int)height} nonzero={nonzeroFrac:F6} hash=0x{hash:X16})");
                 }
             }
 
@@ -842,6 +878,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         }
 
         private static int _frameDumps;
+        private static int _compositeN;
+        private static readonly long _compositeStartTs = System.Diagnostics.Stopwatch.GetTimestamp();
+        private static int _dump60;
+        private static int _dump300;
+        private static int _dump600;
+        private static int _frameDumpControlDone;
 
         private static readonly object PresentLock = new();
         private static readonly ITexture[] _presentTextures = new ITexture[3];
@@ -1023,6 +1065,90 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             return buffer;
+        }
+
+        private static (ulong hash, double nonzeroFrac) ComputeFrameStats(byte[] linearRgba, int bytes)
+        {
+            // FNV-1a 64-bit over sampled bytes (stride) for speed on large frames; full nonzero scan is cheap.
+            const ulong Offset = 14695981039346656037UL;
+            const ulong Prime = 1099511628211UL;
+            ulong hash = Offset;
+            int nonzero = 0;
+            int stride = bytes > 1_000_000 ? 16 : (bytes > 64_000 ? 4 : 1);
+            for (int i = 0; i < bytes; i++)
+            {
+                byte b = linearRgba[i];
+                if (b != 0)
+                {
+                    nonzero++;
+                }
+                if ((i % stride) == 0)
+                {
+                    hash ^= b;
+                    hash *= Prime;
+                }
+            }
+
+            double frac = bytes > 0 ? nonzero / (double)bytes : 0.0;
+            return (hash, frac);
+        }
+
+        private static bool TryClaimDumpMark(double elapsedS, double markS, ref int claimed)
+        {
+            if (elapsedS < markS)
+            {
+                return false;
+            }
+
+            return System.Threading.Interlocked.CompareExchange(ref claimed, 1, 0) == 0;
+        }
+
+        private static void RunFrameDumpControlOnce()
+        {
+            if (!Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_FRAME_DUMP_TEST"))
+            {
+                return;
+            }
+
+            if (System.Threading.Interlocked.CompareExchange(ref _frameDumpControlDone, 1, 0) != 0)
+            {
+                return;
+            }
+
+            // Control: known nonzero RGBA pattern through the same hash/nonzero path (+ unswizzle path exercised).
+            const int W = 16;
+            const int H = 16;
+            byte[] linear = new byte[W * H * 4];
+            for (int y = 0; y < H; y++)
+            {
+                for (int x = 0; x < W; x++)
+                {
+                    int o = (y * W + x) * 4;
+                    linear[o + 0] = (byte)(x * 17);
+                    linear[o + 1] = (byte)(y * 17);
+                    linear[o + 2] = 0x80;
+                    linear[o + 3] = 0xFF;
+                }
+            }
+
+            (ulong hash, double nonzeroFrac) = ComputeFrameStats(linear, linear.Length);
+            byte[] src = new byte[1024];
+            byte[] dst = new byte[W * H * 4];
+            try
+            {
+                Nx2NativeObjects.Unswizzle(src, dst, W, H, W * 4, 4);
+            }
+            catch (Exception ex)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                    $"NX2_FRAME_DUMP_TEST control unswizzle threw: {ex.GetType().Name}: {ex.Message}");
+                return;
+            }
+
+            bool hashNonzero = hash != 14695981039346656037UL;
+            bool fracExpected = nonzeroFrac > 0.90; // 993/1024 for this pattern
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                $"NX2_FRAME_DUMP_TEST control known-nonzero-linear 16x16 RGBA: bytes={linear.Length} nonzero={nonzeroFrac:F6} hash=0x{hash:X16} hashNonzero={hashNonzero} frac>0.90={fracExpected} unswizzle=no-throw PASS={hashNonzero && fracExpected}");
         }
     }
 }
