@@ -93,7 +93,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             if (obj is KReadableEvent re)
                             {
                                 try { ev = $" readableSignaled={re.IsSignaled()}"; } catch { }
-                                // who signals: KEvent/KReadableEvent signaled by Signal(); owning HLE object not resolved generically (unmapped)
+                                // Resolve owning HLE object/service where registered (appmsg/gpuid*/spslot*/vi2*/vi2event11).
+                                // Nx2EventNames keys by RuntimeHelpers.GetHashCode(KReadableEvent instance).
+                                try
+                                {
+                                    string ownerName = Nx2EventNames.Lookup(re);
+                                    if (!string.IsNullOrEmpty(ownerName)) ev += $" owner={ownerName}";
+                                    else ev += " owner=UNRESOLVED";
+                                }
+                                catch { ev += " owner=UNRESOLVED"; }
                             }
                             waits.Add($"w{i}=H{thread.WaitSyncHandles[i]}:{obj.GetType().Name}{sig}{ev}");
                         }
