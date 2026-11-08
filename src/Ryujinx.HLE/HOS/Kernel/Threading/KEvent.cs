@@ -12,7 +12,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
             Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc, $"KEvent create hash={System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(ReadableEvent)}");
 
-            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1" ||
+                System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" ||
+                System.Environment.GetEnvironmentVariable("NX2_HANDLE_OWNER") == "1")
             {
                 // Record the creating frame so a wait on this event says who owns it.
                 string site = null;
