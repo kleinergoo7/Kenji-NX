@@ -26,7 +26,9 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrlGpu
         public NvHostCtrlGpuDeviceFile(ServiceCtx context, IVirtualMemoryManager memory, ulong owner) : base(context, owner)
         {
             _errorEvent = new KEvent(context.Device.System.KernelContext);
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2EventNames.Register(_errorEvent.ReadableEvent, "nvhostctrlgpu_error");
             _unknownEvent = new KEvent(context.Device.System.KernelContext);
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2EventNames.Register(_unknownEvent.ReadableEvent, "nvhostctrlgpu_unknown");
         }
 
         static NvHostCtrlGpuDeviceFile()

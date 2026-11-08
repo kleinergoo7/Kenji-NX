@@ -41,6 +41,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostCtrl
             State = NvHostEventState.Available;
 
             Event = new KEvent(system.KernelContext);
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2EventNames.Register(Event.ReadableEvent, $"nvhostevent{eventId}");
 
             if (KernelStatic.GetCurrentProcess().HandleTable.GenerateHandle(Event.ReadableEvent, out EventHandle) != Result.Success)
             {
