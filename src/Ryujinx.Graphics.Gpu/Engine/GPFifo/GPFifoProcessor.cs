@@ -204,6 +204,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         private const int EngineFifo = 5;
 
         private readonly int[] _subChannelEngine = new int[SubChannelCount];
+        private readonly int[] _subChannelClass = new int[SubChannelCount];
 
         internal static int Method3DTotal => _method3DTotal;
         internal static readonly System.Collections.Generic.Dictionary<int, int> MethodHistogram = [];
@@ -548,6 +549,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 int consumeCount = Math.Min(_state.MethodCount, availableCount);
 
                 ReadOnlySpan<int> data = commandBuffer.Slice(offset, consumeCount);
+                Nx2BulkCounters.I2m(_state.Method, consumeCount);
 
                 if (_state.SubChannel == 0)
                 {
@@ -589,6 +591,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 meth.MethodCount < availableCount &&
                 meth.SecOp == SecOp.NonIncMethod)
             {
+                Nx2BulkCounters.Ubo(meth.MethodAddress, meth.MethodCount);
                 _3dClass.ConstantBufferUpdate(commandBuffer.Slice(offset + 1, meth.MethodCount));
 
                 return true;
@@ -615,7 +618,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             }
             else if (offset < 0xe00)
             {
+                int wordOffset = offset;
                 offset *= 4;
+                if (Nx2MethodProbe.Enabled)
+                    Nx2MethodProbe.RecordDirect(wordOffset, subChannel, (uint)subChannel < SubChannelCount ? _subChannelClass[subChannel] : 0);
 
                 switch (SubChannelEngine(subChannel))
                 {
@@ -645,6 +651,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             else
             {
                 int engine = SubChannelEngine(subChannel);
+                if (Nx2MethodProbe.Enabled)
+                    Nx2MethodProbe.RecordMacro(offset);
 
                 // An unbound subchannel yields an engine id outside the counted set.
                 if ((uint)engine < (uint)EngineCounts.Length)
@@ -767,6 +775,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             {
                 // Class 0 unbinds the subchannel. -1 matches no engine, so its calls are dropped.
                 _subChannelEngine[subChannel] = -1;
+                _subChannelClass[subChannel] = 0;
+                if (Nx2MethodProbe.Enabled) Nx2MethodProbe.RecordClass(subChannel, 0);
                 return;
             }
 
@@ -785,6 +795,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 0xa140 => EngineInlineToMemory,                            // KEPLER_INLINE_TO_MEMORY_B
                 _ => subChannel,                                           // unknown class: legacy mapping
             };
+            _subChannelClass[subChannel] = classId;
+            if (Nx2MethodProbe.Enabled) Nx2MethodProbe.RecordClass(subChannel, classId);
 
             if (classId is not (0xc797 or 0xc697 or 0xc597 or 0xb197 or 0xc7c0 or 0xc6c0 or 0xc5c0 or 0xb1c0 or 0xc7b5 or 0xc6b5 or 0xc5b5 or 0xb0b5 or 0xc56f or 0xc76f or 0xb06f or 0x902d or 0xa140) && _unknownClasses.Add(classId))
             {

@@ -734,6 +734,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                 EmittedHistogram[address] = seen + 1;
             }
 
+            if (Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2MethodProbe.Enabled)
+                Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2MethodProbe.RecordEmitted((int)address);
+
             if (System.Environment.GetEnvironmentVariable("NX2_MACRO_LOG") == "1" && emitIndex <= 30)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
