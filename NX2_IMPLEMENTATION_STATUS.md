@@ -57,6 +57,9 @@ Labels: NOT IMPLEMENTED · STUB · PARTIAL · IMPLEMENTED—UNVERIFIED · VERIFI
 6. **CPU/kernel semantics gaps** (PACGA/MTE/other unverified ARM; SVC/memory accounting fidelity) — implement with tests, preserve Switch 1.
 7. **Full Switch 1 regression suite** — not executed this snapshot.
 
+## TSG ioctl inventory (real, 60s run, NX2_IOCTL_LOG=1)
+- `/dev/nvhost-tsg-gpu`: `0x5408` (size 4, input 0x400) and `0x540B` (size 0x18, first word varies 4/6/7/9/11, second word 0/1/2). Stub echoes input. Reference-backed semantics UNVERIFIED (no droplet/ref source available in workspace); **not implemented** to avoid guessing. Keep stub; revisit with reference.
+
 ## Next implementation step
 Fix the highest-priority *verified* defect in the GPU submission/display chain with reference-backed, testable changes: (a) resolve NX2_SVC/IPC controls and blocked-event handle owners (0b/0c) to identify what the guest waits on; (b) implement real TSG subcontext/ioctl behavior (replace `Nx2StubDeviceFile` stub) with unit/log evidence; (c) address 228/229 separation and GPFIFO/USERD/doorbell per references. Re-run KTimeManager + NX2/MK8 controls, commit logically, push to `kleinergoo7/Kenji-NX`, verify remote commit hash.
 
