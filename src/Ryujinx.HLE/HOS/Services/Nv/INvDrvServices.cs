@@ -66,7 +66,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             { "/dev/nvhost-ctrl-gpu", typeof(NvHostCtrlGpuDeviceFile) },
             { "/dev/nvhost-as-gpu",   typeof(NvHostAsGpuDeviceFile)   },
             { "/dev/nvhost-gpu",      typeof(NvHostGpuDeviceFile)     },
-            { "/dev/nvhost-tsg-gpu",  typeof(Nx2StubDeviceFile)       },
+            { "/dev/nvhost-tsg-gpu",  typeof(Nx2TsgDeviceFile)       },
             //{ "/dev/nvhost-msenc",    typeof(NvHostChannelDeviceFile) },
             { "/dev/nvhost-nvdec",    typeof(NvHostChannelDeviceFile) },
             //{ "/dev/nvhost-nvjpg",    typeof(NvHostChannelDeviceFile) },
