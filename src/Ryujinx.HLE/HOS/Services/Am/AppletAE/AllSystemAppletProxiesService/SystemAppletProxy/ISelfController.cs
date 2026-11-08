@@ -176,7 +176,21 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             bool unknownFlag2 = context.RequestData.ReadBoolean();
             bool unknownFlag3 = context.RequestData.ReadBoolean();
 
-            Logger.Stub?.PrintStub(LogClass.ServiceAm, new { unknownFlag1, unknownFlag2, unknownFlag3 });
+            if (Environment.GetEnvironmentVariable("NX2_EXP_APPLET_FOCUS") == "1")
+            {
+                // NX2_EXP_APPLET_FOCUS=1 (env-gated experiment, default off): cmd 13 was observed (NX2 IPC t=60s n=2)
+                // and is a stub that does nothing; blocked applet/message threads (0b) may wait on applet MessageEvent.
+                // Droplet enables focus-state-changed notification via cmd 13 (behavior only, no GPL code).
+                // Hypothesis: re-signaling MessageEvent wakes a waiter without fabricating new guest state transitions.
+                // Falsifier: no change in submits/draws/frames/blocked threads over 2x240s NX2 PTC-on warm runs.
+                Logger.Warning?.Print(LogClass.ServiceAm,
+                    $"NX2_EXP_APPLET_FOCUS cmd13 flags=({unknownFlag1},{unknownFlag2},{unknownFlag3}) -> signal appmsg event");
+                context.Device.System.AppletState.MessageEvent.ReadableEvent.Signal();
+            }
+            else
+            {
+                Logger.Stub?.PrintStub(LogClass.ServiceAm, new { unknownFlag1, unknownFlag2, unknownFlag3 });
+            }
 
             return ResultCode.Success;
         }
