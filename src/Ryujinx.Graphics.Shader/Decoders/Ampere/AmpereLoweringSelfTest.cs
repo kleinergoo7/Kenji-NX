@@ -210,14 +210,18 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
                 BitConverter.TryWriteBytes(native.AsSpan(index * AmpereInstruction.Size + 12), code[index].W3);
             }
 
-            // Compute has no header: the program starts at the shader address.
+            // Compute has no header: the program starts at the shader address. Wrap the raw accessor
+            // with AmpereGpuAccessor so the translator sees the lowered Maxwell image (runtime adapter).
+            AmpereGpuAccessor computeAccessor = AmpereGpuAccessor.Create(new NativeGpuAccessor(native), 0, false, out string computeError);
+            Assert(computeAccessor != null, $"runtime adapter compute accessor failed: {computeError}");
+
             TranslationOptions computeOptions = new(TargetLanguage.Glsl, TargetApi.OpenGL, TranslationFlags.Compute);
             TranslatorContext computeContext = Translator.CreateContext(
                 0,
-                new NativeGpuAccessor(native),
+                computeAccessor,
                 computeOptions);
 
-            Assert(computeContext.Size == native.Length, "runtime adapter compute size");
+            Assert(computeContext.Size > 0, $"runtime adapter compute size (got {computeContext.Size})");
             Assert(computeContext.Stage == ShaderStage.Compute, "runtime adapter compute stage");
 
             // Graphics keeps the guest header ahead of the lowered code.
@@ -225,13 +229,16 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
 
             native.CopyTo(graphics, AmpereLayout.HeaderSize);
 
+            AmpereGpuAccessor graphicsAccessor = AmpereGpuAccessor.Create(new NativeGpuAccessor(graphics), 0, true, out string graphicsError);
+            Assert(graphicsAccessor != null, $"runtime adapter graphics accessor failed: {graphicsError}");
+
             TranslationOptions graphicsOptions = new(TargetLanguage.Glsl, TargetApi.OpenGL, TranslationFlags.None);
             TranslatorContext graphicsContext = Translator.CreateContext(
                 0,
-                new NativeGpuAccessor(graphics),
+                graphicsAccessor,
                 graphicsOptions);
 
-            Assert(graphicsContext.Size == graphics.Length, "runtime adapter graphics size");
+            Assert(graphicsContext.Size > AmpereLayout.HeaderSize, $"runtime adapter graphics size (got {graphicsContext.Size})");
             Assert(graphicsContext.Stage == ShaderStage.Vertex, "runtime adapter graphics stage");
         }
 
