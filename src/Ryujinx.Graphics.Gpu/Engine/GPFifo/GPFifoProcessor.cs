@@ -475,6 +475,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
         private void ProcessLoop(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer, int startIndex)
         {
+            Nx2BulkCounters.PbStart(commandBuffer.Length);
             for (int index = startIndex; index < commandBuffer.Length; index++)
             {
                 _bufferIndex = index;
@@ -490,6 +491,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     }
 
                     Send(gpuVa, _state.Method, command, _state.SubChannel, _state.MethodCount <= 1);
+                    Nx2BulkCounters.AddSend();
 
                     if (!_state.NonIncrementing)
                     {
@@ -512,6 +514,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                         index += meth.MethodCount;
                         continue;
                     }
+                    Nx2BulkCounters.AddSetup();
 
                     switch (meth.SecOp)
                     {
@@ -550,6 +553,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
                 ReadOnlySpan<int> data = commandBuffer.Slice(offset, consumeCount);
                 Nx2BulkCounters.I2m(_state.Method, consumeCount);
+                Nx2BulkCounters.AddI2m(consumeCount);
 
                 if (_state.SubChannel == 0)
                 {
@@ -569,6 +573,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
                 return true;
             }
+            if (Nx2BulkCounters.DebugEnabled && _state.Method == 0x6D)
+                Nx2BulkCounters.DebugReject("I2M", _state.Method, _state.MethodCount, commandBuffer.Length - offset, $"nonInc={_state.NonIncrementing} subch={_state.SubChannel}");
 
             return false;
         }
@@ -592,10 +598,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 meth.SecOp == SecOp.NonIncMethod)
             {
                 Nx2BulkCounters.Ubo(meth.MethodAddress, meth.MethodCount);
+                Nx2BulkCounters.AddUbo(1 + meth.MethodCount);
                 _3dClass.ConstantBufferUpdate(commandBuffer.Slice(offset + 1, meth.MethodCount));
 
                 return true;
             }
+            if (Nx2BulkCounters.DebugEnabled && meth.MethodAddress == 0x8E4)
+                Nx2BulkCounters.DebugReject("UBO", meth.MethodAddress, meth.MethodCount, availableCount, $"secOp={meth.SecOp} count<{availableCount}={meth.MethodCount < availableCount} (need NonIncMethod && count<avail)");
 
             return false;
         }

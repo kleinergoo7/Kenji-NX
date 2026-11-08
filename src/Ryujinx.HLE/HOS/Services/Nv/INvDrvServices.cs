@@ -336,6 +336,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     if (errorCode == NvResult.Success)
                     {
                         LogIoctl("Ioctl", fd, deviceFile, ioctlCommand, arguments);
+                        try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.IncrementIoctl((int)(context.Thread?.ThreadUid??0), deviceFile?.GetType().Name??"nv", IoctlVariant??"Ioctl", ioctlCommand.Type, ioctlCommand.Number); } catch {}
 
                         Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
                         string prevVariant = IoctlVariant;
@@ -605,6 +606,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     if (errorCode == NvResult.Success)
                     {
                         LogIoctl("Ioctl2", fd, deviceFile, ioctlCommand, arguments);
+                        try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.IncrementIoctl((int)(context.Thread?.ThreadUid??0), deviceFile?.GetType().Name??"nv", IoctlVariant??"Ioctl2", ioctlCommand.Type, ioctlCommand.Number); } catch {}
 
                         Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
                         string prevVariant = IoctlVariant;
@@ -700,6 +702,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     if (errorCode == NvResult.Success)
                     {
                         LogIoctl("Ioctl3", fd, deviceFile, ioctlCommand, arguments);
+                        try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.IncrementIoctl((int)(context.Thread?.ThreadUid??0), deviceFile?.GetType().Name??"nv", IoctlVariant??"Ioctl3", ioctlCommand.Type, ioctlCommand.Number); } catch {}
 
                         Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
                         string prevVariant = IoctlVariant;

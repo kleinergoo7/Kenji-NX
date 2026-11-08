@@ -187,7 +187,7 @@ namespace Ryujinx.HLE.HOS.Services
                 }
             }
 
-            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
+            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
                 (int)(context.Thread?.ThreadUid ?? 0), service.GetType().Name, commandId); } catch { }
 
             bool serviceExists = service.CmifCommands.TryGetValue(commandId, out MethodInfo processRequest);
@@ -329,7 +329,7 @@ namespace Ryujinx.HLE.HOS.Services
                 }
             }
 
-            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
+            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
                 (int)(context.Thread?.ThreadUid ?? 0), GetType().Name, commandId); } catch { }
 
             bool serviceExists = TipcCommands.TryGetValue(commandId, out MethodInfo processRequest);
