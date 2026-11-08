@@ -58,6 +58,10 @@ E1 run2 (130s, PTC-on warm): submits=8, presents 0→1104, draws=0; PresentInter
 6. **CPU/kernel semantics gaps** (PACGA/MTE/other unverified ARM; SVC/memory accounting fidelity) — implement with tests, preserve Switch 1.
 7. **Full Switch 1 regression suite** — not executed this snapshot.
 
+## Best-effort TSG (UNVERIFIED) test (240s, PTC-on warm)
+- Implemented `Nx2TsgDeviceFile` (replaced stub registration): handles 0x540B by returning an incrementing subcontext id in word 0; 0x5408 and unknowns keep input-echoing stub behavior. Marked UNVERIFIED in code/logs.
+- Result: submits=8, draws=0, presents 0→912+; **no change**. Best-effort subcontext id did not unlock draws/submits. Revert? Kept (harmless, gated only by registration; env-gated logging). Status: IMPLEMENTED—UNVERIFIED / no guest effect.
+
 ## TSG ioctl inventory (real, 60s run, NX2_IOCTL_LOG=1)
 - `/dev/nvhost-tsg-gpu`: `0x5408` (size 4, input 0x400) and `0x540B` (size 0x18, first word varies 4/6/7/9/11, second word 0/1/2). Stub echoes input. Reference-backed semantics UNVERIFIED (no droplet/ref source available in workspace); **not implemented** to avoid guessing. Keep stub; revisit with reference.
 
