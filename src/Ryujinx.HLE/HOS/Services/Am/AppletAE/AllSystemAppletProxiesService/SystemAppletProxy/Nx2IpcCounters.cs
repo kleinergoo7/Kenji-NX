@@ -31,6 +31,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             _ioctlCounts.AddOrUpdate($"{threadUid}|{device}|{variant}|0x{type:X2}/0x{nr:X2}", 1, (_, v) => v + 1);
         }
 
+        public static void DumpBucket(int sec)
+        {
+            if (!Enabled) return;
+            // 10s buckets for NX2 interfaces of interest (item 1)
+            var keys = _counts.Where(kv => kv.Key.Contains("INx2GpuSession") || kv.Key.Contains("INx2SyncptSession") || kv.Key.Contains("INx2Vi2Session")).OrderBy(kv=>kv.Key).Select(kv=>{var p=kv.Key.Split('|'); return $"{p[1]}:{p[2]}={kv.Value}";});
+            Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_IPC_BUCKET t={sec}s [{string.Join(", ", keys)}]");
+            var io = _ioctlCounts.Where(kv => kv.Key.Contains("0x48/0x1B")||kv.Key.Contains("0x48/0x08")||kv.Key.Contains("0x48/0x17")||kv.Key.Contains("0x48/0x16")).Select(kv=>{var p=kv.Key.Split('|'); return $"{p[1]} {p[2]} {p[3]} n={kv.Value}";});
+            if (io.Any()) Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_IOCTL_BUCKET t={sec}s [{string.Join(", ", io)}]");
+        }
         public static void Dump(string tag)
         {
             if (!Enabled) return;

@@ -45,8 +45,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             if (!Enabled) return;
             EnsureTimer();
             int sec = (int)_procSw.Elapsed.TotalSeconds;
-            int[] marks = {60,150,240};
-            foreach(int m in marks) if (sec >= m && _lastDumpSec < m) { lock(_dumpLock){ if (_lastDumpSec < m){ _lastDumpSec=m; var k=_kernel??ResolveKernel(); if(k==null) Logger.Warning?.Print(LogClass.ServiceAm,$"NX2_THREAD t={m}s kernel=null (timer)"); DumpAt(k,$"t={m}s"); Nx2IpcCounters.Dump($"t={m}s"); } } }
+            if (sec > 0 && sec % 10 == 0 && sec != _lastDumpSec) Nx2IpcCounters.DumpBucket(sec);
+            int[] marks = {60,150,240,300,600,900};
+            foreach(int m in marks) if (sec >= m && _lastDumpSec < m) { lock(_dumpLock){ if (_lastDumpSec < m){ _lastDumpSec=m; var k=_kernel??ResolveKernel(); if(k==null) Logger.Warning?.Print(LogClass.ServiceAm,$"NX2_THREAD t={m}s kernel=null (timer)"); DumpAt(k,$"t={m}s"); Nx2IpcCounters.Dump($"t={m}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={m}s"); } } }
         }
 
         public static void MaybeLogBuildIdentity()
@@ -119,9 +120,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             if (horizon?.KernelContext != null) _kernel = horizon.KernelContext;
             EnsureTimer();
             // timer is primary; Tick is fallback/capture
-            if ((progressSec == 60 || progressSec == 150 || progressSec == 240) && _lastDumpSec < progressSec)
+            if ((progressSec == 60 || progressSec == 150 || progressSec == 240 || progressSec == 300 || progressSec == 600 || progressSec == 900) && _lastDumpSec < progressSec)
             {
-                lock(_dumpLock){ if (_lastDumpSec < progressSec){ _lastDumpSec=progressSec; DumpAt(_kernel ?? horizon?.KernelContext ?? ResolveKernel(), $"t={progressSec}s"); Nx2IpcCounters.Dump($"t={progressSec}s"); } }
+                lock(_dumpLock){ if (_lastDumpSec < progressSec){ _lastDumpSec=progressSec; DumpAt(_kernel ?? horizon?.KernelContext ?? ResolveKernel(), $"t={progressSec}s"); Nx2IpcCounters.Dump($"t={progressSec}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={progressSec}s"); } }
             }
         }
     }

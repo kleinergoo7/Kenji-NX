@@ -121,7 +121,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
         private static void LogProgress()
         {
-            if (System.Threading.Interlocked.Increment(ref _progressTicks) % 3600 != 0)
+            int mod = System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") == "1" ? 600 : 3600;
+            if (System.Threading.Interlocked.Increment(ref _progressTicks) % mod != 0)
             {
                 return;
             }
@@ -433,12 +434,22 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             // 229(u64 client token, u32 slot, u32 image, ...fences): word 5 after the
             // TIPC header is the presented image id; RequestData starts at word 2.
             context.RequestData.ReadUInt64();  // token
-            context.RequestData.ReadUInt32();  // slot
+            uint slot = context.RequestData.ReadUInt32();
 
             uint imageId = context.RequestData.ReadUInt32();
 
             System.Threading.Volatile.Write(ref _device, context.Device);
-            System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
+            int presentN = System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_PRESENT_TRACE") == "1")
+            {
+                bool logIt = presentN <= 30 || presentN % 100 == 0;
+                if (logIt)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                        $"NX2PT #{presentN} slot={slot} image={imageId} bufHash=dims=format=nonzero=dump=UNRESOLVED(nx2:vi2 TIPC path, buffer not cheaply wired)");
+                }
+            }
 
             if (System.Environment.GetEnvironmentVariable("NX2_METHOD_LOG") == "1" &&
                 System.Threading.Interlocked.Increment(ref _methodSamples) % 300 == 0)

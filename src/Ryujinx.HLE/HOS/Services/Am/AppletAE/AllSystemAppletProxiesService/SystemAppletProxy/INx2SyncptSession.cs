@@ -129,6 +129,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     _dualLogs++;
                     Logger.Warning?.Print(LogClass.ServiceNv, $"nx2:syncpt 103 sp={syncpoint} host={hostValue} gpu={gpuValue}");
                 }
+
+                if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
+                {
+                    int uid = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread() != null ? (int)Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread().ThreadUid : 0;
+                    Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Query103(counter, syncpoint, hostValue, gpuValue, uid, null);
+                }
             }
 
 
@@ -165,14 +171,17 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 {
                     Logger.Warning?.Print(LogClass.ServiceNv, $"nx2:syncpt 201 syncpoint {syncpoint} out of range, signalling");
                     evt.ReadableEvent.Signal();
+                    if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled) Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Request201(slot, syncpoint, value, mode, 0, true, true, false);
 
                     return ResultCode.Success;
                 }
 
                 // nvhost already advanced its (host) fence past the requested value.
-                if (context.Device.System.HostSyncpoint.ReadSyncpointValue(syncpoint) >= value)
+                uint hostAtReq = context.Device.System.HostSyncpoint.ReadSyncpointValue(syncpoint);
+                if (hostAtReq >= value)
                 {
                     evt.ReadableEvent.Signal();
+                    if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled) Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Request201(slot, syncpoint, value, mode, hostAtReq, true, false, false);
 
                     return ResultCode.Success;
                 }
@@ -185,7 +194,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
                 _requests[slot] = request;
 
+                if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
+                {
+                    Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Request201(slot, syncpoint, value, mode, hostAtReq, false, false, false);
+                }
+
                 // The callback may run on the GPU thread before Register returns.
+                var hostSp = context.Device.System.HostSyncpoint;
                 request.Handle = context.Device.Gpu.Synchronization.RegisterCallbackOnSyncpoint(
                     syncpoint,
                     (uint)value,
@@ -202,6 +217,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         }
 
                         evt.ReadableEvent.Signal();
+                        if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
+                        {
+                            Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.SlotSignalled(slot, hostSp.ReadSyncpointValue(syncpoint));
+                        }
                     });
 
                 if (request.Handle == null)
@@ -209,6 +228,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     // Already past the threshold; the callback was never registered.
                     request.Pending = false;
                     evt.ReadableEvent.Signal();
+                    if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
+                    {
+                        Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.SlotSignalled(slot, context.Device.System.HostSyncpoint.ReadSyncpointValue(syncpoint));
+                    }
                 }
             }
 
@@ -221,6 +244,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             uint slot = context.RequestData.ReadUInt32();
 
             Logger.Debug?.Print(LogClass.ServiceNv, $"nx2:syncpt 202 slot={slot}");
+            if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled) Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Cancel202(slot, 0);
 
             lock (_lock)
             {

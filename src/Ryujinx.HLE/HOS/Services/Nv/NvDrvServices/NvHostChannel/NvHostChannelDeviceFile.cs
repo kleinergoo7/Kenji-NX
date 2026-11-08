@@ -484,9 +484,10 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
                 return NvInternalResult.InvalidInput;
             }
 
+            int nx2SubmitN = 0;
             if (nx2)
             {
-                System.Threading.Interlocked.Increment(ref Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Counters.Submits);
+                nx2SubmitN = System.Threading.Interlocked.Increment(ref Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Counters.Submits);
             }
 
             Ryujinx.HLE.HOS.Kernel.Threading.KThread ioctlClient = INvDrvServices.IoctlClientThread;
@@ -610,6 +611,12 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv,
                     $"NX2 submit fence chan={Channel?.GetHashCode():X8} sp={header.Fence.Id} value={header.Fence.Value} inc={incrementCount}");
+            }
+
+            if (nx2 && nx2SubmitN > 0 && Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
+            {
+                uint hostAfter = _device.System.HostSyncpoint.ReadSyncpointValue(header.Fence.Id);
+                Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.SubmitFence(nx2SubmitN, header.Fence.Id, header.Fence.Value, hostAfter);
             }
 
             if (nx2)
