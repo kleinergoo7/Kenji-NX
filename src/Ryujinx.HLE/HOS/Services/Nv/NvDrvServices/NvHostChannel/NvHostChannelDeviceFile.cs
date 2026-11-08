@@ -412,6 +412,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
             arguments.Fence = _channelSyncpoint;
 
+            if (Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
+            {
+                ReadOnlySpan<byte> raw = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref arguments, 1));
+                Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 AllocGpfifoEx numEntries={arguments.NumEntries} numJobs={arguments.NumJobs} flags=0x{arguments.Flags:X} fence=({arguments.Fence.Id},{arguments.Fence.Value}) r1=0x{arguments.Reserved1:X} r2=0x{arguments.Reserved2:X} r3=0x{arguments.Reserved3:X} raw={Convert.ToHexString(raw)} owner={Owner}");
+            }
             Logger.Stub?.PrintStub(LogClass.ServiceNv);
 
             return NvInternalResult.Success;
@@ -423,6 +428,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
             arguments.Fence = _channelSyncpoint;
 
+            if (Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
+            {
+                ReadOnlySpan<byte> raw = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref arguments, 1));
+                Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 AllocGpfifoEx2 numEntries={arguments.NumEntries} numJobs={arguments.NumJobs} flags=0x{arguments.Flags:X} fence=({arguments.Fence.Id},{arguments.Fence.Value}) r1=0x{arguments.Reserved1:X} r2=0x{arguments.Reserved2:X} r3=0x{arguments.Reserved3:X} raw={Convert.ToHexString(raw)} owner={Owner}");
+            }
             Logger.Stub?.PrintStub(LogClass.ServiceNv);
 
             return NvInternalResult.Success;
@@ -446,6 +456,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         private NvInternalResult SetUserData(ref ulong userData)
         {
+            if (Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
+            {
+                bool mapped = _memory != null && userData != 0 && _memory.IsMapped(userData);
+                Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 SetUserData userData=0x{userData:X} mapped={mapped} owner={Owner}");
+            }
             Logger.Stub?.PrintStub(LogClass.ServiceNv);
 
             return NvInternalResult.Success;
@@ -474,8 +489,18 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
                 System.Threading.Interlocked.Increment(ref Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Counters.Submits);
             }
 
-            Ryujinx.HLE.HOS.Kernel.Threading.KThread caller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
-            ulong callerPc = caller?.Context.Pc ?? 0;
+            Ryujinx.HLE.HOS.Kernel.Threading.KThread ioctlClient = INvDrvServices.IoctlClientThread;
+            Ryujinx.HLE.HOS.Kernel.Threading.KThread curThread = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+            Ryujinx.HLE.HOS.Kernel.Threading.KThread caller = ioctlClient ?? curThread;
+            ulong callerPc = caller?.Context.GetX(30) ?? 0;
+            ulong callerFp = caller?.Context.GetX(29) ?? 0;
+            bool sameThread = ReferenceEquals(ioctlClient, curThread);
+            bool usedClient = ioctlClient != null;
+            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv,
+                    $"NX2 submit ctx client={(ioctlClient!=null ? $"{ioctlClient.ThreadUid}/{ioctlClient.GetThreadName()}/pid{ioctlClient.Owner?.Pid}" : "null")} cur={(curThread!=null ? $"{curThread.ThreadUid}/{curThread.GetThreadName()}/pid{curThread.Owner?.Pid}" : "null")} same={sameThread} usedClient={usedClient} nx2={nx2} x30=0x{callerPc:X} x29=0x{callerFp:X} pcField=0x{(caller?.Context.Pc ?? 0):X}");
+            }
 
             if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
             {
@@ -496,8 +521,13 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
             {
                 int submitIndex = System.Threading.Interlocked.Increment(ref _nx2SubmitLogs);
+                int cap = 200;
+                if (int.TryParse(System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG_CAP"), out int capOverride) && capOverride > 0)
+                {
+                    cap = capOverride;
+                }
 
-                if (submitIndex <= 40)
+                if (submitIndex <= cap)
                 {
                     System.Text.StringBuilder words = new();
 
@@ -506,8 +536,45 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
                         words.Append($"{entries[i]:X16} ");
                     }
 
+                    // x30 at SVC/ioctl time is the stub's return address, not the GPU-work builder.
+                    // Walk x29 frame-pointer chain (AArch64: [FP]=prev FP, [FP+8]=saved LR), IsMapped pre-checked.
+                    string fpChain = "n/a";
+                    try
+                    {
+                        if (caller?.Context != null)
+                        {
+                            ulong fp = callerFp;
+                            System.Text.StringBuilder fb = new();
+                            ulong prevFp = 0;
+                            for (int fi = 0; fi < 8 && fp >= 0x1000 && fp + 16 <= ulong.MaxValue - 16; fi++)
+                            {
+                                if (!_memory.IsMapped(fp) || !_memory.IsMapped(fp + 8))
+                                {
+                                    break;
+                                }
+
+                                ulong savedLr = _memory.Read<ulong>(fp + 8);
+                                ulong nextFp = _memory.Read<ulong>(fp);
+                                fb.Append($"#{fi}=0x{savedLr:X}(fp=0x{fp:X}) ");
+                                if (nextFp <= fp || nextFp == prevFp)
+                                {
+                                    break;
+                                }
+
+                                prevFp = fp;
+                                fp = nextFp;
+                            }
+                            fpChain = fb.Length > 0 ? fb.ToString().TrimEnd() : "empty";
+                        }
+                    }
+                    catch { fpChain = "err"; }
+
                     Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv,
-                        $"NX2 submit #{submitIndex} owner={Owner} chan={Channel?.GetHashCode():X8} tid={caller?.ThreadUid}({caller?.GetThreadName()}) pc=0x{callerPc:X} flags={header.Flags} fence=({header.Fence.Id},{header.Fence.Value}) entries={entries.Length} words=[{words}]");
+                        $"NX2 submit #{submitIndex} owner={Owner} chan={Channel?.GetHashCode():X8} var={Ryujinx.HLE.HOS.Services.Nv.INvDrvServices.IoctlVariant ?? "?"} tid={caller?.ThreadUid}({caller?.GetThreadName()}) pid={caller?.Owner?.Pid} x30=0x{callerPc:X} flags={header.Flags} fence=({header.Fence.Id},{header.Fence.Value}) addr=0x{header.Address:X} entries={entries.Length} words=[{words}] fp=[{fpChain}]");
+                }
+                else if (submitIndex == cap + 1)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 submit log cap {cap} reached, further submits dropped (NX2_SUBMIT_LOG_CAP to raise)");
                 }
             }
 

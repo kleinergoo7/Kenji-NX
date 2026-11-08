@@ -187,6 +187,9 @@ namespace Ryujinx.HLE.HOS.Services
                 }
             }
 
+            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
+                (int)(context.Thread?.ThreadUid ?? 0), service.GetType().Name, commandId); } catch { }
+
             bool serviceExists = service.CmifCommands.TryGetValue(commandId, out MethodInfo processRequest);
 
             if (context.Device.Configuration.IgnoreMissingServices || serviceExists)
@@ -325,6 +328,9 @@ namespace Ryujinx.HLE.HOS.Services
                     Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 gsvcall {commandId} n={n}");
                 }
             }
+
+            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
+                (int)(context.Thread?.ThreadUid ?? 0), GetType().Name, commandId); } catch { }
 
             bool serviceExists = TipcCommands.TryGetValue(commandId, out MethodInfo processRequest);
 

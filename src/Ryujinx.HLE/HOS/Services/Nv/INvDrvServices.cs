@@ -26,6 +26,10 @@ namespace Ryujinx.HLE.HOS.Services.Nv
     [Service("nvdrv:t")]
     class INvDrvServices : IpcService
     {
+        [ThreadStatic]
+        internal static Ryujinx.HLE.HOS.Kernel.Threading.KThread IoctlClientThread;
+        [ThreadStatic]
+        internal static string IoctlVariant;
         // Diagnostic: per-ioctl counts, printed with the NX2 progress line.
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> IoctlCounts = [];
 
@@ -333,7 +337,20 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     {
                         LogIoctl("Ioctl", fd, deviceFile, ioctlCommand, arguments);
 
-                        NvInternalResult internalResult = deviceFile.Ioctl(ioctlCommand, arguments);
+                        Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
+                        string prevVariant = IoctlVariant;
+                        IoctlClientThread = context.Thread;
+                        IoctlVariant = "Ioctl";
+                        NvInternalResult internalResult;
+                        try
+                        {
+                            internalResult = deviceFile.Ioctl(ioctlCommand, arguments);
+                        }
+                        finally
+                        {
+                            IoctlClientThread = prevClient;
+                            IoctlVariant = prevVariant;
+                        }
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
@@ -589,7 +606,20 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     {
                         LogIoctl("Ioctl2", fd, deviceFile, ioctlCommand, arguments);
 
-                        NvInternalResult internalResult = deviceFile.Ioctl2(ioctlCommand, arguments, inlineInBufferSpan);
+                        Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
+                        string prevVariant = IoctlVariant;
+                        IoctlClientThread = context.Thread;
+                        IoctlVariant = "Ioctl2";
+                        NvInternalResult internalResult;
+                        try
+                        {
+                            internalResult = deviceFile.Ioctl2(ioctlCommand, arguments, inlineInBufferSpan);
+                        }
+                        finally
+                        {
+                            IoctlClientThread = prevClient;
+                            IoctlVariant = prevVariant;
+                        }
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
@@ -671,7 +701,20 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     {
                         LogIoctl("Ioctl3", fd, deviceFile, ioctlCommand, arguments);
 
-                        NvInternalResult internalResult = deviceFile.Ioctl3(ioctlCommand, arguments, inlineOutBufferSpan);
+                        Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
+                        string prevVariant = IoctlVariant;
+                        IoctlClientThread = context.Thread;
+                        IoctlVariant = "Ioctl3";
+                        NvInternalResult internalResult;
+                        try
+                        {
+                            internalResult = deviceFile.Ioctl3(ioctlCommand, arguments, inlineOutBufferSpan);
+                        }
+                        finally
+                        {
+                            IoctlClientThread = prevClient;
+                            IoctlVariant = prevVariant;
+                        }
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
