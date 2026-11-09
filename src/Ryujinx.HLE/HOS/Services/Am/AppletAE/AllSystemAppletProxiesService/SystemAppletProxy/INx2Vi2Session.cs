@@ -5,6 +5,7 @@ using Ryujinx.Graphics.GAL;
 using Ryujinx.HLE.HOS.Ipc;
 using Ryujinx.HLE.HOS.Kernel.Common;
 using Ryujinx.HLE.HOS.Kernel.Threading;
+using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel;
 using System;
 using System.Collections.Generic;
 
@@ -461,6 +462,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             System.Threading.Volatile.Write(ref _device, context.Device);
             int presentN = System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
+            NvHostChannelDeviceFile.TracePresentUserData(context.Device, presentN);
 
             if (System.Environment.GetEnvironmentVariable("NX2_PRESENT_TRACE") == "1")
             {

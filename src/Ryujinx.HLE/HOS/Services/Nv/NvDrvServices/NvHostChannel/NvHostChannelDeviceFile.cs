@@ -17,6 +17,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
     class NvHostChannelDeviceFile : NvDeviceFile
     {
         private static readonly ConcurrentDictionary<ulong, Host1xContext> _host1xContextRegistry = new();
+        private static readonly bool TraceUserDataEnabled = Environment.GetEnvironmentVariable("NX2_USERD_LOG") == "1";
+        private static readonly ConcurrentDictionary<NvHostChannelDeviceFile, ulong> UserDataTraceAddresses = new();
 
         private const uint MaxModuleSyncpoint = 16;
 
@@ -31,6 +33,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
         private readonly IVirtualMemoryManager _memory;
         private readonly Host1xContext _host1xContext;
         private readonly long _contextId;
+        private int _userDataRegistrationLogs;
 
         public GpuChannel Channel { get; }
 
@@ -483,6 +486,22 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         private NvInternalResult SetUserData(ref ulong userData)
         {
+            if (TraceUserDataEnabled && NvHostCtrlGpuDeviceFile.Nx2Driver)
+            {
+                if (userData == 0)
+                {
+                    UserDataTraceAddresses.TryRemove(this, out _);
+                }
+                else
+                {
+                    UserDataTraceAddresses[this] = userData;
+                    if (System.Threading.Interlocked.Increment(ref _userDataRegistrationLogs) <= 4)
+                    {
+                        LogUserData(userData, "register");
+                    }
+                }
+            }
+
             if (Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
             {
                 bool mapped = _memory != null && userData != 0 && _memory.IsMapped(userData);
@@ -491,6 +510,48 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             Logger.Stub?.PrintStub(LogClass.ServiceNv);
 
             return NvInternalResult.Success;
+        }
+
+        internal static void TracePresentUserData(Switch device, int present)
+        {
+            // Sample the transition into the frame loop and a bounded set of later presents.
+            if (!TraceUserDataEnabled || (present > 8 && (present > 3600 || present % 120 != 0)))
+            {
+                return;
+            }
+
+            foreach ((NvHostChannelDeviceFile channel, ulong address) in UserDataTraceAddresses)
+            {
+                if (channel._device == device)
+                {
+                    channel.LogUserData(address, $"present#{present}");
+                }
+            }
+        }
+
+        private void LogUserData(ulong address, string stage)
+        {
+            const int sampleSize = 0x100;
+            Span<byte> bytes = stackalloc byte[sampleSize];
+
+            try
+            {
+                if (address <= ulong.MaxValue - (sampleSize - 1) &&
+                    _memory.IsMapped(address) && _memory.IsMapped(address + sampleSize - 1))
+                {
+                    _memory.Read(address, bytes);
+                    Logger.Warning?.Print(LogClass.ServiceNv,
+                        $"NX2 USERD {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} bytes={Convert.ToHexString(bytes)}");
+                    return;
+                }
+            }
+            catch (InvalidMemoryRegionException)
+            {
+                // The guest can unmap this range between checking it and reading it.
+            }
+
+            Logger.Warning?.Print(LogClass.ServiceNv,
+                $"NX2 USERD {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} unavailable");
         }
 
         private static int _nx2SubmitLogs;
@@ -515,6 +576,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             if (nx2)
             {
                 nx2SubmitN = System.Threading.Interlocked.Increment(ref Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Counters.Submits);
+
+                if (TraceUserDataEnabled && nx2SubmitN <= 32 && UserDataTraceAddresses.TryGetValue(this, out ulong userData))
+                {
+                    LogUserData(userData, $"submit#{nx2SubmitN}");
+                }
             }
 
             Ryujinx.HLE.HOS.Kernel.Threading.KThread ioctlClient = INvDrvServices.IoctlClientThread;
@@ -805,6 +871,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         public override void Close()
         {
+            UserDataTraceAddresses.TryRemove(this, out _);
             _host1xContext.Host1x.DestroyContext(_contextId);
             Channel.Dispose();
 
@@ -828,6 +895,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         public static void Destroy()
         {
+            UserDataTraceAddresses.Clear();
             foreach (Host1xContext host1xContext in _host1xContextRegistry.Values)
             {
                 host1xContext.Dispose();
