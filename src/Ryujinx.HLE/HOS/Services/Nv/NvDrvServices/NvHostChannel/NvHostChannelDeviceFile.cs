@@ -329,13 +329,40 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             return NvInternalResult.Success;
         }
 
+        internal delegate NvInternalResult GpfifoSubmitter(ref SubmitGpfifoArguments header, Span<ulong> entries);
+
         private NvInternalResult SubmitGpfifo(Span<byte> arguments)
         {
-            int headerSize = Unsafe.SizeOf<SubmitGpfifoArguments>();
-            SubmitGpfifoArguments gpfifoSubmissionHeader = MemoryMarshal.Cast<byte, SubmitGpfifoArguments>(arguments)[0];
-            Span<ulong> gpfifoEntries = MemoryMarshal.Cast<byte, ulong>(arguments[headerSize..])[..gpfifoSubmissionHeader.NumEntries];
+            return SubmitGpfifo(arguments, SubmitGpfifo);
+        }
 
-            return SubmitGpfifo(ref gpfifoSubmissionHeader, gpfifoEntries);
+        internal static NvInternalResult SubmitGpfifo(Span<byte> arguments, GpfifoSubmitter submit)
+        {
+            int headerSize = Unsafe.SizeOf<SubmitGpfifoArguments>();
+            if (arguments.Length < headerSize)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"SubmitGpfifo rejected: argument size 0x{arguments.Length:X} is smaller than header size 0x{headerSize:X}.");
+
+                return NvInternalResult.InvalidInput;
+            }
+
+            // The ioctl returns the updated fence and flags in this same header.
+            ref SubmitGpfifoArguments header = ref MemoryMarshal.AsRef<SubmitGpfifoArguments>(arguments);
+            Span<ulong> entries = MemoryMarshal.Cast<byte, ulong>(arguments[headerSize..]);
+
+            return SubmitGpfifoEntries(ref header, entries, submit);
+        }
+
+        internal static NvInternalResult SubmitGpfifoEntries(ref SubmitGpfifoArguments header, Span<ulong> entries, GpfifoSubmitter submit)
+        {
+            if (header.NumEntries < 0 || header.NumEntries > entries.Length)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"SubmitGpfifo rejected: entry count {header.NumEntries} is outside the buffer bounds (capacity {entries.Length}).");
+
+                return NvInternalResult.InvalidInput;
+            }
+
+            return submit(ref header, entries[..header.NumEntries]);
         }
 
         private NvInternalResult AllocObjCtx(ref AllocObjCtxArguments arguments)
@@ -500,7 +527,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
             {
                 Logger.Warning?.Print(LogClass.ServiceNv,
-                    $"NX2 submit ctx client={(ioctlClient!=null ? $"{ioctlClient.ThreadUid}/{ioctlClient.GetThreadName()}/pid{ioctlClient.Owner?.Pid}" : "null")} cur={(curThread!=null ? $"{curThread.ThreadUid}/{curThread.GetThreadName()}/pid{curThread.Owner?.Pid}" : "null")} same={sameThread} usedClient={usedClient} nx2={nx2} x30=0x{callerPc:X} x29=0x{callerFp:X} pcField=0x{(caller?.Context.Pc ?? 0):X}");
+                    $"NX2 submit ctx client={(ioctlClient != null ? $"{ioctlClient.ThreadUid}/{ioctlClient.GetThreadName()}/pid{ioctlClient.Owner?.Pid}" : "null")} cur={(curThread != null ? $"{curThread.ThreadUid}/{curThread.GetThreadName()}/pid{curThread.Owner?.Pid}" : "null")} same={sameThread} usedClient={usedClient} nx2={nx2} x30=0x{callerPc:X} x29=0x{callerFp:X} pcField=0x{(caller?.Context.Pc ?? 0):X}");
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
