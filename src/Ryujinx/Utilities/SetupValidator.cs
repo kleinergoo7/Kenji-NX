@@ -92,7 +92,7 @@ namespace Ryujinx.Ava.Utilities
                 // WORKAROUND: unpacked Switch 2 titles also boot without firmware (verified
                 // headless); missing system archives get HLE fallbacks at runtime instead.
                 // Remove once firmware-gated features are required at load time.
-                if (baseApplicationExtension is ".nro" or ".nso" || Directory.Exists(baseApplicationPath))
+                if (baseApplicationExtension is ".nro" or ".nso" or ".nup" || Directory.Exists(baseApplicationPath))
                 {
                     error = UserError.Success;
                     return true;
