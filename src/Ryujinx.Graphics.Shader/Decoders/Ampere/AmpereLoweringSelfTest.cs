@@ -24,6 +24,7 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
             CheckImageAndAddressMap();
             CheckDecoder();
             CheckRuntimeAdapter();
+            CheckAccessorBounds();
         }
 
         private static void CheckLayout()
@@ -240,6 +241,34 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
 
             Assert(graphicsContext.Size > AmpereLayout.HeaderSize, $"runtime adapter graphics size (got {graphicsContext.Size})");
             Assert(graphicsContext.Stage == ShaderStage.Vertex, "runtime adapter graphics stage");
+        }
+
+        private static void CheckAccessorBounds()
+        {
+            AmpereInstruction exit = Exit();
+            byte[] native = new byte[AmpereInstruction.Size];
+            WriteExit(native);
+
+            AmpereGpuAccessor accessor = AmpereGpuAccessor.Create(
+                new NativeGpuAccessor(native), 0, false, out string error);
+            Assert(accessor != null, $"accessor bounds setup failed: {error}");
+            Assert(accessor.GetCode(0, 8).Length > 0, "accessor start is valid");
+            Assert(accessor.GetCode(ulong.MaxValue, 8).IsEmpty, "overflowing guest address rejected");
+            Assert(accessor.GetCode(1, 8).IsEmpty, "unaligned guest address rejected");
+
+            const int captureLimitBytes = (int)AmpereProgramCapture.MaximumInstructions * AmpereInstruction.Size;
+            native = new byte[captureLimitBytes + AmpereInstruction.Size];
+            WriteExit(native.AsSpan(captureLimitBytes));
+            accessor = AmpereGpuAccessor.Create(new NativeGpuAccessor(native), 0, false, out error);
+            Assert(accessor == null && error == "native program end not found", "terminator after capture limit rejected");
+
+            void WriteExit(Span<byte> destination)
+            {
+                BitConverter.TryWriteBytes(destination, exit.W0);
+                BitConverter.TryWriteBytes(destination[4..], exit.W1);
+                BitConverter.TryWriteBytes(destination[8..], exit.W2);
+                BitConverter.TryWriteBytes(destination[12..], exit.W3);
+            }
         }
 
         private sealed class NativeGpuAccessor : IGpuAccessor
