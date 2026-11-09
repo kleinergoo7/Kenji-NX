@@ -382,6 +382,24 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             return KernelResult.InvalidState;
         }
 
+        internal static int ReadAndDecrementIfLessThan(ref int addressValue, int threshold)
+        {
+            int current = Volatile.Read(ref addressValue);
+
+            while (current < threshold)
+            {
+                int observed = Interlocked.CompareExchange(ref addressValue, unchecked(current - 1), current);
+                if (observed == current)
+                {
+                    break;
+                }
+
+                current = observed;
+            }
+
+            return current;
+        }
+
         public Result WaitForAddressIfLessThan(ulong address, int value, bool shouldDecrement, long timeout)
         {
             KThread currentThread = KernelStatic.GetCurrentThread();
@@ -409,7 +427,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
             if (shouldDecrement)
             {
-                currentValue = Interlocked.Decrement(ref currentProcess.CpuMemory.GetRef<int>(address)) + 1;
+                currentValue = ReadAndDecrementIfLessThan(ref currentProcess.CpuMemory.GetRef<int>(address), value);
             }
 
             if (currentValue < value)
