@@ -541,42 +541,24 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             return Result.Success;
         }
 
+        internal static int GetSignalAndModifyAddend(int waitingCount, int count)
+        {
+            if (waitingCount == 0)
+            {
+                return 1;
+            }
+
+            // A nonpositive count wakes everyone. For a positive count, equality
+            // also empties the queue and must clear the guest's waiter indication.
+            return count <= 0 || waitingCount <= count ? -1 : 0;
+        }
+
         public Result SignalAndModifyIfEqual(ulong address, int value, int count)
         {
             _context.CriticalSection.Enter();
 
-            int addend;
-
-            // The value is decremented if the number of threads waiting is less
-            // or equal to the Count of threads to be signaled, or Count is zero
-            // or negative. It is incremented if there are no threads waiting.
-            int waitingCount = 0;
-
-            if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
-            {
-                waitingCount = threads.Count;
-            }
-
-
-            if (waitingCount > 0)
-            {
-                if (count <= 0)
-                {
-                    addend = -2;
-                }
-                else if (waitingCount < count)
-                {
-                    addend = -1;
-                }
-                else
-                {
-                    addend = 0;
-                }
-            }
-            else
-            {
-                addend = 1;
-            }
+            _arbiterThreads.TryGetValue(address, out List<KThread> threads);
+            int addend = GetSignalAndModifyAddend(threads?.Count ?? 0, count);
 
             KProcess currentProcess = KernelStatic.GetCurrentProcess();
 
