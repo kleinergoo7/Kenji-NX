@@ -185,11 +185,12 @@ namespace Ryujinx.HLE
             try
             {
                 _nupArchive = NupArchive.Open(path);
-                Logger.Info?.Print(LogClass.Loader, $"Mounted NUP base package directly from '{path}'.");
+                string package = _nupArchive.IsStandaloneUpdate ? "standalone update" : "base package";
+                Logger.Info?.Print(LogClass.Loader, $"Mounted NUP {package} directly from '{path}'.");
 
                 if (!Processes.LoadNup(_nupArchive))
                 {
-                    Logger.Error?.Print(LogClass.Loader, $"Could not start the base package from NUP '{path}'.");
+                    Logger.Error?.Print(LogClass.Loader, $"Could not start the selected package from NUP '{path}'.");
                     return false;
                 }
 

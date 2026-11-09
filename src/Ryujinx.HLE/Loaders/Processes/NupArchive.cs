@@ -30,6 +30,8 @@ namespace Ryujinx.HLE.Loaders.Processes
         private const int FileSize = 0x50;
         private const uint NoDirectory = uint.MaxValue;
         private const byte BasePackage = 0;
+        private const byte UpdatePackage = 1;
+        private const byte StandaloneUpdateFlag = 1;
         private const byte RawCodec = 0;
         private const byte ZstdCodec = 1;
         private const long MaxTocBytes = 64L * 1024 * 1024;
@@ -55,13 +57,16 @@ namespace Ryujinx.HLE.Loaders.Processes
         private DecompressionStream _decoder;
         private long _decoderPosition;
 
-        private NupArchive(FileStream archive, byte[] toc, List<Entry> entries, bool hasRomFs)
+        public bool IsStandaloneUpdate { get; }
+
+        private NupArchive(FileStream archive, byte[] toc, List<Entry> entries, bool hasRomFs, bool isStandaloneUpdate)
         {
             _archive = archive;
             _storage = archive.AsStorage(true);
             _toc = toc;
             _entries = entries;
             _hasRomFs = hasRomFs;
+            IsStandaloneUpdate = isStandaloneUpdate;
         }
 
         public static NupArchive Open(string path)
@@ -106,9 +111,9 @@ namespace Ryujinx.HLE.Loaders.Processes
                 throw new InvalidDataException("NUP TOC SHA-256 mismatch.");
             }
 
-            List<Entry> entries = ReadBaseTree(toc, packageCount, blobOffset, archiveSize, out bool hasRomFs);
+            List<Entry> entries = ReadProgramTree(toc, packageCount, blobOffset, archiveSize, out bool hasRomFs, out bool isStandaloneUpdate);
 
-            return new NupArchive(archive, toc, entries, hasRomFs);
+            return new NupArchive(archive, toc, entries, hasRomFs, isStandaloneUpdate);
         }
 
         public IFileSystem OpenExeFs() => new RomFsFileSystem(BuildView("exefs/"));
@@ -245,7 +250,7 @@ namespace Ryujinx.HLE.Loaders.Processes
             }
         }
 
-        private static List<Entry> ReadBaseTree(byte[] toc, uint packageCount, ulong blobOffset, ulong archiveSize, out bool hasRomFs)
+        private static List<Entry> ReadProgramTree(byte[] toc, uint packageCount, ulong blobOffset, ulong archiveSize, out bool hasRomFs, out bool isStandaloneUpdate)
         {
             ulong dirCount = Read64(toc, 8);
             ulong fileCount = Read64(toc, 0x10);
@@ -268,28 +273,13 @@ namespace Ryujinx.HLE.Loaders.Processes
                 throw new InvalidDataException("Invalid NUP TOC table bounds.");
             }
 
-            uint exeFs = NoDirectory;
-            uint romFs = NoDirectory;
-            bool foundBase = false;
-            for (int i = 0; i < packageCount; i++)
+            int package = SelectProgramPackage(toc, packageCount);
+            isStandaloneUpdate = toc[package + 0x18] == UpdatePackage;
+            uint exeFs = Read32(toc, package + 0x0c);
+            uint romFs = Read32(toc, package + 0x10);
+            if (exeFs >= dirCount || (romFs != NoDirectory && romFs >= dirCount))
             {
-                int package = TocHeaderSize + i * PackageSize;
-                if (toc[package + 0x18] == BasePackage)
-                {
-                    if (foundBase)
-                    {
-                        throw new InvalidDataException("The NUP contains multiple base packages.");
-                    }
-
-                    foundBase = true;
-                    exeFs = Read32(toc, package + 0x0c);
-                    romFs = Read32(toc, package + 0x10);
-                }
-            }
-
-            if (!foundBase || exeFs >= dirCount || (romFs != NoDirectory && romFs >= dirCount))
-            {
-                throw new InvalidDataException("The NUP needs a base package with valid ExeFS and RomFS directory indexes.");
+                throw new InvalidDataException("The selected NUP package has invalid ExeFS or RomFS directory indexes.");
             }
 
             List<Entry> entries = [];
@@ -383,6 +373,44 @@ namespace Ryujinx.HLE.Loaders.Processes
                     }
                 }
             }
+        }
+
+        private static int SelectProgramPackage(ReadOnlySpan<byte> toc, uint packageCount)
+        {
+            int basePackage = -1;
+            int standaloneUpdate = -1;
+            for (int i = 0; i < packageCount; i++)
+            {
+                // ReadProgramTree bounds the package table by the size of the TOC.
+                int package = TocHeaderSize + i * PackageSize;
+                if (toc[package + 0x18] == BasePackage)
+                {
+                    if (basePackage >= 0)
+                    {
+                        throw new InvalidDataException("The NUP contains multiple base packages.");
+                    }
+
+                    basePackage = package;
+                }
+                else if (toc[package + 0x18] == UpdatePackage &&
+                    toc[package + 0x19] == StandaloneUpdateFlag &&
+                    (standaloneUpdate < 0 || Read32(toc, package + 0x14) > Read32(toc, standaloneUpdate + 0x14)))
+                {
+                    standaloneUpdate = package;
+                }
+            }
+
+            if (basePackage >= 0)
+            {
+                return basePackage;
+            }
+
+            if (standaloneUpdate < 0)
+            {
+                throw new InvalidDataException("The NUP contains neither a base package nor a standalone update.");
+            }
+
+            return standaloneUpdate;
         }
 
         private static uint Read32(ReadOnlySpan<byte> data, int offset) => BinaryPrimitives.ReadUInt32LittleEndian(data[offset..]);

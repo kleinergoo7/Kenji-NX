@@ -73,6 +73,55 @@ namespace Ryujinx.Tests.HLE
         }
 
         [Test]
+        public void ReadsStandaloneUpdateWhenBaseIsAbsent()
+        {
+            MakeUpdateOnly(standalone: true);
+
+            using NupArchive package = NupArchive.Open(_archive);
+            using IFileSystem exefs = package.OpenExeFs();
+            using IStorage romfsStorage = package.OpenRomFs();
+            using IFileSystem romfs = new RomFsFileSystem(romfsStorage);
+            using UniqueRef<IFile> main = new();
+            using UniqueRef<IFile> data = new();
+            exefs.OpenFile(ref main.Ref, "/main".ToU8Span(), OpenMode.Read).ThrowIfFailure();
+            romfs.OpenFile(ref data.Ref, "/data.bin".ToU8Span(), OpenMode.Read).ThrowIfFailure();
+
+            Assert.That(package.IsStandaloneUpdate, Is.True);
+            Assert.That(Encoding.UTF8.GetString(Read(main.Get, 0, 17)), Is.EqualTo("update-executable"));
+            Assert.That(Encoding.UTF8.GetString(Read(data.Get, 0, 18)), Is.EqualTo("compressed fixture"));
+        }
+
+        [Test]
+        public void RejectsUpdateRequiringBaseWhenBaseIsAbsent()
+        {
+            MakeUpdateOnly(standalone: false);
+
+            Assert.That(() => NupArchive.Open(_archive),
+                Throws.TypeOf<InvalidDataException>().With.Message.Contains("neither a base package nor a standalone update"));
+        }
+
+        private void MakeUpdateOnly(bool standalone)
+        {
+            const int packageTableOffset = 0x30;
+            const int packageRecordSize = 0x40;
+            const int romFsOffset = 0x10;
+            const int kindOffset = 0x18;
+            const int flagsOffset = 0x19;
+            const byte addonKind = 2;
+            const byte standaloneFlag = 1;
+
+            int tocSize = (int)BinaryPrimitives.ReadUInt64LittleEndian(_fixture.AsSpan(0x10));
+            Span<byte> toc = _fixture.AsSpan(TocOffset, tocSize);
+            Span<byte> first = toc.Slice(packageTableOffset, packageRecordSize);
+            Span<byte> update = toc.Slice(packageTableOffset + packageRecordSize, packageRecordSize);
+            first[kindOffset] = addonKind;
+            update[flagsOffset] = standalone ? standaloneFlag : (byte)0;
+            first.Slice(romFsOffset, sizeof(uint)).CopyTo(update[romFsOffset..]);
+            SHA256.HashData(toc).CopyTo(_fixture, TocHashOffset);
+            File.WriteAllBytes(_archive, _fixture);
+        }
+
+        [Test]
         public void RejectsCorruptTableOnOpen()
         {
             _fixture[TocOffset + 4] ^= 1;
