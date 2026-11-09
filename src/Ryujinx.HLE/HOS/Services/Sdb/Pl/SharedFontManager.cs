@@ -36,7 +36,11 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             "/usr/share/fonts/truetype/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/Roboto-Regular.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         ];
+
+        private sealed class MissingSystemFontException(string message) : InvalidSystemResourceException(message);
 
         private readonly Switch _device;
         private readonly SharedMemoryStorage _storage;
@@ -72,6 +76,21 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
         }
 
         public void EnsureInitialized(ContentManager contentManager)
+        {
+            try
+            {
+                EnsureSystemFonts(contentManager);
+            }
+            catch (MissingSystemFontException ex) when (
+                _device.CompatibilityProfile.Generation == ConsoleGeneration.Switch2 &&
+                _device.Configuration.MemoryConfiguration == MemoryConfiguration.MemoryConfiguration12GiB)
+            {
+                Logger.Warning?.Print(LogClass.ServiceFs, ex.Message);
+                LoadHostFallbackFonts();
+            }
+        }
+
+        private void EnsureSystemFonts(ContentManager contentManager)
         {
             if (_fontData == null)
             {
@@ -124,7 +143,7 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                                 titleName = "Unknown";
                             }
 
-                            throw new InvalidSystemResourceException($"{titleName} ({fontTitle:x8}) system title not found! This font will not work, provide the system archive to fix this error.");
+                            throw new MissingSystemFontException($"{titleName} ({fontTitle:x8}) system title not found! This font will not work, provide the system archive to fix this error.");
                         }
                     }
                     else
@@ -170,7 +189,7 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
             try
             {
-                EnsureInitialized(contentManager);
+                EnsureSystemFonts(contentManager);
             }
             catch (Exception ex) when (ex is InvalidSystemResourceException || ex is ArgumentException)
             {
@@ -250,19 +269,26 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                         continue;
                     }
 
-                    byte[] candidate = File.ReadAllBytes(path);
-
-                    if (candidate.Length > 4)
+                    const int maxFontBytes = Horizon.FontSize / (int)SharedFontType.Count - 8;
+                    using FileStream stream = File.OpenRead(path);
+                    if (stream.Length <= sizeof(uint) || stream.Length > maxFontBytes)
                     {
-                        uint magic = BinaryPrimitives.ReadUInt32BigEndian(candidate.AsSpan(0, 4));
+                        Logger.Warning?.Print(LogClass.ServiceFs, $"Host fallback font '{path}' has invalid size {stream.Length}.");
+                        continue;
+                    }
 
-                        if (magic == TtfSfntTrueType || magic == TtfSfntCff || magic == TtfSfntTrue || magic == TtfSfntTyp1)
-                        {
-                            ttf = candidate;
-                            usedPath = path;
+                    // Shared memory reserves a header and one copy for each font type.
+                    byte[] candidate = new byte[(int)stream.Length];
+                    stream.ReadExactly(candidate);
 
-                            break;
-                        }
+                    uint magic = BinaryPrimitives.ReadUInt32BigEndian(candidate);
+
+                    if (magic == TtfSfntTrueType || magic == TtfSfntCff || magic == TtfSfntTrue || magic == TtfSfntTyp1)
+                    {
+                        ttf = candidate;
+                        usedPath = path;
+
+                        break;
                     }
                 }
                 catch (IOException)
