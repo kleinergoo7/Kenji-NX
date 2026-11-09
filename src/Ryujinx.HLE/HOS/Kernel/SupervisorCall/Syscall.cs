@@ -2077,6 +2077,25 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             if ((reason & (1UL << 31)) == 0)
             {
+                if (Environment.GetEnvironmentVariable("NX2_ABORT_LOG") == "1" && !currentThread.Context.IsAarch32)
+                {
+                    // The AArch64 Break call passes the diagnostic buffer address and size in X1 and X2.
+                    ulong address = currentThread.Context.GetX(1);
+                    ulong size = currentThread.Context.GetX(2);
+
+                    if (size == sizeof(int) && address <= currentThread.Owner.MemoryManager.AddrSpaceEnd - size &&
+                        KernelTransfer.UserToKernel(out int abortWord, address))
+                    {
+                        Logger.Error?.Print(LogClass.KernelSvc,
+                            $"Guest abort data at 0x{address:X}: 0x{abortWord:X8} ({new Result(abortWord).PrintableResult} if Result)");
+                    }
+                    else
+                    {
+                        Logger.Warning?.Print(LogClass.KernelSvc,
+                            $"Guest abort data unavailable: reason=0x{reason:X} address=0x{address:X} size=0x{size:X}");
+                    }
+                }
+
                 currentThread.PrintGuestStackTrace();
                 currentThread.PrintGuestRegisterPrintout();
 
