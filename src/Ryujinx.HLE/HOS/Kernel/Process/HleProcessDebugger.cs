@@ -57,6 +57,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             const int instructionWindowSize = 0x80;
             int instructionWindowsRemaining =
                 !context.IsAarch32 && Environment.GetEnvironmentVariable("NX2_ABORT_LOG") == "1" ? 12 : 0;
+            ulong mutexSlowReturn = 0;
 
             trace.AppendLine($"Process: {_owner.Name}, PID: {_owner.Pid}");
 
@@ -76,6 +77,12 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 if (AnalyzePointer(out PointerInfo info, address, thread))
                 {
                     trace.AppendLine($"   0x{address:x16}\t{info.ImageDisplay}\t{info.SubDisplay}");
+
+                    if (instructionWindowsRemaining > 0 &&
+                        info.SubName?.Contains("TlsHeapCentral::LockMutexSlow_()", StringComparison.Ordinal) == true)
+                    {
+                        mutexSlowReturn = address;
+                    }
                 }
                 else
                 {
@@ -126,13 +133,83 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                         break;
                     }
 
-                    AppendTrace(_owner.CpuMemory.Read<ulong>(framePointer + 8));
+                    ulong returnAddress = _owner.CpuMemory.Read<ulong>(framePointer + 8);
+
+                    if (mutexSlowReturn != 0)
+                    {
+                        AppendHeapMutexState(trace, framePointer, returnAddress, mutexSlowReturn);
+                        mutexSlowReturn = 0;
+                    }
+
+                    AppendTrace(returnAddress);
 
                     framePointer = _owner.CpuMemory.Read<ulong>(framePointer);
                 }
             }
 
             return trace.ToString();
+        }
+
+        private void AppendHeapMutexState(StringBuilder trace, ulong framePointer, ulong callerReturn, ulong fallbackReturn)
+        {
+            const uint moveX20ToX0 = 0xAA1403E0;
+            const uint saveX20AndX19 = 0xA9014FF4;
+            const uint loadMutexArgument = 0x9100E260; // add x0, x19, #0x38
+            const uint branchLinkMask = 0xFC000000;
+            const uint branchLink = 0x94000000;
+            const int savedX20Offset = 16;
+            const int mutexOffset = 0x38;
+            const int mutexWindowSize = 16;
+            const int helperWindowSize = 64;
+            const int fallbackReturnOffset = 0x64;
+
+            // The observed SDK passes the heap in X20 and saves it at FP+16 in LockMutexSlow_.
+            // Match the call site and frame prologue before interpreting saved guest registers.
+            if (callerReturn < 8 || !IsMapped(callerReturn - 8, 8) ||
+                _owner.CpuMemory.Read<uint>(callerReturn - 8) != moveX20ToX0)
+            {
+                return;
+            }
+
+            if (fallbackReturn < fallbackReturnOffset ||
+                !IsMapped(fallbackReturn - fallbackReturnOffset, fallbackReturnOffset) ||
+                _owner.CpuMemory.Read<uint>(fallbackReturn - fallbackReturnOffset + 8) != saveX20AndX19 ||
+                _owner.CpuMemory.Read<uint>(fallbackReturn - 8) != loadMutexArgument ||
+                !IsMapped(framePointer, savedX20Offset + sizeof(ulong)))
+            {
+                return;
+            }
+
+            ulong heap = _owner.CpuMemory.Read<ulong>(framePointer + savedX20Offset);
+            if (heap <= ulong.MaxValue - mutexOffset && IsMapped(heap + mutexOffset, mutexWindowSize))
+            {
+                ulong mutex = heap + mutexOffset;
+                trace.AppendLine($"      Guest heap mutex at 0x{mutex:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(mutex, mutexWindowSize))}");
+            }
+
+            if (TryGetBranchTarget(fallbackReturn, out ulong helper) && IsMapped(helper, helperWindowSize))
+            {
+                trace.AppendLine($"      Guest mutex fallback instructions at 0x{helper:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(helper, helperWindowSize))}");
+            }
+
+            bool IsMapped(ulong address, int size) =>
+                address <= _owner.MemoryManager.AddrSpaceEnd - (ulong)size && _owner.CpuMemory.IsRangeMapped(address, (ulong)size);
+
+            bool TryGetBranchTarget(ulong returnAddress, out ulong target)
+            {
+                target = 0;
+                if (returnAddress < sizeof(uint) || !IsMapped(returnAddress - sizeof(uint), sizeof(uint)))
+                {
+                    return false;
+                }
+
+                ulong pc = returnAddress - sizeof(uint);
+                uint opcode = _owner.CpuMemory.Read<uint>(pc);
+                // Shift the signed imm26 into the sign bit, then scale it by four.
+                int displacement = unchecked((int)(opcode << 6)) >> 4;
+                target = unchecked((ulong)((long)pc + displacement));
+                return (opcode & branchLinkMask) == branchLink;
+            }
         }
 
         public string GetCpuRegisterPrintout(KThread thread)
