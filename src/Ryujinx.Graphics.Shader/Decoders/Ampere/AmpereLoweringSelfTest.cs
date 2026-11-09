@@ -24,6 +24,7 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
             CheckImageAndAddressMap();
             CheckDecoder();
             CheckRuntimeAdapter();
+            CheckAccessorBounds();
         }
 
         private static void CheckLayout()
@@ -240,6 +241,23 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
 
             Assert(graphicsContext.Size > AmpereLayout.HeaderSize, $"runtime adapter graphics size (got {graphicsContext.Size})");
             Assert(graphicsContext.Stage == ShaderStage.Vertex, "runtime adapter graphics stage");
+        }
+
+        private static void CheckAccessorBounds()
+        {
+            AmpereInstruction[] code = [Exit()];
+            byte[] native = new byte[AmpereInstruction.Size];
+            BitConverter.TryWriteBytes(native.AsSpan(0), code[0].W0);
+            BitConverter.TryWriteBytes(native.AsSpan(4), code[0].W1);
+            BitConverter.TryWriteBytes(native.AsSpan(8), code[0].W2);
+            BitConverter.TryWriteBytes(native.AsSpan(12), code[0].W3);
+
+            AmpereGpuAccessor accessor = AmpereGpuAccessor.Create(
+                new NativeGpuAccessor(native), 0, false, out string error);
+            Assert(accessor != null, $\"accessor bounds setup failed: {error}\");
+            Assert(accessor.GetCode(0, 8).Length > 0, \"accessor start is valid\");
+            Assert(accessor.GetCode(ulong.MaxValue, 8).IsEmpty, \"overflowing guest address rejected\");
+            Assert(accessor.GetCode(1, 8).IsEmpty, \"unaligned guest address rejected\");
         }
 
         private sealed class NativeGpuAccessor : IGpuAccessor
