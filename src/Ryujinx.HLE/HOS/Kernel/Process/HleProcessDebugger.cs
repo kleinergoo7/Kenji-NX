@@ -54,6 +54,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             IExecutionContext context = thread.Context;
 
             StringBuilder trace = new();
+            const int instructionWindowSize = 0x80;
+            int instructionWindowsRemaining =
+                !context.IsAarch32 && Environment.GetEnvironmentVariable("NX2_ABORT_LOG") == "1" ? 12 : 0;
 
             trace.AppendLine($"Process: {_owner.Name}, PID: {_owner.Pid}");
 
@@ -77,6 +80,18 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 else
                 {
                     trace.AppendLine($"   0x{address:x16}");
+                }
+
+                if (instructionWindowsRemaining > 0 && address >= instructionWindowSize &&
+                    address <= _owner.MemoryManager.AddrSpaceEnd && (address & 3) == 0)
+                {
+                    ulong start = address - instructionWindowSize;
+
+                    if (_owner.CpuMemory.IsRangeMapped(start, instructionWindowSize))
+                    {
+                        instructionWindowsRemaining--;
+                        trace.AppendLine($"      Guest instructions at 0x{start:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(start, instructionWindowSize))}");
+                    }
                 }
             }
 
