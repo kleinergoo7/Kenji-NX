@@ -105,16 +105,19 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
                 return ReadOnlySpan<ulong>.Empty;
             }
 
-            long offset = (long)(address - _baseAddress);
+            ulong relativeAddress = address - _baseAddress;
 
-            if (offset >= _image.Length)
+            // Reject offsets outside the image before narrowing to int. A guest address can
+            // legally be much larger than long.MaxValue, even though the image is small.
+            if (relativeAddress >= (ulong)_image.Length || (relativeAddress & 7) != 0)
             {
                 return ReadOnlySpan<ulong>.Empty;
             }
 
-            int length = (_image.Length - (int)offset) & ~7;
+            int offset = (int)relativeAddress;
+            int length = (_image.Length - offset) & ~7;
 
-            return MemoryMarshal.Cast<byte, ulong>(_image.AsSpan((int)offset, length));
+            return MemoryMarshal.Cast<byte, ulong>(_image.AsSpan(offset, length));
         }
 
         private static bool Capture(
@@ -130,7 +133,10 @@ namespace Ryujinx.Graphics.Shader.Decoders.Ampere
             while (captured.Count < AmpereProgramCapture.MaximumInstructions)
             {
                 ReadOnlySpan<ulong> span = inner.GetCode(codeAddress + offset, AmpereInstruction.Size);
-                int available = span.Length / 2;
+                // Accessors may return the entire remaining mapping rather than just the
+                // requested instruction. Never capture past the native program limit.
+                int remaining = checked((int)(AmpereProgramCapture.MaximumInstructions - captured.Count));
+                int available = Math.Min(span.Length / 2, remaining);
 
                 if (available == 0)
                 {
