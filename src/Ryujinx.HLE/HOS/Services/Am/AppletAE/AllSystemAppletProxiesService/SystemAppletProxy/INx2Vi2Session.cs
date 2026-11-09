@@ -866,7 +866,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     // Reuse a small ring of host textures: the GPU may still be reading
                     // an earlier frame when the next one is submitted. Creating one per
                     // present leaked GPU memory until presents failed.
-                    ITexture texture = RentPresentTexture(context, info, (int)width, (int)height);
+                    ITexture texture = PresentTextures.Rent(context.Device.Gpu.Renderer, info);
 
                     texture.SetData(MemoryOwner<byte>.RentCopy(linear));
 
@@ -903,34 +903,34 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static int _frameDumpControlDone;
 
         private static readonly object PresentLock = new();
-        private static readonly ITexture[] _presentTextures = new ITexture[3];
-        private static int _presentTextureIndex;
-        private static int _presentTextureWidth;
-        private static int _presentTextureHeight;
+        private static readonly PresentTextureRing PresentTextures = new();
 
         // A ring of reusable host textures, sized for the current frame. Must be
         // called with PresentLock held.
-        private static ITexture RentPresentTexture(ServiceCtx context, TextureCreateInfo info, int width, int height)
+        internal sealed class PresentTextureRing
         {
-            if (_presentTextures[_presentTextureIndex] == null || width != _presentTextureWidth || height != _presentTextureHeight)
+            private readonly ITexture[] _textures = new ITexture[3];
+            private TextureCreateInfo _info;
+            private int _index;
+
+            public ITexture Rent(IRenderer renderer, TextureCreateInfo info)
             {
-                foreach (ITexture old in _presentTextures)
+                if (!_info.Equals(info))
                 {
-                    (old as System.IDisposable)?.Dispose();
+                    foreach (ITexture old in _textures)
+                    {
+                        old?.Release();
+                    }
+
+                    Array.Clear(_textures);
+                    _index = 0;
+                    _info = info;
                 }
 
-                Array.Clear(_presentTextures, 0, _presentTextures.Length);
-                _presentTextureIndex = 0;
-                _presentTextureWidth = width;
-                _presentTextureHeight = height;
+                ITexture texture = _textures[_index] ??= renderer.CreateTexture(info);
+                _index = (_index + 1) % _textures.Length;
+                return texture;
             }
-
-            ref ITexture slot = ref _presentTextures[_presentTextureIndex];
-            _presentTextureIndex = (_presentTextureIndex + 1) % _presentTextures.Length;
-
-            slot ??= context.Device.Gpu.Renderer.CreateTexture(info);
-
-            return slot;
         }
         private static uint _previousFenceId = uint.MaxValue;
         private static int _event11Logs;
