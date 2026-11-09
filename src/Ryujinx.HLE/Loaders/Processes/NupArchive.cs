@@ -1,21 +1,26 @@
 // SPDX-License-Identifier: MIT
+using LibHac;
 using LibHac.Fs;
+using LibHac.Fs.Fsa;
+using LibHac.FsSystem;
 using LibHac.Tools.FsSystem;
+using LibHac.Tools.FsSystem.RomFs;
 using Ryujinx.Common.Logging;
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using ZstdSharp;
 using ZstdSharp.Unsafe;
-using Path = System.IO.Path;
 
 namespace Ryujinx.HLE.Loaders.Processes
 {
     // NUP v1, as documented in https://github.com/a55uka/nup/blob/meow/SPEC.md.
-    // Materialize the base package for the same ExeFS/RomFS loader as a loose title.
+    // Expose ExeFS and RomFS as read-only views backed by the NUP file.
     internal sealed class NupArchive : IDisposable
     {
         private const int HeaderSize = 0x80;
@@ -28,31 +33,53 @@ namespace Ryujinx.HLE.Loaders.Processes
         private const byte RawCodec = 0;
         private const byte ZstdCodec = 1;
         private const long MaxTocBytes = 64L * 1024 * 1024;
-        private const long MaxExtractedBytes = 64L * 1024 * 1024 * 1024;
+        private const ulong MaxMappedBytes = 1UL << 40;
+        private const ulong RomFsAlignment = 16;
         private const int MaxTreeDepth = 64;
         private const int MaxZstdWindowLog = 27; // 128 MiB per decoder.
         private const int MaxNameBytes = 255;
         private const int MaxRelativePath = 4096;
 
         private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-        private static readonly char[] InvalidNameChars = Path.GetInvalidFileNameChars();
 
         private readonly record struct Entry(string Path, long Size, long Offset, long StoredSize, int DigestOffset, byte Codec);
 
-        private readonly string _directory;
+        private readonly FileStream _archive;
+        private readonly IStorage _storage;
+        private readonly byte[] _toc;
+        private readonly List<Entry> _entries;
+        private readonly Lock _readLock = new();
+        private readonly bool _hasRomFs;
 
-        public string ExeFsPath => Path.Combine(_directory, "exefs");
-        public string RomFsPath { get; }
+        private Entry _decoderEntry;
+        private DecompressionStream _decoder;
+        private long _decoderPosition;
 
-        private NupArchive(string directory, bool hasRomFs)
+        private NupArchive(FileStream archive, byte[] toc, List<Entry> entries, bool hasRomFs)
         {
-            _directory = directory;
-            RomFsPath = hasRomFs ? Path.Combine(directory, "romfs") : null;
+            _archive = archive;
+            _storage = archive.AsStorage(true);
+            _toc = toc;
+            _entries = entries;
+            _hasRomFs = hasRomFs;
         }
 
-        public static NupArchive ExtractBase(string path, string cacheDirectory)
+        public static NupArchive Open(string path)
         {
-            using FileStream archive = File.OpenRead(path);
+            FileStream archive = File.OpenRead(path);
+            try
+            {
+                return Open(archive);
+            }
+            catch
+            {
+                archive.Dispose();
+                throw;
+            }
+        }
+
+        private static NupArchive Open(FileStream archive)
+        {
             Span<byte> header = stackalloc byte[HeaderSize];
             archive.ReadExactly(header);
 
@@ -79,87 +106,146 @@ namespace Ryujinx.HLE.Loaders.Processes
                 throw new InvalidDataException("NUP TOC SHA-256 mismatch.");
             }
 
-            List<Entry> entries = ReadBaseTree(toc, packageCount, blobOffset, archiveSize, out long totalSize, out bool hasRomFs);
-            Directory.CreateDirectory(cacheDirectory);
-            string mount = Path.GetPathRoot(cacheDirectory);
-            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            List<Entry> entries = ReadBaseTree(toc, packageCount, blobOffset, archiveSize, out bool hasRomFs);
+
+            return new NupArchive(archive, toc, entries, hasRomFs);
+        }
+
+        public IFileSystem OpenExeFs() => new RomFsFileSystem(BuildView("exefs/"));
+
+        public IStorage OpenRomFs() => _hasRomFs ? BuildView("romfs/") : null;
+
+        private IStorage BuildView(string prefix)
+        {
+            RomFsBuilder builder = new();
+            foreach (Entry entry in _entries)
             {
-                if (drive.Name.Length > mount.Length &&
-                    (cacheDirectory == drive.Name || cacheDirectory.StartsWith(
-                        Path.TrimEndingDirectorySeparator(drive.Name) + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+                if (entry.Path.StartsWith(prefix, StringComparison.Ordinal))
                 {
-                    mount = drive.Name;
+                    builder.AddFile(entry.Path[(prefix.Length - 1)..], new StorageFile(new EntryStorage(this, entry), OpenMode.Read));
                 }
             }
 
-            if (new DriveInfo(mount).AvailableFreeSpace < totalSize)
+            return builder.Build();
+        }
+
+        private Result Read(Entry entry, long offset, Span<byte> destination)
+        {
+            if (offset < 0 || offset > entry.Size || destination.Length > entry.Size - offset)
             {
-                throw new IOException($"The NUP base package requires {totalSize} bytes of free space in '{cacheDirectory}'.");
+                return ResultFs.OutOfRange;
             }
 
-            NupArchive result = new(Path.Combine(cacheDirectory, Guid.NewGuid().ToString("N")), hasRomFs);
-            bool extracted = false;
-            try
+            if (destination.IsEmpty)
             {
-                using IStorage storage = archive.AsStorage(true);
-                byte[] buffer = new byte[128 * 1024];
+                return Result.Success;
+            }
 
-                Logger.Info?.Print(LogClass.Loader, $"Extracting NUP base package '{path}' ({totalSize} bytes).");
-                foreach (Entry entry in entries)
+            lock (_readLock)
+            {
+                try
                 {
-                    string destination = Path.Combine(result._directory, entry.Path);
-                    if (entry.DigestOffset < 0)
+                    if (entry.Codec == RawCodec)
                     {
-                        Directory.CreateDirectory(destination);
-                        continue;
+                        _archive.Position = entry.Offset + offset;
+                        _archive.ReadExactly(destination);
+                    }
+                    else
+                    {
+                        ReadCompressed(entry, offset, destination);
                     }
 
-                    using FileStream output = new(destination, FileMode.CreateNew, FileAccess.Write);
-                    using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-
-                    if (entry.Size != 0)
+                    // A whole-file read can verify its digest without scanning unrelated bytes.
+                    if (offset == 0 && destination.Length == entry.Size)
                     {
-                        using SubStorage extent = new(storage, entry.Offset, entry.StoredSize);
-                        using Stream raw = extent.AsStream(FileAccess.Read, true);
-                        using DecompressionStream decoder = entry.Codec == ZstdCodec ? new(raw, leaveOpen: true) : null;
-                        decoder?.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, MaxZstdWindowLog);
-                        Stream decoded = (Stream)decoder ?? raw;
-                        long remaining = entry.Size;
-                        while (remaining > 0)
+                        Span<byte> digest = stackalloc byte[32];
+                        SHA256.HashData(destination, digest);
+                        if (!digest.SequenceEqual(_toc.AsSpan(entry.DigestOffset, digest.Length)))
                         {
-                            // The buffer bounds the count, even for a multi-gigabyte entry.
-                            int count = (int)Math.Min(remaining, buffer.Length);
-                            decoded.ReadExactly(buffer.AsSpan(0, count));
-                            output.Write(buffer, 0, count);
-                            hash.AppendData(buffer, 0, count);
-                            remaining -= count;
-                        }
-
-                        if (decoded.ReadByte() != -1)
-                        {
-                            throw new InvalidDataException($"NUP entry '{entry.Path}' exceeds its declared size.");
+                            throw new InvalidDataException("File SHA-256 mismatch.");
                         }
                     }
 
-                    if (!hash.GetHashAndReset().AsSpan().SequenceEqual(toc.AsSpan(entry.DigestOffset, 32)))
-                    {
-                        throw new InvalidDataException($"NUP entry '{entry.Path}' has a SHA-256 mismatch.");
-                    }
+                    return Result.Success;
                 }
-
-                extracted = true;
-                return result;
-            }
-            finally
-            {
-                if (!extracted)
+                catch (Exception ex) when (ex is IOException or InvalidDataException or ZstdException)
                 {
-                    result.Dispose();
+                    ResetDecoder();
+                    Logger.Error?.Print(LogClass.Loader, $"Cannot read NUP '{_archive.Name}', entry '{entry.Path}' at {offset}: {ex.Message}");
+                    return ResultFs.DataCorrupted;
                 }
             }
         }
 
-        private static List<Entry> ReadBaseTree(byte[] toc, uint packageCount, ulong blobOffset, ulong archiveSize, out long totalSize, out bool hasRomFs)
+        private void ReadCompressed(Entry entry, long offset, Span<byte> destination)
+        {
+            // A NUP v1 file is a single Zstandard frame. Restart it on a backwards seek.
+            // Keep one decoder live across the archive, rather than one per ROMFS file.
+            if (_decoder == null || _decoderEntry != entry || offset < _decoderPosition)
+            {
+                ResetDecoder();
+                SubStorage extent = new(_storage, entry.Offset, entry.StoredSize);
+                _decoder = new DecompressionStream(extent.AsStream());
+                _decoder.SetParameter(ZSTD_dParameter.ZSTD_d_windowLogMax, MaxZstdWindowLog);
+                _decoderEntry = entry;
+            }
+
+            if (offset > _decoderPosition)
+            {
+                byte[] scratch = ArrayPool<byte>.Shared.Rent(64 * 1024);
+                try
+                {
+                    while (_decoderPosition < offset)
+                    {
+                        // The scratch buffer bounds the narrowing conversion.
+                        int count = (int)Math.Min(offset - _decoderPosition, scratch.Length);
+                        _decoder.ReadExactly(scratch.AsSpan(0, count));
+                        _decoderPosition += count;
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(scratch);
+                }
+            }
+
+            _decoder.ReadExactly(destination);
+            _decoderPosition += destination.Length;
+            if (_decoderPosition == entry.Size)
+            {
+                if (_decoder.ReadByte() != -1)
+                {
+                    throw new InvalidDataException("File exceeds its declared size.");
+                }
+
+                ResetDecoder();
+            }
+        }
+
+        private void ResetDecoder()
+        {
+            _decoder?.Dispose();
+            _decoder = null;
+            _decoderPosition = 0;
+        }
+
+        private sealed class EntryStorage(NupArchive archive, Entry entry) : IStorage
+        {
+            public override Result Read(long offset, Span<byte> destination) => archive.Read(entry, offset, destination);
+            public override Result Write(long offset, ReadOnlySpan<byte> source) => ResultFs.UnsupportedWriteForReadOnlyFile;
+            public override Result Flush() => Result.Success;
+            public override Result SetSize(long size) => ResultFs.UnsupportedWriteForReadOnlyFile;
+            public override Result OperateRange(Span<byte> output, OperationId operationId, long offset, long size, ReadOnlySpan<byte> input) =>
+                ResultFs.UnsupportedOperateRangeForStorageFile;
+
+            public override Result GetSize(out long size)
+            {
+                size = entry.Size;
+                return Result.Success;
+            }
+        }
+
+        private static List<Entry> ReadBaseTree(byte[] toc, uint packageCount, ulong blobOffset, ulong archiveSize, out bool hasRomFs)
         {
             ulong dirCount = Read64(toc, 8);
             ulong fileCount = Read64(toc, 0x10);
@@ -208,7 +294,7 @@ namespace Ryujinx.HLE.Loaders.Processes
 
             List<Entry> entries = [];
             HashSet<uint> visited = [];
-            long bytes = 0;
+            ulong mappedBytes = 0;
             ReadDirectory(exeFs, "exefs", 0);
             hasRomFs = romFs != NoDirectory;
             if (hasRomFs)
@@ -216,7 +302,6 @@ namespace Ryujinx.HLE.Loaders.Processes
                 ReadDirectory(romFs, "romfs", 0);
             }
 
-            totalSize = bytes;
             return entries;
 
             void ReadDirectory(uint index, string parent, int depth)
@@ -225,8 +310,6 @@ namespace Ryujinx.HLE.Loaders.Processes
                 {
                     throw new InvalidDataException($"NUP directory '{parent}' is too deep or referenced more than once.");
                 }
-
-                entries.Add(new Entry(parent, 0, 0, 0, -1, RawCodec));
 
                 // Directory and child indexes are bounded by the validated TOC tables.
                 int directory = (int)(directories + index * (ulong)DirectorySize);
@@ -237,8 +320,7 @@ namespace Ryujinx.HLE.Loaders.Processes
                     throw new InvalidDataException($"NUP directory '{parent}' has invalid child bounds.");
                 }
 
-                HashSet<string> names = new(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-                    ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+                HashSet<string> names = new(StringComparer.Ordinal);
                 for (ulong i = first; i < first + count; i++)
                 {
                     uint node = Read32(toc, (int)(children + i * sizeof(uint)));
@@ -260,14 +342,12 @@ namespace Ryujinx.HLE.Loaders.Processes
 
                     // The string pool bounds both casts and the UTF-8 decode.
                     string name = StrictUtf8.GetString(toc.AsSpan((int)(strings + nameOffset), (int)nameLength));
-                    if (name is "." or ".." || name.EndsWith('.') || name.EndsWith(' ') ||
-                        name.AsSpan().IndexOfAny("/\\:\0") >= 0 ||
-                        name.IndexOfAny(InvalidNameChars) >= 0 || IsReservedWindowsName(name) || !names.Add(name))
+                    if (name is "." or ".." || name.AsSpan().IndexOfAny("/\\:\0") >= 0 || !names.Add(name))
                     {
                         throw new InvalidDataException($"Unsafe or duplicate NUP name '{name}' under '{parent}'.");
                     }
 
-                    string path = Path.Combine(parent, name);
+                    string path = parent + "/" + name;
                     if (path.Length > MaxRelativePath)
                     {
                         throw new InvalidDataException($"NUP path exceeds {MaxRelativePath} characters under '{parent}'.");
@@ -288,7 +368,7 @@ namespace Ryujinx.HLE.Loaders.Processes
                         ulong offset = Read64(toc, record + 0x10);
                         ulong storedSize = Read64(toc, record + 0x18);
                         byte codec = toc[record + 0x40];
-                        if (size > (ulong)(MaxExtractedBytes - bytes) || toc[record + 0x41] != 0 ||
+                        if (size > MaxMappedBytes - RomFsAlignment || size + RomFsAlignment > MaxMappedBytes - mappedBytes || toc[record + 0x41] != 0 ||
                             codec is not (RawCodec or ZstdCodec) || (codec == RawCodec && size != storedSize) ||
                             (size == 0 ? offset != 0 || codec != RawCodec :
                                 storedSize == 0 || offset < blobOffset || offset > archiveSize ||
@@ -297,26 +377,12 @@ namespace Ryujinx.HLE.Loaders.Processes
                             throw new InvalidDataException($"Invalid or unsupported NUP extent for '{path}'.");
                         }
 
-                        // The output cap and the archive's signed stream length bound these casts.
+                        // The extent and size checks bound these casts to the signed storage API.
                         entries.Add(new Entry(path, (long)size, (long)offset, (long)storedSize, record + 0x20, codec));
-                        bytes += (long)size;
+                        mappedBytes += size + RomFsAlignment;
                     }
                 }
             }
-        }
-
-        private static bool IsReservedWindowsName(string name)
-        {
-            if (!OperatingSystem.IsWindows())
-            {
-                return false;
-            }
-
-            string stem = name.Split('.', 2)[0].TrimEnd(' ').ToUpperInvariant();
-
-            return stem is "CON" or "PRN" or "AUX" or "NUL" or "CONIN$" or "CONOUT$" ||
-                (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) ||
-                    stem.StartsWith("LPT", StringComparison.Ordinal)) && "123456789¹²³".Contains(stem[3]));
         }
 
         private static uint Read32(ReadOnlySpan<byte> data, int offset) => BinaryPrimitives.ReadUInt32LittleEndian(data[offset..]);
@@ -325,16 +391,11 @@ namespace Ryujinx.HLE.Loaders.Processes
 
         public void Dispose()
         {
-            try
+            lock (_readLock)
             {
-                if (Directory.Exists(_directory))
-                {
-                    Directory.Delete(_directory, true);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                Logger.Warning?.Print(LogClass.Loader, $"Could not remove extracted NUP files in '{_directory}': {ex.Message}");
+                ResetDecoder();
+                _storage.Dispose();
+                _archive.Dispose();
             }
         }
     }

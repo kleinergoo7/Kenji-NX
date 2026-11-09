@@ -208,8 +208,29 @@ namespace Ryujinx.HLE.Loaders.Processes
 
         public bool LoadUnpackedNca(string exeFsDirPath, string romFsPath = null)
         {
-            ProcessResult processResult = new LocalFileSystem(exeFsDirPath).Load(_device, romFsPath);
+            return StartUnpacked(new LocalFileSystem(exeFsDirPath).Load(_device, romFsPath));
+        }
 
+        internal bool LoadNup(NupArchive archive)
+        {
+            using IFileSystem exeFs = archive.OpenExeFs();
+            ProcessResult processResult = exeFs.LoadUnpackedProgram(_device);
+            if (processResult.ProcessId == 0)
+            {
+                return false;
+            }
+
+            IStorage romFs = archive.OpenRomFs();
+            if (romFs != null)
+            {
+                _device.Configuration.VirtualFileSystem.SetRomFs(processResult.ProcessId, romFs.AsStream());
+            }
+
+            return StartUnpacked(processResult);
+        }
+
+        private bool StartUnpacked(ProcessResult processResult)
+        {
             if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
             {
                 if (processResult.Start(_device))

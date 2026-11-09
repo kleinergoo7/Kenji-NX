@@ -184,8 +184,10 @@ namespace Ryujinx.HLE
 
             try
             {
-                _nupArchive = NupArchive.ExtractBase(path, Path.Combine(AppDataManager.BaseDirPath, "nup-cache"));
-                if (!LoadCart(_nupArchive.ExeFsPath, _nupArchive.RomFsPath))
+                _nupArchive = NupArchive.Open(path);
+                Logger.Info?.Print(LogClass.Loader, $"Mounted NUP base package directly from '{path}'.");
+
+                if (!Processes.LoadNup(_nupArchive))
                 {
                     Logger.Error?.Print(LogClass.Loader, $"Could not start the base package from NUP '{path}'.");
                     return false;
@@ -193,7 +195,7 @@ namespace Ryujinx.HLE
 
                 return true;
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or DecoderFallbackException or ZstdSharp.ZstdException)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or DecoderFallbackException or HorizonResultException or ZstdSharp.ZstdException)
             {
                 Logger.Error?.Print(LogClass.Loader, $"Cannot load NUP '{path}': {ex.Message}");
                 return false;

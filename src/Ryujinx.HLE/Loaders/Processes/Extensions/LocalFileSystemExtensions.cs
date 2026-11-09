@@ -16,18 +16,7 @@ namespace Ryujinx.HLE.Loaders.Processes
     {
         public static ProcessResult Load(this LocalFileSystem exeFs, Switch device, string romFsPath = "")
         {
-            MetaLoader metaLoader = exeFs.GetNpdm();
-            BlitStruct<ApplicationControlProperty> nacpData = new(1);
-            ulong programId = metaLoader.ProgramId;
-
-            device.Configuration.VirtualFileSystem.ModLoader.CollectMods([programId]);
-
-            if (programId != 0)
-            {
-                ProcessLoaderHelper.EnsureSaveData(device, new ApplicationId(programId), nacpData);
-            }
-
-            ProcessResult processResult = exeFs.Load(device, nacpData, metaLoader, 0);
+            ProcessResult processResult = exeFs.LoadUnpackedProgram(device);
 
             // Load RomFS. A directory is exposed as a lazy RomFS view.
             if (!string.IsNullOrEmpty(romFsPath))
@@ -46,6 +35,22 @@ namespace Ryujinx.HLE.Loaders.Processes
             }
 
             return processResult;
+        }
+
+        internal static ProcessResult LoadUnpackedProgram(this IFileSystem exeFs, Switch device)
+        {
+            MetaLoader metaLoader = exeFs.GetNpdm();
+            BlitStruct<ApplicationControlProperty> nacpData = new(1);
+            ulong programId = metaLoader.ProgramId;
+
+            device.Configuration.VirtualFileSystem.ModLoader.CollectMods([programId]);
+
+            if (programId != 0)
+            {
+                ProcessLoaderHelper.EnsureSaveData(device, new ApplicationId(programId), nacpData);
+            }
+
+            return exeFs.Load(device, nacpData, metaLoader, 0);
         }
     }
 }
