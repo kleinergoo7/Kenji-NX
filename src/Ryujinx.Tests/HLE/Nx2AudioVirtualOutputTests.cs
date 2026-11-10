@@ -18,7 +18,7 @@ namespace Ryujinx.Tests.HLE
             Nx2AudioDeviceManager manager = new(null);
             Nx2AudioVirtualOutputSession session = new();
             Assert.That(manager.CmifCommands.Keys, Is.EquivalentTo(new[] { 0 }));
-            Assert.That(session.CmifCommands.Keys, Is.EquivalentTo(new[] { 0, 100, 401 }));
+            Assert.That(session.CmifCommands.Keys, Is.EquivalentTo(new[] { 0, 100, 401, 700, 800 }));
 
             using MemoryStream response = new();
             using BinaryWriter writer = new(response);

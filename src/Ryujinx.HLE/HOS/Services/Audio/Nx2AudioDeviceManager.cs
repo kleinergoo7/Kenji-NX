@@ -24,7 +24,7 @@ namespace Ryujinx.HLE.HOS.Services.Audio
                 return AudioResultCode.InvalidUpdateInfo;
             }
 
-            MakeObject(context, new Nx2AudioVirtualOutputSession());
+            MakeObject(context, new Nx2AudioVirtualOutputSession(context.ClientProcessId));
 
             return AudioResultCode.Success;
         }
@@ -36,6 +36,12 @@ namespace Ryujinx.HLE.HOS.Services.Audio
         internal const int PropertiesSize = 0x228;
 
         private static ReadOnlySpan<byte> OutputName => "AudioVirtualOutput0"u8;
+        private readonly ulong _ownerPid;
+
+        public Nx2AudioVirtualOutputSession(ulong ownerPid = 0)
+        {
+            _ownerPid = ownerPid;
+        }
 
         [CommandCmif(0)]
         public AudioResultCode ListVirtualOutputDevices(ServiceCtx context)
@@ -97,10 +103,41 @@ namespace Ryujinx.HLE.HOS.Services.Audio
             OutputName.CopyTo(name);
         }
 
+        [CommandCmif(700)]
+        public AudioResultCode AttachStream(ServiceCtx context)
+        {
+            if (context.RequestData.BaseStream.Length - context.RequestData.BaseStream.Position < 8)
+            {
+                return AudioResultCode.InvalidUpdateInfo;
+            }
+
+            uint id = context.RequestData.ReadUInt32();
+            (ulong address, ulong size) = context.Request.GetBufferType0x21();
+            if (address == 0 || size < NameSize || !IsOutputName(context.Memory.GetSpan(address, NameSize)))
+            {
+                return AudioResultCode.DeviceNotFound;
+            }
+
+            return Nx2SoundMixer.GetRegistry(context.Device).SetEngaged(_ownerPid, id, true);
+        }
+
+        [CommandCmif(800)]
+        public AudioResultCode DetachStream(ServiceCtx context)
+        {
+            if (context.RequestData.BaseStream.Length - context.RequestData.BaseStream.Position < sizeof(uint))
+            {
+                return AudioResultCode.InvalidUpdateInfo;
+            }
+
+            return Nx2SoundMixer.GetRegistry(context.Device).SetEngaged(_ownerPid, context.RequestData.ReadUInt32(), false);
+        }
+
+        private static bool IsOutputName(ReadOnlySpan<byte> name) =>
+            name.Length > OutputName.Length && name[OutputName.Length] == 0 && name.StartsWith(OutputName);
+
         internal static AudioResultCode WriteOutputProperties(ReadOnlySpan<byte> name, Span<byte> properties)
         {
-            int terminator = name.IndexOf((byte)0);
-            if (terminator < 0 || !name[..terminator].SequenceEqual(OutputName))
+            if (!IsOutputName(name))
             {
                 return AudioResultCode.DeviceNotFound;
             }
