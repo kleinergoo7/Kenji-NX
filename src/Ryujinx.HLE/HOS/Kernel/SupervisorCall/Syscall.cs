@@ -25,6 +25,15 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         private static readonly bool WaitLogEnabled = System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1";
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> WaitSiteLogged = [];
         private static readonly long[] _waitLogLast = new long[256];
+        private static readonly ulong _tracedArbiterAddress =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_ARB_TRACE_ADDR"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong address) ? address : 0;
+        private static int _arbiterTraceCount;
+
+        internal static bool MatchesArbiterTrace(ulong target, ulong address, ConsoleGeneration generation)
+        {
+            return target != 0 && target == address && generation == ConsoleGeneration.Switch2;
+        }
 
         // Switch 2 InfoType handling is a WORKAROUND: the real T239 kernel layout is
         // unverified, so the values below are guesses that keep titles booting. Each
@@ -3433,7 +3442,15 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 }
             }
 
-            return type switch
+            bool trace = MatchesArbiterTrace(_tracedArbiterAddress, address, currentProcess.CompatibilityProfile.Generation) &&
+                Interlocked.Increment(ref _arbiterTraceCount) <= 128;
+            if (trace)
+            {
+                Logger.Warning?.Print(LogClass.KernelSvc,
+                    $"NX2 arb trace wait begin addr=0x{address:X} tid={KernelStatic.GetCurrentThread().ThreadUid} type={type} value=0x{value:X} timeout={timeout}");
+            }
+
+            Result result = type switch
             {
                 ArbitrationType.WaitIfLessThan
                     => currentProcess.AddressArbiter.WaitForAddressIfLessThan(address, unchecked((int)value), false, timeout),
@@ -3445,6 +3462,14 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                     => currentProcess.AddressArbiter.WaitForAddressIfEqual(address, value, timeout),
                 _ => KernelResult.InvalidEnumValue,
             };
+
+            if (trace)
+            {
+                Logger.Warning?.Print(LogClass.KernelSvc,
+                    $"NX2 arb trace wait end addr=0x{address:X} tid={KernelStatic.GetCurrentThread().ThreadUid} result={result}");
+            }
+
+            return result;
         }
 
         internal static Result ValidateWaitIfEqual64(ulong address, ConsoleGeneration generation, bool isAarch32)
@@ -3485,7 +3510,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 }
             }
 
-            return type switch
+            Result result = type switch
             {
                 SignalType.Signal
                     => currentProcess.AddressArbiter.Signal(address, count),
@@ -3495,6 +3520,15 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                     => currentProcess.AddressArbiter.SignalAndModifyIfEqual(address, value, count),
                 _ => KernelResult.InvalidEnumValue,
             };
+
+            if (MatchesArbiterTrace(_tracedArbiterAddress, address, currentProcess.CompatibilityProfile.Generation) &&
+                Interlocked.Increment(ref _arbiterTraceCount) <= 128)
+            {
+                Logger.Warning?.Print(LogClass.KernelSvc,
+                    $"NX2 arb trace signal addr=0x{address:X} tid={KernelStatic.GetCurrentThread().ThreadUid} type={type} value=0x{value:X} count={count} result={result}");
+            }
+
+            return result;
         }
 
         [Svc(0x36)]

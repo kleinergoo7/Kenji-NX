@@ -9,6 +9,16 @@ namespace Ryujinx.Tests.HLE
 {
     public class KAddressArbiterTests
     {
+        [TestCase(0UL, 0UL, ConsoleGeneration.Switch2, false)]
+        [TestCase(0x1000UL, 0x1004UL, ConsoleGeneration.Switch2, false)]
+        [TestCase(0x1000UL, 0x1000UL, ConsoleGeneration.Switch1, false)]
+        [TestCase(0x1000UL, 0x1000UL, ConsoleGeneration.Switch2, true)]
+        public void ArbiterTraceMatchesOnlyTheSelectedSwitch2Address(
+            ulong target, ulong address, ConsoleGeneration generation, bool expected)
+        {
+            Assert.That(Syscall.MatchesArbiterTrace(target, address, generation), Is.EqualTo(expected));
+        }
+
         [Test]
         public void WaitIfEqual64RequiresSwitch2Aarch64AndEightByteAlignment()
         {
