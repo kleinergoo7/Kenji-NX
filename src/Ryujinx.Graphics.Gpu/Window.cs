@@ -86,6 +86,7 @@ namespace Ryujinx.Graphics.Gpu
         }
 
         private readonly ConcurrentQueue<PresentationTexture> _frameQueue;
+        private Action<Action> _pendingHostFrame;
 
         private int _framesAvailable;
 
@@ -242,6 +243,27 @@ namespace Ryujinx.Graphics.Gpu
 
                 pt.ReleaseCallback(pt.UserObj);
             }
+            else
+            {
+                Interlocked.Exchange(ref _pendingHostFrame, null)?.Invoke(swapBuffersCallback);
+            }
+        }
+
+        /// <summary>
+        /// Queues one host-backed frame for the GPU thread without waiting for the renderer.
+        /// </summary>
+        public bool TryEnqueueHostFrame(Action<Action> present)
+        {
+            ArgumentNullException.ThrowIfNull(present);
+
+            if (Interlocked.CompareExchange(ref _pendingHostFrame, present, null) != null)
+            {
+                return false;
+            }
+
+            SignalFrameReady();
+            _context.GPFifo.Interrupt();
+            return true;
         }
 
         /// <summary>

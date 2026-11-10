@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 using NUnit.Framework;
 using Ryujinx.Graphics.GAL;
+using Ryujinx.Graphics.Gpu;
 using Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,30 @@ namespace Ryujinx.Tests.HLE
 {
     public class Nx2PresentTextureRingTests
     {
+        [Test]
+        public void HostFrameQueueReturnsImmediatelyAndPresentsOnlyTheAcceptedFrame()
+        {
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer);
+            int swaps = 0;
+            int presents = 0;
+
+            Assert.IsTrue(gpu.Window.TryEnqueueHostFrame(swap =>
+            {
+                presents++;
+                swap();
+            }));
+            Assert.IsFalse(gpu.Window.TryEnqueueHostFrame(_ => Assert.Fail("A second pending frame must be dropped.")));
+            Assert.AreEqual(0, presents);
+            Assert.IsTrue(gpu.Window.ConsumeFrameAvailable());
+            Assert.IsFalse(gpu.Window.ConsumeFrameAvailable());
+
+            gpu.Window.Present(() => swaps++);
+            Assert.AreEqual(1, presents);
+            Assert.AreEqual(1, swaps);
+            Assert.IsTrue(gpu.Window.TryEnqueueHostFrame(_ => { }));
+        }
+
         [Test]
         public void ReusesThreeTexturesAndReleasesThemWhenSizeChanges()
         {

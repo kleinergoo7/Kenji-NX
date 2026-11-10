@@ -868,28 +868,27 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 SwizzleComponent.Blue,
                 SwizzleComponent.Alpha);
 
-            try
+            // The scratch buffer is reused by later guest presents. Queue a private copy
+            // so the IPC reply never waits on host presentation or a renderer command.
+            byte[] frame = linear.AsSpan(0, (int)pixelBytes).ToArray();
+            IRenderer renderer = context.Device.Gpu.Renderer;
+            if (!context.Device.Gpu.Window.TryEnqueueHostFrame(swapBuffers =>
             {
-                lock (PresentLock)
+                try
                 {
-                    // Reuse a small ring of host textures: the GPU may still be reading
-                    // an earlier frame when the next one is submitted. Creating one per
-                    // present leaked GPU memory until presents failed.
-                    ITexture texture = PresentTextures.Rent(context.Device.Gpu.Renderer, info);
-
-                    texture.SetData(MemoryOwner<byte>.RentCopy(linear));
-
-                    context.Device.Gpu.Renderer.Window.Present(texture, crop, static () => { });
-
+                    ITexture texture = PresentTextures.GetValue(renderer, static _ => new()).Rent(renderer, info);
+                    texture.SetData(MemoryOwner<byte>.RentCopy(frame));
+                    renderer.Window.Present(texture, crop, swapBuffers);
                 }
-            }
-            catch (Exception ex)
+                catch (Exception ex)
+                {
+                    if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
+                    }
+                }
+            }))
             {
-                if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
-                {
-                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
-                }
-
                 return;
             }
 
@@ -898,9 +897,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 composite image={imageId} addr=0x{address:X} {width}x{height} blockLog2={blockHeightLog2} pid={pid}");
             }
 
-            // Let the render loop swap the UI over to the renderer host on the first frame.
-            context.Device.Gpu.Window.SignalFrameReady();
-            context.Device.Gpu.GPFifo.Interrupt();
         }
 
         private static int _frameDumps;
@@ -911,11 +907,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static int _dump600;
         private static int _frameDumpControlDone;
 
-        private static readonly object PresentLock = new();
-        private static readonly PresentTextureRing PresentTextures = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IRenderer, PresentTextureRing> PresentTextures = new();
 
-        // A ring of reusable host textures, sized for the current frame. Must be
-        // called with PresentLock held.
+        // A ring of reusable host textures, accessed on the GPU thread.
         internal sealed class PresentTextureRing
         {
             private readonly ITexture[] _textures = new ITexture[3];
