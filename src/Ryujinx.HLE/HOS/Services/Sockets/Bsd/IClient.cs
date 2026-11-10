@@ -24,10 +24,17 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
 
         private BsdContext _context;
         private readonly bool _isPrivileged;
+        private readonly ConsoleGeneration _generation;
 
-        public IClient(ServiceCtx context, bool isPrivileged) : base(context.Device.System.BsdServer)
+        public IClient(ServiceCtx context, bool isPrivileged)
+            : this(context.Device.System.BsdServer, isPrivileged, context.Device.CompatibilityProfile.Generation)
+        {
+        }
+
+        internal IClient(ServerBase server, bool isPrivileged, ConsoleGeneration generation) : base(server)
         {
             _isPrivileged = isPrivileged;
+            _generation = generation;
         }
 
         private ResultCode WriteBsdResult(ServiceCtx context, int result, LinuxError errorCode = LinuxError.SUCCESS)
@@ -1166,6 +1173,31 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
             return WriteBsdResult(context, newSockFd, errno);
         }
 
+
+        [CommandCmif(36)]
+        // RegisterClient(u32 version, u64 pidReserved, pid) -> u32 bsd_errno
+        public ResultCode RegisterClientWithoutTransferMemory(ServiceCtx context)
+        {
+            if (_generation == ConsoleGeneration.Switch2)
+            {
+                const int InputSize = 2 * sizeof(uint) + sizeof(ulong); // Includes padding before pidReserved.
+                if (context.Request.HandleDesc is not { HasPId: true } descriptor ||
+                    context.RequestData.BaseStream.Length - context.RequestData.BaseStream.Position < InputSize)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceBsd, "BSD command 36 requires a PID descriptor and a 16-byte registration payload.");
+                    context.ResponseData.Write((uint)LinuxError.EINVAL);
+
+                    return ResultCode.Success;
+                }
+
+                _context = BsdContext.GetOrRegister(descriptor.PId);
+            }
+
+            // On Switch 1 this command only returns a zero status.
+            context.ResponseData.Write((uint)LinuxError.SUCCESS);
+
+            return ResultCode.Success;
+        }
 
         public override void DestroyAtExit()
         {
