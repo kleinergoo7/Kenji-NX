@@ -1,11 +1,24 @@
 // SPDX-License-Identifier: MIT
 using NUnit.Framework;
+using Ryujinx.HLE;
+using Ryujinx.HLE.HOS.Kernel.SupervisorCall;
 using Ryujinx.HLE.HOS.Kernel.Threading;
+using Ryujinx.Horizon.Common;
 
 namespace Ryujinx.Tests.HLE
 {
     public class KAddressArbiterTests
     {
+        [Test]
+        public void WaitIfEqual64RequiresSwitch2Aarch64AndEightByteAlignment()
+        {
+            Assert.That((int)ArbitrationType.WaitIfEqual64, Is.EqualTo(3));
+            Assert.That(Syscall.ValidateWaitIfEqual64(0x1008, ConsoleGeneration.Switch2, false), Is.EqualTo(Result.Success));
+            Assert.That(Syscall.ValidateWaitIfEqual64(0x1004, ConsoleGeneration.Switch2, false), Is.EqualTo(KernelResult.InvalidAddress));
+            Assert.That(Syscall.ValidateWaitIfEqual64(0x1008, ConsoleGeneration.Switch2, true), Is.EqualTo(KernelResult.InvalidEnumValue));
+            Assert.That(Syscall.ValidateWaitIfEqual64(0x1008, ConsoleGeneration.Switch1, false), Is.EqualTo(KernelResult.InvalidEnumValue));
+        }
+
         [TestCase(0, 0, 1)]
         [TestCase(0, 1, 1)]
         [TestCase(2, -1, -1)]

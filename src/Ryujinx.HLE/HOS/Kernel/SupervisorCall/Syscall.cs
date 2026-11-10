@@ -3358,7 +3358,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         }
 
         [Svc(0x34)]
-        public Result WaitForAddress([PointerSized] ulong address, ArbitrationType type, int value, long timeout)
+        public Result WaitForAddress([PointerSized] ulong address, ArbitrationType type, [PointerSized] long value, long timeout)
         {
             if (IsPointingInsideKernel(address))
             {
@@ -3371,6 +3371,16 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             }
 
             KProcess currentProcess = KernelStatic.GetCurrentProcess();
+            bool wait64 = type == ArbitrationType.WaitIfEqual64;
+            if (wait64)
+            {
+                Result validation = ValidateWaitIfEqual64(address, currentProcess.CompatibilityProfile.Generation,
+                    KernelStatic.GetCurrentThread().Context.IsAarch32);
+                if (validation != Result.Success)
+                {
+                    return validation;
+                }
+            }
 
             if (timeout > 0)
             {
@@ -3391,22 +3401,22 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
                     if (n == 1)
                     {
-                        int current = 0;
+                        long current;
 
                         try
                         {
-                            current = currentProcess.CpuMemory.Read<int>(address);
+                            current = wait64 ? currentProcess.CpuMemory.Read<long>(address) : currentProcess.CpuMemory.Read<int>(address);
                         }
                         catch (System.Exception)
                         {
-                            current = int.MinValue;
+                            current = long.MinValue;
                         }
 
                         int holder = MutexOwners.TryGetValue(address, out int h) ? h : -1;
                         string holderName = holder >= 0 ? LookupThreadName(currentProcess, holder) : "-";
 
                         Logger.Warning?.Print(LogClass.KernelSvc,
-                            $"NX2 arb wait tid={waiter.ThreadUid}({waiter.GetThreadName()}) pc=0x{waiter.Context.Pc:X} addr=0x{address:X} type={type} want=0x{value:X} mem=0x{current:X} owner={holder}({holderName})");
+                            $"NX2 arb wait tid={waiter.ThreadUid}({waiter.GetThreadName()}) pc=0x{waiter.Context.Pc:X} addr=0x{address:X} type={type} want=0x{(wait64 ? (ulong)value : (uint)value):X} mem=0x{(wait64 ? (ulong)current : (uint)current):X} owner={holder}({holderName})");
                     }
                 }
             }
@@ -3414,13 +3424,25 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             return type switch
             {
                 ArbitrationType.WaitIfLessThan
-                    => currentProcess.AddressArbiter.WaitForAddressIfLessThan(address, value, false, timeout),
+                    => currentProcess.AddressArbiter.WaitForAddressIfLessThan(address, unchecked((int)value), false, timeout),
                 ArbitrationType.DecrementAndWaitIfLessThan
-                    => currentProcess.AddressArbiter.WaitForAddressIfLessThan(address, value, true, timeout),
+                    => currentProcess.AddressArbiter.WaitForAddressIfLessThan(address, unchecked((int)value), true, timeout),
                 ArbitrationType.WaitIfEqual
+                    => currentProcess.AddressArbiter.WaitForAddressIfEqual(address, unchecked((int)value), timeout),
+                ArbitrationType.WaitIfEqual64
                     => currentProcess.AddressArbiter.WaitForAddressIfEqual(address, value, timeout),
                 _ => KernelResult.InvalidEnumValue,
             };
+        }
+
+        internal static Result ValidateWaitIfEqual64(ulong address, ConsoleGeneration generation, bool isAarch32)
+        {
+            if (generation != ConsoleGeneration.Switch2 || isAarch32)
+            {
+                return KernelResult.InvalidEnumValue;
+            }
+
+            return (address & 7) == 0 ? Result.Success : KernelResult.InvalidAddress;
         }
 
         [Svc(0x35)]

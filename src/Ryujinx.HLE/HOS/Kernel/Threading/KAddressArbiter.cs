@@ -324,7 +324,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             }
         }
 
-        public Result WaitForAddressIfEqual(ulong address, int value, long timeout)
+        public Result WaitForAddressIfEqual<T>(ulong address, T value, long timeout) where T : unmanaged, IEquatable<T>
         {
             KThread currentThread = KernelStatic.GetCurrentThread();
 
@@ -340,14 +340,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             currentThread.SignaledObj = null;
             currentThread.ObjSyncResult = KernelResult.TimedOut;
 
-            if (!KernelTransfer.UserToKernel(out int currentValue, address))
+            if (!KernelTransfer.UserToKernel(out T currentValue, address))
             {
                 _context.CriticalSection.Leave();
 
                 return KernelResult.InvalidMemState;
             }
 
-            if (currentValue == value)
+            if (currentValue.Equals(value))
             {
                 if (timeout == 0)
                 {
