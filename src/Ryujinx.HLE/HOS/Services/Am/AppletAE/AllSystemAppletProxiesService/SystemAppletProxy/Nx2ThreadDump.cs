@@ -70,10 +70,16 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
         public static void DumpAt(Ryujinx.HLE.HOS.Kernel.KernelContext kernel, string tag)
         {
-            if (!Enabled) return; if (kernel == null) { Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_THREAD {tag} kernel=null (dump skipped; no thread enumeration)"); return; }
+            if (!Enabled)
+                return;
+            if (kernel == null)
+            { Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_THREAD {tag} kernel=null (dump skipped; no thread enumeration)"); return; }
             try
             {
                 int total = 0;
+                bool includeStacks = Environment.GetEnvironmentVariable("NX2_STALL_STACKS") == "1";
+                ulong applicationPid = kernel.Device.Processes?.ActiveApplication?.ProcessId ?? 0;
+                int stacksRemaining = 12;
                 var waitReasons = new Dictionary<string, int>(StringComparer.Ordinal);
                 var focusNames = new[] { "gear::gfx", "tera::", "ModuleSystemWorker", "Prepare Thread", "PrepareThread", "MainThread" };
                 foreach (KeyValuePair<ulong, KProcess> proc in kernel.Processes)
@@ -82,44 +88,84 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     {
                         total++;
                         string tname = thread.GetThreadName() ?? "";
+                        bool waitingSync = thread.WaitingSync;
+                        bool waitingInArbitration = thread.WaitingInArbitration;
                         var waits = new List<string>();
-                        for (int i = 0; i < thread.WaitSyncObjects.Length; i++)
+                        for (int i = 0; waitingSync && i < thread.WaitSyncObjects.Length; i++)
                         {
                             KSynchronizationObject obj = thread.WaitSyncObjects[i];
-                            if (obj == null) continue;
+                            if (obj == null)
+                                continue;
                             string sig = "";
-                            try { sig = obj.IsSignaled() ? " SIGNALED" : " unsignaled"; } catch { sig = " (IsSignaled?)"; }
+                            try
+                            { sig = obj.IsSignaled() ? " SIGNALED" : " unsignaled"; }
+                            catch { sig = " (IsSignaled?)"; }
                             string ev = "";
                             if (obj is KReadableEvent re)
                             {
-                                try { ev = $" readableSignaled={re.IsSignaled()}"; } catch { }
+                                try
+                                { ev = $" readableSignaled={re.IsSignaled()}"; }
+                                catch { }
                                 // Resolve owning HLE object/service where registered (appmsg/gpuid*/spslot*/vi2*/vi2event11).
                                 // Nx2EventNames keys by RuntimeHelpers.GetHashCode(KReadableEvent instance).
                                 try
                                 {
                                     string ownerName = Nx2EventNames.Lookup(re);
-                                    if (!string.IsNullOrEmpty(ownerName)) ev += $" owner={ownerName}";
-                                    else ev += " owner=UNRESOLVED";
+                                    if (!string.IsNullOrEmpty(ownerName))
+                                        ev += $" owner={ownerName}";
+                                    else
+                                        ev += " owner=UNRESOLVED";
                                 }
                                 catch { ev += " owner=UNRESOLVED"; }
                             }
                             waits.Add($"w{i}=H{thread.WaitSyncHandles[i]}:{obj.GetType().Name}{sig}{ev}");
                         }
-                        string waitKey = thread.WaitingSync ? (waits.Count > 0 ? waits[0].Split(':')[1].Split(' ')[0] : "sync") : (thread.SchedFlags.ToString());
+                        string waitKey = waitingSync ? (waits.Count > 0 ? waits[0].Split(':')[1].Split(' ')[0] : "sync") : (thread.SchedFlags.ToString());
                         waitReasons[waitKey] = waitReasons.TryGetValue(waitKey, out int c) ? c + 1 : 1;
-                        string mutexInfo = thread.MutexOwner != null ? $" mutexAddr=0x{thread.MutexAddress:X} owner={thread.MutexOwner.ThreadUid}" : (thread.MutexAddress != 0 ? $" mutexAddr=0x{thread.MutexAddress:X}" : "");
+                        KThread mutexOwner = thread.MutexOwner;
+                        string mutexInfo = waitingInArbitration ? $" arbiterAddr=0x{thread.MutexAddress:X}" :
+                            mutexOwner != null ? $" mutexAddr=0x{thread.MutexAddress:X} owner={mutexOwner.ThreadUid}" : "";
                         string line = $"NX2_THREAD {tag} pid={proc.Key} name={proc.Value.Name} uid={thread.ThreadUid} tname={tname} " +
-                                      $"sched={thread.SchedFlags} waitingSync={thread.WaitingSync} waitArb={thread.WaitingInArbitration}{mutexInfo} " +
-                                      $"signaled={(thread.SignaledObj!=null?thread.SignaledObj.GetType().Name:"-")} waits=[{string.Join("; ", waits)}] " +
-                                      $"condvar=UNMAPPED arbiter=UNMAPPED timeout=UNMAPPED";
+                                      $"sched={thread.SchedFlags} waitingSync={waitingSync} waitArb={waitingInArbitration}{mutexInfo} " +
+                                      $"signaled={thread.SignaledObj?.GetType().Name ?? "-"} waits=[{string.Join("; ", waits)}]";
                         bool focus = focusNames.Any(n => tname.Contains(n, StringComparison.OrdinalIgnoreCase)) || tname.Length == 0;
-                        if (focus || thread.WaitingSync) Logger.Warning?.Print(LogClass.ServiceAm, line);
+                        if (focus || waitingSync)
+                            Logger.Warning?.Print(LogClass.ServiceAm, line);
+
+                        if (includeStacks && proc.Key == applicationPid && stacksRemaining > 0 &&
+                            (waitingSync || waitingInArbitration) && !thread.TerminationRequested &&
+                            ShouldDumpStallStack(tname))
+                        {
+                            stacksRemaining--;
+                            DumpStallStack(thread, tag);
+                        }
                     }
                 }
                 var topW = waitReasons.OrderByDescending(kv => kv.Value).Take(12).Select(kv => $"{kv.Key}={kv.Value}");
                 Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_THREAD {tag} total={total} topWaitReasons=[{string.Join(", ", topW)}]");
             }
             catch (Exception e) { Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_THREAD dump failed: {e.Message}"); }
+        }
+
+        internal static bool ShouldDumpStallStack(string name)
+        {
+            return name.Contains("MainThread", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("ModuleSystemWorker", StringComparison.Ordinal) ||
+                name.StartsWith("nn.npln.", StringComparison.Ordinal);
+        }
+
+        private static void DumpStallStack(KThread thread, string tag)
+        {
+            try
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm,
+                    $"NX2_STALL_STACK {tag} uid={thread.ThreadUid} pc=0x{thread.Context.Pc:X}\n{thread.GetGuestStackTrace()}");
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm,
+                    $"NX2_STALL_STACK {tag} uid={thread.ThreadUid} failed: {exception.GetType().Name}: {exception.Message}");
+            }
         }
 
         public static void Tick(Horizon horizon, int progressSec)

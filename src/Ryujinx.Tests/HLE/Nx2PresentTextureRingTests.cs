@@ -13,6 +13,16 @@ namespace Ryujinx.Tests.HLE
 {
     public class Nx2PresentTextureRingTests
     {
+        [TestCase("sead::MainThread", true)]
+        [TestCase("ModuleSystemWorker3", true)]
+        [TestCase("nn.npln.Worker", true)]
+        [TestCase("AudioFrameworkThread", false)]
+        [TestCase("", false)]
+        public void StallStackProbeSelectsStartupThreads(string name, bool expected)
+        {
+            Assert.That(Nx2ThreadDump.ShouldDumpStallStack(name), Is.EqualTo(expected));
+        }
+
         [TestCase(0x0001003Cu, 16_666_666L)]
         [TestCase(0x00020078u, 16_666_666L)]
         [TestCase(0x00000000u, 16_666_666L)]

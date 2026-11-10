@@ -55,6 +55,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             StringBuilder trace = new();
             const int instructionWindowSize = 0x80;
+            const int maxStackFrames = 64;
             int instructionWindowsRemaining =
                 !context.IsAarch32 && Environment.GetEnvironmentVariable("NX2_ABORT_LOG") == "1" ? 12 : 0;
             ulong mutexSlowReturn = 0;
@@ -106,7 +107,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             {
                 ulong framePointer = context.GetX(11);
 
-                while (framePointer != 0)
+                for (int frame = 0; frame < maxStackFrames && framePointer != 0; frame++)
                 {
                     if ((framePointer & 3) != 0 ||
                         !_owner.CpuMemory.IsMapped(framePointer) ||
@@ -124,7 +125,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             {
                 ulong framePointer = context.GetX(29);
 
-                while (framePointer != 0)
+                for (int frame = 0; frame < maxStackFrames && framePointer != 0; frame++)
                 {
                     if ((framePointer & 7) != 0 ||
                         !_owner.CpuMemory.IsMapped(framePointer) ||
