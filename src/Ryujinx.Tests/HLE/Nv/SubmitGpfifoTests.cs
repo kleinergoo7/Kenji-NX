@@ -4,6 +4,7 @@ using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices;
 using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel;
 using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel.Types;
 using System;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -11,6 +12,20 @@ namespace Ryujinx.Tests.HLE.Nv
 {
     public class SubmitGpfifoTests
     {
+        [TestCase(12UL, 13UL, 1)]
+        [TestCase(14UL, 11UL, 3)]
+        [TestCase(14UL, 12UL, -1)]
+        public void RingProbeMatchesOnlyConsecutiveEntriesAndCanWrap(ulong first, ulong second, int expected)
+        {
+            Span<byte> ring = stackalloc byte[4 * sizeof(ulong)];
+            for (int i = 0; i < 4; i++)
+            {
+                BinaryPrimitives.WriteUInt64LittleEndian(ring[(i * sizeof(ulong))..], (ulong)(i + 11));
+            }
+
+            Assert.AreEqual(expected, NvHostChannelDeviceFile.FindGpfifoSubmission(ring, [first, second]));
+        }
+
         [Test]
         public void SubmitGpfifoWritesFenceAndFlagsToIoctlBuffer()
         {

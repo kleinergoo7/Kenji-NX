@@ -8,9 +8,12 @@ using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvMap;
 using Ryujinx.HLE.HOS.Services.Nv.Types;
 using Ryujinx.Memory;
 using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 {
@@ -34,6 +37,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
         private readonly Host1xContext _host1xContext;
         private readonly long _contextId;
         private int _userDataRegistrationLogs;
+        private uint _traceGpfifoEntryCount;
 
         public GpuChannel Channel { get; }
 
@@ -454,6 +458,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         private NvInternalResult AllocGpfifoEx2(ref AllocGpfifoExArguments arguments)
         {
+            if (TraceUserDataEnabled)
+            {
+                System.Threading.Volatile.Write(ref _traceGpfifoEntryCount, arguments.NumEntries);
+            }
+
             _channelSyncpoint.UpdateValue(_device.System.HostSyncpoint);
 
             arguments.Fence = _channelSyncpoint;
@@ -529,7 +538,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             }
         }
 
-        private void LogUserData(ulong address, string stage)
+        private void LogUserData(ulong address, string stage, ReadOnlySpan<ulong> submittedEntries = default)
         {
             const int sampleSize = 0x100;
             Span<byte> bytes = stackalloc byte[sampleSize];
@@ -542,6 +551,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
                     _memory.Read(address, bytes);
                     Logger.Warning?.Print(LogClass.ServiceNv,
                         $"NX2 USERD {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} bytes={Convert.ToHexString(bytes)}");
+                    LogCandidateGpfifo(bytes, stage, submittedEntries);
                     return;
                 }
             }
@@ -552,6 +562,97 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
             Logger.Warning?.Print(LogClass.ServiceNv,
                 $"NX2 USERD {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} unavailable");
+        }
+
+        private void LogCandidateGpfifo(ReadOnlySpan<byte> userData, string stage, ReadOnlySpan<ulong> submittedEntries)
+        {
+            const int candidateAddressOffset = 0xD0;
+            const int candidateCountOffset = 0xD8;
+            const uint maxTraceEntries = 1 << 17;
+            ulong address = BinaryPrimitives.ReadUInt64LittleEndian(userData[candidateAddressOffset..]);
+            uint count = BinaryPrimitives.ReadUInt32LittleEndian(userData[candidateCountOffset..]);
+            uint allocatedCount = System.Threading.Volatile.Read(ref _traceGpfifoEntryCount);
+            string label = $"NX2 RING {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} entries={count}";
+
+            // These offsets are candidates from the observed channel objects. Require the
+            // count to agree with the ioctl before reading any guest memory at the pointer.
+            if (count == 0 || count != allocatedCount || count > maxTraceEntries || address == 0 || (address & 7) != 0)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"{label} rejected allocated={allocatedCount}");
+                return;
+            }
+
+            int size = (int)count * sizeof(ulong);
+            ulong lastOffset = (ulong)size - 1;
+            if (address > ulong.MaxValue - lastOffset || !_memory.IsMapped(address) ||
+                !_memory.IsMapped(address + lastOffset) || !_memory.IsRangeMapped(address, (ulong)size))
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"{label} unmapped");
+                return;
+            }
+
+            byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+            try
+            {
+                Span<byte> ring = rented.AsSpan(0, size);
+                _memory.Read(address, ring);
+
+                int match = FindGpfifoSubmission(ring, submittedEntries);
+                int nonzero = 0;
+                int first = -1;
+                int last = -1;
+                for (int i = 0; i < (int)count; i++)
+                {
+                    if (BinaryPrimitives.ReadUInt64LittleEndian(ring[(i * sizeof(ulong))..]) != 0)
+                    {
+                        if (first < 0)
+                        {
+                            first = i;
+                        }
+
+                        last = i;
+                        nonzero++;
+                    }
+                }
+
+                Logger.Warning?.Print(LogClass.ServiceNv,
+                    $"{label} submitted={submittedEntries.Length} matchIndex={match} nonzero={nonzero} first={first} last={last} sha256={Convert.ToHexString(SHA256.HashData(ring))}");
+            }
+            catch (InvalidMemoryRegionException)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"{label} became unmapped");
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+
+        internal static int FindGpfifoSubmission(ReadOnlySpan<byte> ring, ReadOnlySpan<ulong> submittedEntries)
+        {
+            int count = ring.Length / sizeof(ulong);
+            const int maxComparedEntries = 32;
+            if (submittedEntries.IsEmpty || submittedEntries.Length > Math.Min(count, maxComparedEntries))
+            {
+                return -1;
+            }
+
+            for (int start = 0; start < count; start++)
+            {
+                int matched = 0;
+                while (matched < submittedEntries.Length &&
+                    BinaryPrimitives.ReadUInt64LittleEndian(ring[(((start + matched) % count) * sizeof(ulong))..]) == submittedEntries[matched])
+                {
+                    matched++;
+                }
+
+                if (matched == submittedEntries.Length)
+                {
+                    return start;
+                }
+            }
+
+            return -1;
         }
 
         private static int _nx2SubmitLogs;
@@ -579,7 +680,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
                 if (TraceUserDataEnabled && nx2SubmitN <= 32 && UserDataTraceAddresses.TryGetValue(this, out ulong userData))
                 {
-                    LogUserData(userData, $"submit#{nx2SubmitN}");
+                    LogUserData(userData, $"submit#{nx2SubmitN}", entries);
                 }
             }
 
