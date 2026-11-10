@@ -1,5 +1,19 @@
 # NX2 (Nintendo Switch 2) Implementation Status — Kenji-NX/Ryubing integration
 
+## Current branch update · 2026-11-10
+
+The working branch is `codex/nx2-submission-progress` on `kleinergoo7/Kenji-NX`. The Starforgejo reference HEAD is `bd99084`. The snapshot and historical findings below predate the current branch.
+
+| Area | Status | Latest evidence |
+|---|---|---|
+| GPU memory aliases | VERIFIED BY TEST | `MemoryManager.cs` tracks the source handle on each mapping and preserves it when a range splits. Destroying a handle removes its aliases and preserves mappings owned by other handles. `Nx2GpuMemoryTests.cs` covers both cases. |
+| GPU map IPC | PARTIAL | `INx2GpuSession.MapMemory` reports a rejected map without signaling successful completion. Sparse mapping and the device-wide memory lifetime still need verification. |
+| Ampere lowering | PARTIAL | The offline Ampere lowering self-test passes on this build. Guest shader coverage remains unverified. |
+| Mario Kart World | BLOCKED | The paired guest run on `37c78aa` recorded eight GPFIFO submissions, zero tracked draws and 3,096 VI2 presents. |
+| Ocarina of Time | BLOCKED | The same paired build mounted the standalone NUP update and reached the SDK heap mutex fallback abort before its first present. |
+
+The solution built successfully and all 61 HLE tests passed. The GPU memory changes still need a paired guest run. A Switch 1 title was not run during this stage.
+
 **Date:** 2026-05-08 (workspace snapshot)  
 **Workspace:** `/home/reng/projects/ryujinx-nx2` · `Ryubing` branch `nx2-probes-wip` @ `282029a88` (snapshot) / base probe commit `ad8d88186`  
 **Auth (verified before push):** `gh auth status` → `github.com` logged in as **`kleinergoo7`** (active, https, token scopes incl. `repo`). Git author/committer set locally to `348551191+kleinergoo7@users.noreply.github.com` (verified `gh api user` id=348551191, login=kleinergoo7).  

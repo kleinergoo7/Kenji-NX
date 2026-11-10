@@ -993,6 +993,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
         private sealed class MappingEntry
         {
+            public uint Handle;
             public ulong GpuStart;
             public ulong GpuSize;
             public ulong CpuStart;
@@ -1089,7 +1090,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
                 // Registering implies the mapping at its own address (identity), like the graphic
                 // server does on the console.
-                MapLocked(start, start, size);
+                MapLocked(handle, start, start, size);
 
                 return handle;
             }
@@ -1110,7 +1111,8 @@ namespace Ryujinx.Graphics.Gpu.Memory
                     return false;
                 }
 
-                UnmapLocked(memory.Start, memory.Size);
+                _mappings.RemoveAll(mapping => mapping.Handle == handle);
+                RebuildMappingsLocked();
 
                 if (memory.Size == SemaphoreRegionSize)
                 {
@@ -1150,7 +1152,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                     gpuSize = available;
                 }
 
-                MapLocked(gpuStart, memory.Start + offset, gpuSize);
+                MapLocked(handle, gpuStart, memory.Start + offset, gpuSize);
 
                 return true;
             }
@@ -1404,11 +1406,11 @@ namespace Ryujinx.Graphics.Gpu.Memory
             }
         }
 
-        private static void MapLocked(ulong gpuStart, ulong cpuStart, ulong size)
+        private static void MapLocked(uint handle, ulong gpuStart, ulong cpuStart, ulong size)
         {
             TrimMappingsLocked(gpuStart, size);
 
-            _mappings.Add(new MappingEntry { GpuStart = gpuStart, CpuStart = cpuStart, GpuSize = size });
+            _mappings.Add(new MappingEntry { Handle = handle, GpuStart = gpuStart, CpuStart = cpuStart, GpuSize = size });
             RebuildMappingsLocked();
         }
 
@@ -1438,6 +1440,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 {
                     kept.Add(new MappingEntry
                     {
+                        Handle = mapping.Handle,
                         GpuStart = mapping.GpuStart,
                         CpuStart = mapping.CpuStart,
                         GpuSize = gpuStart - mapping.GpuStart,
@@ -1448,6 +1451,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 {
                     kept.Add(new MappingEntry
                     {
+                        Handle = mapping.Handle,
                         GpuStart = end,
                         CpuStart = mapping.CpuStart + (end - mapping.GpuStart),
                         GpuSize = mappingEnd - end,

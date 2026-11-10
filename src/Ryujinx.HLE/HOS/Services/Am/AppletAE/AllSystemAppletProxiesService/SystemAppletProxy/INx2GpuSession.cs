@@ -295,8 +295,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             {
                 Logger.Warning?.Print(LogClass.KernelIpc,
                     $"nx2:gpu 211 map [0x{first:X}, 0x{last:X}] handle={handle} offset=0x{offset:X} failed");
+                return ResultCode.InvalidParameters;
             }
-            else if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
+
+            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
                 System.Threading.Interlocked.Increment(ref _mapLogs) <= 40)
             {
                 // Capped probe (AGENTS.md section 9): map arguments distinguish genuine
