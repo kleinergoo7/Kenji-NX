@@ -8,6 +8,52 @@ namespace Ryujinx.Tests.HLE.Nv
     public class Nx2GpuMemoryTests
     {
         [Test]
+        public void OverlappingReplacementPreservesBothLiveSparseRegions()
+        {
+            const ulong first = 0x700000;
+            const ulong second = 0x702000;
+            const ulong page = 0x1000;
+
+            try
+            {
+                Assert.IsTrue(Nx2GpuMemory.CreateSparse(first, page));
+                Assert.IsTrue(Nx2GpuMemory.CreateSparse(second, page));
+                Assert.IsFalse(Nx2GpuMemory.CreateSparse(first, 3 * page));
+                Assert.IsTrue(Nx2GpuMemory.IsSparse(first));
+                Assert.IsFalse(Nx2GpuMemory.IsSparse(first + page));
+                Assert.IsTrue(Nx2GpuMemory.DestroySparse(first));
+                Assert.IsTrue(Nx2GpuMemory.DestroySparse(second));
+            }
+            finally
+            {
+                Nx2GpuMemory.DestroySparse(first);
+                Nx2GpuMemory.DestroySparse(second);
+            }
+        }
+
+        [Test]
+        public void SparseReplacementCanReuseItsReservationButCannotExceedBudget()
+        {
+            const ulong start = 0x1000000000;
+            const ulong page = 0x1000;
+            ulong end = start + Nx2GpuMemory.SparseBudget;
+
+            try
+            {
+                Assert.IsTrue(Nx2GpuMemory.CreateSparse(start, Nx2GpuMemory.SparseBudget));
+                Assert.IsFalse(Nx2GpuMemory.CreateSparse(end, page));
+                Assert.IsFalse(Nx2GpuMemory.CreateSparse(start, Nx2GpuMemory.SparseBudget + page));
+                Assert.IsTrue(Nx2GpuMemory.CreateSparse(start, Nx2GpuMemory.SparseBudget - page));
+                Assert.IsTrue(Nx2GpuMemory.CreateSparse(end, page));
+            }
+            finally
+            {
+                Nx2GpuMemory.DestroySparse(start);
+                Nx2GpuMemory.DestroySparse(end);
+            }
+        }
+
+        [Test]
         public void RejectsOversizedMappingWithoutReplacingExistingAlias()
         {
             const ulong original = 0x400000;

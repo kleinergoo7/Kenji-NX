@@ -969,8 +969,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
     {
         /// <summary>
         /// Virtual size that sparse regions may reserve. Pages are committed by the host only
-        /// when touched, so most of a large region costs address space, not RAM. Past the limit a
-        /// region stays unbacked (reads zero, writes dropped) instead of failing the emulator.
+        /// when touched, so most of a large region costs address space, not RAM.
         /// </summary>
         public const ulong SparseBudget = 64UL << 30;
 
@@ -1203,29 +1202,30 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
             lock (_lock)
             {
-                if (_sparse.TryGetValue(start, out SparseEntry existing))
-                {
-                    DestroySparseLocked(existing);
-                }
+                _sparse.TryGetValue(start, out SparseEntry existing);
 
                 foreach (SparseEntry region in _sparse.Values)
                 {
-                    if (start < region.Start + region.Size && region.Start < start + size)
+                    if (region != existing && start < region.Start + region.Size && region.Start < start + size)
                     {
                         return false;
                     }
                 }
 
-                if (size <= SparseBudget - _sparseBytes)
-                {
-                    _sparseBytes += size;
-                }
-                else
+                ulong reservedWithoutExisting = _sparseBytes - (existing?.Size ?? 0);
+                if (size > SparseBudget - reservedWithoutExisting)
                 {
                     Logger.Warning?.Print(LogClass.Gpu,
-                        $"NX2 sparse region 0x{start:X} (0x{size:X} bytes) exceeds the virtual budget, writes dropped");
+                        $"NX2 sparse region 0x{start:X} (0x{size:X} bytes) exceeds the virtual budget");
+                    return false;
                 }
 
+                if (existing != null)
+                {
+                    DestroySparseLocked(existing);
+                }
+
+                _sparseBytes += size;
                 SparseEntry entry = new() { Start = start, Size = size };
 
                 if (eager)

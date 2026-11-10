@@ -14,7 +14,9 @@ The working branch is `codex/nx2-submission-progress` on `kleinergoo7/Kenji-NX`.
 
 GPU mapping now rejects a request that extends beyond its backing allocation. Sparse map IPC command 216 validates its request buffer and reports the completed prefix if an entry fails. The registry regression test verifies that a rejected oversized map preserves the prior alias.
 
-The solution built successfully and all 62 HLE tests passed. Sparse map IPC behavior still needs guest validation. In the paired run on `d2b5fbf`, Kart reached present 120 and Ocarina reproduced the same startup abort. A Switch 1 title was not run during this stage.
+Sparse-region reservations now validate overlap and virtual budget before replacing a live region. Tests cover a rejected overlap, a rejected over-budget reservation, and reuse of an existing reservation's budget. The solution built and all 64 HLE tests passed.
+
+In the paired run on `b2193d0`, Kart reached present 120 after eight submissions and Ocarina reproduced the same startup abort. Sparse-region reservation changes still need guest validation. A Switch 1 title was not run during this stage.
 
 **Date:** 2026-05-08 (workspace snapshot)  
 **Workspace:** `/home/reng/projects/ryujinx-nx2` · `Ryubing` branch `nx2-probes-wip` @ `282029a88` (snapshot) / base probe commit `ad8d88186`  
