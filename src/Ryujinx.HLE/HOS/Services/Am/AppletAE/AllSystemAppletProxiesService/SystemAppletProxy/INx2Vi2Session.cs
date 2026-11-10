@@ -699,10 +699,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     {
                         // Up to 4 s, like the console path: the CPU runs frames ahead while the
                         // GPU is still compiling shaders, and a 1 s cap made presents fail.
-                        bool reached = context.Device.Gpu.Synchronization.WaitOnSyncpoint(
+                        bool timedOut = context.Device.Gpu.Synchronization.WaitOnSyncpoint(
                             waitId, waitValue, TimeSpan.FromSeconds(4));
 
-                        if (!reached && System.Threading.Interlocked.Increment(ref _fenceTimeouts) <= 8)
+                        if (timedOut && System.Threading.Interlocked.Increment(ref _fenceTimeouts) <= 8)
                         {
                             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                                 $"NX2 present fence {waitId},{waitValue} not reached in 4 s");

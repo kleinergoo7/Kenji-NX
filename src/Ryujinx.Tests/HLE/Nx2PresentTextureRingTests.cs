@@ -3,6 +3,7 @@ using NUnit.Framework;
 using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Gpu;
 using Ryujinx.Graphics.Gpu.Memory;
+using Ryujinx.Graphics.Gpu.Synchronization;
 using Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy;
 using Ryujinx.Memory;
 using System;
@@ -13,6 +14,28 @@ namespace Ryujinx.Tests.HLE
 {
     public class Nx2PresentTextureRingTests
     {
+        [Test]
+        public void ReachedSyncpointCompletesInlineWithoutRegisteringAWaiter()
+        {
+            SynchronizationManager syncpoints = new();
+            int completions = 0;
+            syncpoints.IncrementSyncpoint(1);
+
+            Assert.That(syncpoints.RegisterCallbackOnSyncpoint(1, 1, _ => completions++), Is.Null);
+            Assert.That(completions, Is.EqualTo(1));
+            syncpoints.IncrementSyncpoint(1);
+            Assert.That(completions, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SyncpointWaitReturnsTrueOnlyOnTimeout()
+        {
+            SynchronizationManager syncpoints = new();
+            Assert.That(syncpoints.WaitOnSyncpoint(1, 1, TimeSpan.Zero), Is.True);
+            syncpoints.IncrementSyncpoint(1);
+            Assert.That(syncpoints.WaitOnSyncpoint(1, 1, TimeSpan.Zero), Is.False);
+        }
+
         [TestCase("sead::MainThread", true, true)]
         [TestCase("ModuleSystemWorker3", true, true)]
         [TestCase("nn.npln.Worker", true, true)]
