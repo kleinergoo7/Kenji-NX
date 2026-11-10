@@ -2,7 +2,9 @@
 using NUnit.Framework;
 using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Gpu;
+using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy;
+using Ryujinx.Memory;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -11,6 +13,46 @@ namespace Ryujinx.Tests.HLE
 {
     public class Nx2PresentTextureRingTests
     {
+        [Test]
+        public void HostCommandBufferResumesAcrossTwoSemaphoreAcquires()
+        {
+            const int SemaphorePacket = 0x20040004;
+            const int Acquire = 0x01000001;
+            const int Release = 0x01000002;
+            const ulong Page = 0x1000;
+
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = true };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel channel = gpu.CreateChannel();
+            channel.BindMemory(memory);
+
+            channel.PushHostCommandBuffer([
+                SemaphorePacket, 0, 0x1000, 1, Acquire,
+                SemaphorePacket, 0, 0x1004, 2, Acquire,
+                SemaphorePacket, 0, 0x1008, 3, Release,
+            ]);
+            channel.PushHostCommandBuffer([SemaphorePacket, 0, 0x1008, 4, Release]);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(0x1008), Is.Zero);
+
+            memory.Write(0x1000, 1);
+            Assert.That(gpu.GPFifo.WaitForCommands(), Is.True);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(0x1008), Is.Zero);
+
+            memory.Write(0x1004, 2);
+            Assert.That(gpu.GPFifo.WaitForCommands(), Is.True);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(0x1008), Is.EqualTo(4));
+            Assert.That(gpu.GPFifo.WaitForCommands(), Is.False);
+        }
+
         [TestCase(null, "1", 1, false)]
         [TestCase("1", "1", 1, true)]
         [TestCase(null, "8", 8, true)]

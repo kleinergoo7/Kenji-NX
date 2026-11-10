@@ -19,11 +19,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
     /// </summary>
     public static class Nx2GpuStall
     {
-        public static void TryResumeAll()
-        {
-            GPFifoProcessor.TryResumeAll();
-        }
-
         public static int MacrosRun => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacrosRun;
         public static int MacroMemoHits => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoHits;
         public static int MacroMemoMisses => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoMisses;
@@ -232,9 +227,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         private uint _stallValue;
         private bool _stallExact;
         private ulong _stallBaseVa;
-        private int _stallWordCount;
-        private int _stallIndex;
+        private int[] _stalledWords;
+        private readonly System.Collections.Generic.Queue<(ulong Address, int[] Words)> _deferredBuffers = new();
         private long _stallSince;
+        private bool _stallTimeoutReported;
 
         private static readonly System.Collections.Generic.List<GPFifoProcessor> Stalled = [];
         private static bool _resuming;
@@ -261,10 +257,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             _stallAddress = address;
             _stallValue = (uint)value;
             _stallExact = exact;
-            _stallBaseVa = _bufferBaseVa;
-            _stallWordCount = _bufferWords;
-            _stallIndex = _bufferIndex;
-            _stallSince = System.Environment.TickCount64;
+            _stallSince = Environment.TickCount64;
+            _stallTimeoutReported = false;
 
             lock (Stalled)
             {
@@ -284,10 +278,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             return _stallExact ? current == _stallValue : current >= _stallValue;
         }
 
+        internal static bool HasStalledChannels(GpuContext context)
+        {
+            lock (Stalled)
+            {
+                return Stalled.Exists(processor => processor._context == context);
+            }
+        }
+
         /// <summary>
-        /// Resumes channels whose acquire was met (or that waited too long).
+        /// Resumes this context's channels on its GPU thread after an acquire is met.
         /// </summary>
-        public static void TryResumeAll()
+        public static void TryResumeAll(GpuContext context)
         {
             GPFifoProcessor[] stalled;
 
@@ -306,7 +308,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             {
                 foreach (GPFifoProcessor processor in stalled)
                 {
-                    processor.TryResume();
+                    if (processor._context == context)
+                    {
+                        processor.TryResume();
+                    }
                 }
             }
             finally
@@ -332,20 +337,23 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 return;
             }
 
-            bool met = AcquireMet();
-            bool timedOut = !met && System.Environment.TickCount64 - _stallSince >= 500;
-
-            if (!met && !timedOut)
+            if (!AcquireMet())
             {
+                if (!_stallTimeoutReported && Environment.TickCount64 - _stallSince >= 500)
+                {
+                    _stallTimeoutReported = true;
+                    if (System.Threading.Interlocked.Increment(ref _stallTimeouts) <= 8)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                            $"NX2 semaphore acquire 0x{_stallAddress:X} still waiting after 500 ms (wants {_stallValue}, has {(uint)MemoryManager.Read<int>(_stallAddress)})");
+                    }
+                }
+
                 return;
             }
 
-            if (timedOut && System.Threading.Interlocked.Increment(ref _stallTimeouts) <= 8)
-            {
-                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
-                    $"nx2: semaphore acquire 0x{_stallAddress:X} not met in 500 ms (wants {_stallValue}, has {(uint)MemoryManager.Read<int>(_stallAddress)}); continuing");
-            }
-
+            int[] words = _stalledWords;
+            _stalledWords = null;
             _stalled = false;
 
             lock (Stalled)
@@ -353,15 +361,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 Stalled.Remove(this);
             }
 
-            int count = _stallWordCount;
-            int[] words = new int[count];
+            ProcessWithStallHandling(_stallBaseVa, words);
 
-            for (int i = 0; i < count; i++)
+            while (!_stalled && _deferredBuffers.TryDequeue(out var next))
             {
-                words[i] = MemoryManager.Read<int>(_stallBaseVa + (ulong)i * 4);
+                ProcessWithStallHandling(next.Address, next.Words);
             }
-
-            ProcessLoop(_stallBaseVa, words, _stallIndex);
         }
 
         /// <summary>
@@ -451,26 +456,34 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <param name="commandBuffer">Command buffer</param>
         public void Process(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer)
         {
-            _bufferBaseVa = baseGpuVa;
-            _bufferWords = commandBuffer.Length;
-
             System.Threading.Interlocked.Add(ref WordsProcessed, commandBuffer.Length);
             System.Threading.Interlocked.Increment(ref BuffersProcessed);
 
+            if (_stalled)
+            {
+                _deferredBuffers.Enqueue((baseGpuVa, commandBuffer.ToArray()));
+                return;
+            }
+
+            ProcessWithStallHandling(baseGpuVa, commandBuffer);
+        }
+
+        private void ProcessWithStallHandling(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer)
+        {
             try
             {
                 ProcessLoop(baseGpuVa, commandBuffer, 0);
             }
             catch (StallException)
             {
-                // Resume point recorded by StallOnAcquire.
+                // Prefetched and host-generated buffers cannot be reconstructed from guest VA.
+                _stallBaseVa = baseGpuVa + (ulong)_bufferIndex * sizeof(int);
+                _stalledWords = commandBuffer[_bufferIndex..].ToArray();
             }
 
             _3dClass.FlushUboDirty();
         }
 
-        private ulong _bufferBaseVa;
-        private int _bufferWords;
         private int _bufferIndex;
 
         private void ProcessLoop(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer, int startIndex)
@@ -785,7 +798,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 // Class 0 unbinds the subchannel. -1 matches no engine, so its calls are dropped.
                 _subChannelEngine[subChannel] = -1;
                 _subChannelClass[subChannel] = 0;
-                if (Nx2MethodProbe.Enabled) Nx2MethodProbe.RecordClass(subChannel, 0);
+                if (Nx2MethodProbe.Enabled)
+                    Nx2MethodProbe.RecordClass(subChannel, 0);
                 return;
             }
 
@@ -805,7 +819,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 _ => subChannel,                                           // unknown class: legacy mapping
             };
             _subChannelClass[subChannel] = classId;
-            if (Nx2MethodProbe.Enabled) Nx2MethodProbe.RecordClass(subChannel, classId);
+            if (Nx2MethodProbe.Enabled)
+                Nx2MethodProbe.RecordClass(subChannel, classId);
 
             if (classId is not (0xc797 or 0xc697 or 0xc597 or 0xb197 or 0xc7c0 or 0xc6c0 or 0xc5c0 or 0xb1c0 or 0xc7b5 or 0xc6b5 or 0xc5b5 or 0xb0b5 or 0xc56f or 0xc76f or 0xb06f or 0x902d or 0xa140) && _unknownClasses.Add(classId))
             {
@@ -907,6 +922,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             if (disposing)
             {
+                lock (Stalled)
+                {
+                    Stalled.Remove(this);
+                }
+
+                _stalledWords = null;
+                _deferredBuffers.Clear();
                 _3dClass.Dispose();
             }
         }

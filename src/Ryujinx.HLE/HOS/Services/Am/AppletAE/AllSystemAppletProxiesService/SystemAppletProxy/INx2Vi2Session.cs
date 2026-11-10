@@ -30,7 +30,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             lock (_vblankEvents)
             {
                 // Oracle drives the frame loop off a 60 Hz vblank; the tick also
-                // resumes stalled GPU channels and signalled id events.
+                // signals GPU ID events.
                 _tickTimer ??= new System.Threading.Timer(_ =>
                 {
                     lock (_vblankEvents)
@@ -41,7 +41,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         }
                     }
 
-                    Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.TryResumeAll();
                     Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel.NvHostGpuDeviceFile.SignalAllNx2Events();
                     INx2GpuSession.SignalAllNx2GpuEvents();
                     Nx2Diagnostics.WatchQueues(System.Threading.Volatile.Read(ref _device));

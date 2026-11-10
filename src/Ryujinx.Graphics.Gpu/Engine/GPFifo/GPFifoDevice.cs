@@ -218,7 +218,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <returns>True if commands were received, false if wait timed out</returns>
         public bool WaitForCommands()
         {
-            return !_commandBufferQueue.IsEmpty || (_event.WaitOne(8) && !_commandBufferQueue.IsEmpty);
+            if (!_commandBufferQueue.IsEmpty)
+            {
+                return true;
+            }
+
+            _event.WaitOne(8);
+            return !_commandBufferQueue.IsEmpty || GPFifoProcessor.HasStalledChannels(_context);
         }
 
         /// <summary>
@@ -230,7 +236,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             _context.RunDeferredActions();
 
             // A semaphore release may have landed since the last dispatch: resume those first.
-            GPFifoProcessor.TryResumeAll();
+            GPFifoProcessor.TryResumeAll(_context);
 
             // Process command buffers.
             while (_ibEnable && !_interrupt && _commandBufferQueue.TryDequeue(out CommandBuffer entry))
@@ -263,7 +269,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 entry.Processor.Process(entry.EntryAddress, words);
             }
 
-            GPFifoProcessor.TryResumeAll();
+            GPFifoProcessor.TryResumeAll(_context);
 
             _interrupt = false;
         }
