@@ -208,15 +208,34 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                             TryResolveVeneer(innerVeneer, out ulong innerSlot, out ulong innerTarget))
                         {
                             trace.AppendLine($"      Guest mutex inner helper veneer=0x{innerVeneer:X} slot=0x{innerSlot:X} target=0x{innerTarget:X}");
-                            if (innerTarget != 0 && (innerTarget & 3) == 0 && IsMapped(innerTarget, innerWindowSize))
+                            // SDK import entries can alternate between direct jumps and
+                            // indirect veneers. Bound the walk even if guest pointers cycle.
+                            const int maxHops = 6;
+                            for (int hop = 0; hop < maxHops && IsCodeMapped(innerTarget, 4 * sizeof(uint)); hop++)
                             {
-                                if (TryDecodeImmediateBranch(innerTarget, _owner.CpuMemory.Read<uint>(innerTarget), branch, out ulong body) &&
-                                    IsMapped(body, innerWindowSize))
+                                if (TryDecodeImmediateBranch(innerTarget, _owner.CpuMemory.Read<uint>(innerTarget), branch, out ulong next))
                                 {
-                                    trace.AppendLine($"      Guest mutex inner entry 0x{innerTarget:X} branches to 0x{body:X}");
-                                    innerTarget = body;
+                                    trace.AppendLine($"      Guest mutex inner entry 0x{innerTarget:X} branches to 0x{next:X}");
+                                }
+                                else if (TryResolveVeneer(innerTarget, out ulong nextSlot, out next))
+                                {
+                                    trace.AppendLine($"      Guest mutex inner veneer=0x{innerTarget:X} slot=0x{nextSlot:X} target=0x{next:X}");
+                                }
+                                else
+                                {
+                                    break;
                                 }
 
+                                if (next == innerTarget)
+                                {
+                                    break;
+                                }
+
+                                innerTarget = next;
+                            }
+
+                            if (IsCodeMapped(innerTarget, innerWindowSize))
+                            {
                                 trace.AppendLine($"      Guest mutex inner instructions at 0x{innerTarget:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(innerTarget, innerWindowSize))}");
                             }
                         }
@@ -243,6 +262,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             bool IsMapped(ulong address, int size) =>
                 address <= _owner.MemoryManager.AddrSpaceEnd - (ulong)size && _owner.CpuMemory.IsRangeMapped(address, (ulong)size);
+
+            bool IsCodeMapped(ulong address, int size) => address != 0 && (address & 3) == 0 && IsMapped(address, size);
 
             bool TryGetBranchTarget(ulong returnAddress, out ulong target)
             {

@@ -36,5 +36,13 @@ namespace Ryujinx.Tests.HLE
             Assert.IsFalse(HleProcessDebugger.TryDecodeMutexFallbackSlot(
                 0x8120, 0xB0000010, 0xF9400611, 0x91002210, 0xD61F0200, out _));
         }
+
+        [Test]
+        public void DecodesOcarinaInnerVeneerSlot()
+        {
+            Assert.IsTrue(HleProcessDebugger.TryDecodeMutexFallbackSlot(
+                0xDCFE2C0, 0xF0003190, 0xF9442611, 0x91212210, 0xD61F0220, out ulong slot));
+            Assert.AreEqual(0xE331848UL, slot);
+        }
     }
 }
