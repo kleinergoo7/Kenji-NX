@@ -13,6 +13,13 @@ namespace Ryujinx.Tests.HLE
 {
     public class Nx2PresentTextureRingTests
     {
+        [TestCase(0x0400486024DEC000UL, 2u, 20u)]
+        [TestCase(0UL, 1u, 10u)]
+        public void PresentFenceSelectionUsesTheCurrentFenceForOcarina(ulong programId, uint id, uint value)
+        {
+            Assert.That(INx2Vi2Session.GetPresentWaitFence(programId, (2u, 20u), (1u, 10u)), Is.EqualTo((id, value)));
+        }
+
         [Test]
         public void HostCommandBufferResumesAcrossTwoSemaphoreAcquires()
         {

@@ -420,6 +420,16 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             return int.TryParse(setting, out int target) && target > 0 && target == present;
         }
 
+        internal static (uint Id, uint Value) GetPresentWaitFence(
+            ulong programId, (uint Id, uint Value) current, (uint Id, uint Value) previous)
+        {
+            const ulong OcarinaOfTimeProgramId = 0x0400486024DEC000;
+
+            // Eglantine's VI2 path waits on the current fence for Ocarina because
+            // its next frame can overwrite GPU data still used by the current frame.
+            return programId == OcarinaOfTimeProgramId ? current : previous;
+        }
+
         public ResultCode PresentInternal(ServiceCtx context, uint cmdId)
         {
             // Probe: the NX2 present request carries a GPU fence; the reference
@@ -629,20 +639,16 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                     uint fenceValue = context.RequestData.ReadUInt32();
                     uint fenceId = ~fenceRawId;
 
-                    // Wait for the previous frame's fence, like the console: the guest prepares
-                    // frame N+1 while the GPU still runs frame N.
-                    uint waitId = _previousFenceId;
-                    uint waitValue = _previousFenceValue;
-
-                    _previousFenceId = fenceId;
-                    _previousFenceValue = fenceValue;
+                    ulong programId = context.Device.Processes.ActiveApplication?.ProgramId ?? 0;
+                    (uint waitId, uint waitValue) = GetPresentWaitFence(programId, (fenceId, fenceValue), _previousFence);
+                    _previousFence = (fenceId, fenceValue);
 
                     if (System.Threading.Interlocked.Increment(ref _fenceLogs) <= 12)
                     {
                         uint now = waitId < MaxSyncpoints ? context.Device.Gpu.Synchronization.GetSyncpointValue(waitId) : 0;
 
                         Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                            $"NX2 present fence id={fenceId} value={fenceValue} (previous {waitId},{waitValue}) now={now}");
+                            $"NX2 present fence id={fenceId} value={fenceValue} (wait {waitId},{waitValue}) now={now}");
                     }
 
                     if (waitId < MaxSyncpoints && waitValue != 0)
@@ -946,9 +952,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 return texture;
             }
         }
-        private static uint _previousFenceId = uint.MaxValue;
+        private (uint Id, uint Value) _previousFence = (uint.MaxValue, 0);
         private static int _event11Logs;
-        private static uint _previousFenceValue;
 
         private static int _pcSamples;
 
