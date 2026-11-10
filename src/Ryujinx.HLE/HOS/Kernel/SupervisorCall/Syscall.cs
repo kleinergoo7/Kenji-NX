@@ -2823,9 +2823,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             if (result == Result.Success)
             {
-                KProcess process = KernelStatic.GetCurrentProcess();
-
-                result = process.HandleTable.GenerateHandle(thread, out handle);
+                result = currentProcess.GenerateThreadHandle(thread, out handle);
             }
             else
             {

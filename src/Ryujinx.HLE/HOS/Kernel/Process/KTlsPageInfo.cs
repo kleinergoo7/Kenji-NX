@@ -1,10 +1,22 @@
 using Ryujinx.HLE.HOS.Kernel.Memory;
+using Ryujinx.Memory;
 
 namespace Ryujinx.HLE.HOS.Kernel.Process
 {
     class KTlsPageInfo
     {
         public const int TlsEntrySize = 0x200;
+        private const int CurrentThreadHandleOffset = 0x110;
+
+        internal static void InitializeThreadHandle(
+            IVirtualMemoryManager memory, ulong tlsAddress, ConsoleGeneration generation, int handle)
+        {
+            // Horizon 22 adds CurrentThreadHandle to the guest thread local region.
+            if (generation == ConsoleGeneration.Switch2 && tlsAddress != 0)
+            {
+                memory.Write(tlsAddress + CurrentThreadHandleOffset, handle);
+            }
+        }
 
         public ulong PageVirtualAddress { get; }
         public ulong PagePhysicalAddress { get; }
