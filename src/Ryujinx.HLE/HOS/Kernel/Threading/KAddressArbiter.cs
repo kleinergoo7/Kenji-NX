@@ -242,15 +242,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         {
             _context.CriticalSection.Enter();
 
-            int validThreads = 0;
             _condVarThreads.TryGetValue(address, out List<KThread> threads);
 
-            if (threads is not null && threads.Count > 0)
-            {
-                validThreads = WakeThreads(threads, count, TryAcquireMutex);
-            }
-
-            if (validThreads == 0)
+            // The guest flag tracks waiters remaining after signaling, not how many woke.
+            if (threads == null || WakeThreads(threads, count, TryAcquireMutex))
             {
                 KernelTransfer.KernelToUser(address, 0);
             }
@@ -269,6 +264,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 // Invalid address.
                 requester.SignaledObj = null;
                 requester.ObjSyncResult = KernelResult.InvalidMemState;
+                requester.ReleaseAndResume();
 
                 return;
             }
@@ -641,7 +637,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             }
         }
 
-        private static int WakeThreads(
+        internal static bool WakeThreads(
             List<KThread> threads,
             int count,
             Action<KThread> removeCallback)
@@ -656,7 +652,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
             threads.RemoveRange(0, validCount);
 
-            return validCount;
+            return threads.Count == 0;
         }
 
         private class ByDynamicPriority : IComparer<KThread>
