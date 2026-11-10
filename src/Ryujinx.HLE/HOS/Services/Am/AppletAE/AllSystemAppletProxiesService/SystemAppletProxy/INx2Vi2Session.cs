@@ -14,6 +14,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     // Minimal nx2:vi2 session. Presentation is acknowledged but not displayed yet.
     class INx2Vi2Session : IpcService
     {
+        private const ulong OcarinaOfTimeProgramId = 0x0400486024DEC000;
+        private long _nextVblank;
+
         // Native vsync slots (Eglantine INx2Vi2Session: 8 indexed slots shared by
         // 31/32 acquire and 261-272 bind/unbind; a slot fires on vblank while bound).
         // Unbound slots fire too (the game waits on a fresh slot before binding it),
@@ -423,11 +426,48 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         internal static (uint Id, uint Value) GetPresentWaitFence(
             ulong programId, (uint Id, uint Value) current, (uint Id, uint Value) previous)
         {
-            const ulong OcarinaOfTimeProgramId = 0x0400486024DEC000;
-
             // Eglantine's VI2 path waits on the current fence for Ocarina because
             // its next frame can overwrite GPU data still used by the current frame.
             return programId == OcarinaOfTimeProgramId ? current : previous;
+        }
+
+        internal static long GetPresentIntervalNanoseconds(uint timing)
+        {
+            uint interval = Math.Clamp(timing >> 16, 1u, 4u);
+            uint refreshRate = timing & 0xFFFF;
+            if (refreshRate is < 30 or > 240)
+            {
+                refreshRate = 60;
+            }
+
+            return 1_000_000_000L * interval / refreshRate;
+        }
+
+        private void PaceOcarinaPresent(ServiceCtx context, uint timing)
+        {
+            if (context.Device.Processes.ActiveApplication?.ProgramId != OcarinaOfTimeProgramId ||
+                context.Device.VSyncMode == Ryujinx.Common.Configuration.VSyncMode.Unbounded)
+            {
+                _nextVblank = 0;
+                return;
+            }
+
+            long intervalNs = GetPresentIntervalNanoseconds(timing);
+            long frequency = System.Diagnostics.Stopwatch.Frequency;
+            long intervalTicks = (long)(intervalNs * (frequency / 1_000_000_000.0));
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+
+            if (now - _nextVblank >= intervalTicks)
+            {
+                _nextVblank = now;
+            }
+            else if (_nextVblank > now)
+            {
+                long waitNs = (long)((_nextVblank - now) * (1_000_000_000.0 / frequency));
+                context.Thread.Sleep(Math.Max(1, waitNs));
+            }
+
+            _nextVblank += intervalTicks;
         }
 
         public ResultCode PresentInternal(ServiceCtx context, uint cmdId)
@@ -612,6 +652,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             // The presented image's GPU fence travels in words 22/24 (the id is stored as its
             // bitwise NOT). Pace the guest on it, bounded, like the oracle does.
+            uint? presentTiming = null;
             try
             {
                 System.IO.Stream stream = context.RequestData.BaseStream;
@@ -632,7 +673,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             $"NX2 present words w6=0x{word6:X} shown=0x{shownSize:X} (image #{Nx2Counters.Presents})");
                     }
 
-                    stream.Seek(14 * sizeof(uint), System.IO.SeekOrigin.Current);
+                    // The swap interval and refresh rate are in payload word 10.
+                    stream.Seek(2 * sizeof(uint), System.IO.SeekOrigin.Current);
+                    presentTiming = context.RequestData.ReadUInt32();
+                    stream.Seek(11 * sizeof(uint), System.IO.SeekOrigin.Current);
 
                     uint fenceRawId = context.RequestData.ReadUInt32();
                     context.RequestData.ReadUInt32();
@@ -674,6 +718,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             Composite(context, imageId);
+
+            if (presentTiming is uint timing)
+            {
+                PaceOcarinaPresent(context, timing);
+            }
 
             // The display consumed the frame: advance the display syncpoint the guest waits on
             // after Present. INx2SyncptSession.GetSlot hands out slot 0, and the guest polls
