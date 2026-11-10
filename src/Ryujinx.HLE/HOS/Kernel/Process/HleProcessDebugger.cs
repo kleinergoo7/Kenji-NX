@@ -190,6 +190,17 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             if (TryGetBranchTarget(fallbackReturn, out ulong helper) && IsMapped(helper, helperWindowSize))
             {
                 trace.AppendLine($"      Guest mutex fallback instructions at 0x{helper:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(helper, helperWindowSize))}");
+                if (TryDecodeMutexFallbackSlot(helper, _owner.CpuMemory.Read<uint>(helper),
+                    _owner.CpuMemory.Read<uint>(helper + 4), _owner.CpuMemory.Read<uint>(helper + 8),
+                    _owner.CpuMemory.Read<uint>(helper + 12), out ulong slot) && IsMapped(slot, sizeof(ulong)))
+                {
+                    ulong target = _owner.CpuMemory.Read<ulong>(slot);
+                    trace.AppendLine($"      Guest mutex fallback slot=0x{slot:X} target=0x{target:X}");
+                    if ((target & 3) == 0 && target != 0 && IsMapped(target, helperWindowSize))
+                    {
+                        trace.AppendLine($"      Guest mutex resolved instructions at 0x{target:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(target, helperWindowSize))}");
+                    }
+                }
             }
 
             bool IsMapped(ulong address, int size) =>
@@ -210,6 +221,24 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 target = unchecked((ulong)((long)pc + displacement));
                 return (opcode & branchLinkMask) == branchLink;
             }
+        }
+
+        internal static bool TryDecodeMutexFallbackSlot(ulong pc, uint adrp, uint ldr, uint add, uint branch, out ulong slot)
+        {
+            slot = 0;
+
+            // Match ADRP X16, LDR X17, [X16, #imm], ADD X16, X16, #imm, BR X17.
+            if ((adrp & 0x9F00001F) != 0x90000010 || (ldr & 0xFFC003FF) != 0xF9400211 ||
+                (add & 0xFFC003FF) != 0x91000210 || branch != 0xD61F0220)
+            {
+                return false;
+            }
+
+            uint immediate = (((adrp >> 5) & 0x7FFFF) << 2) | ((adrp >> 29) & 3);
+            long pages = unchecked((int)(immediate << 11)) >> 11;
+            long page = (long)(pc & ~0xFFFUL) + (pages << 12);
+            slot = unchecked((ulong)(page + (((ldr >> 10) & 0xFFF) * sizeof(ulong))));
+            return true;
         }
 
         public string GetCpuRegisterPrintout(KThread thread)

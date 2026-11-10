@@ -546,6 +546,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         try
                         {
                             thread.PrintGuestStackTrace();
+                            if (thread.GetThreadName() == "MainThread" && thread.Context is { IsAarch32: false } cpu)
+                            {
+                                KThread owner = thread.MutexOwner;
+                                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                                    $"NX2 main mutex addr=0x{thread.MutexAddress:X} ownerTid={owner?.ThreadUid} ownerName={owner?.GetThreadName()} requester=0x{thread.ThreadHandleForUserMutex:X} x0=0x{cpu.GetX(0):X} x1=0x{cpu.GetX(1):X} x2=0x{cpu.GetX(2):X}");
+                                owner?.PrintGuestStackTrace();
+                            }
                         }
                         catch (System.Exception ex)
                         {
