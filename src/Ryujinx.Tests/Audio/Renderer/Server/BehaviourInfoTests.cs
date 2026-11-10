@@ -5,6 +5,29 @@ namespace Ryujinx.Tests.Audio.Renderer.Server
 {
     public class BehaviourInfoTests
     {
+        [TestCase(0x3F564552, 15, true)]
+        [TestCase(0x3F764552, 15, true)]
+        [TestCase(0x40764552, 16, true)]
+        [TestCase(0x40564552, 16, false)]
+        [TestCase(0x41764552, 17, false)]
+        public void ValidatesNativeRevision16WithoutRaisingTheLegacyLimit(int magic, int number, bool supported)
+        {
+            Assert.That(BehaviourInfo.GetRevisionNumber(magic), Is.EqualTo(number));
+            Assert.That(BehaviourInfo.CheckValidRevision(magic), Is.EqualTo(supported));
+        }
+
+        [Test]
+        public void NativeRevision16KeepsRevision15FeaturesAndNativeMagic()
+        {
+            const int nativeRevision16 = 0x40764552;
+            BehaviourInfo behaviour = new();
+            behaviour.SetUserRevision(nativeRevision16);
+
+            Assert.That(behaviour.UserRevision, Is.EqualTo(nativeRevision16));
+            Assert.That(BehaviourInfo.CheckFeatureSupported(
+                behaviour.UserRevision, BehaviourInfo.BaseRevisionMagic + BehaviourInfo.Revision15), Is.True);
+        }
+
         [Test]
         public void TestCheckFeature()
         {
