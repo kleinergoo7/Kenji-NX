@@ -746,7 +746,14 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             return ReplyAndReceive(out handleIndex, handles, replyTargetHandle, timeout);
         }
 
-        public Result ReplyAndReceive(out int handleIndex, ReadOnlySpan<int> handles, int replyTargetHandle, long timeout)
+        public Result ReplyAndReceive(
+            out int handleIndex, ReadOnlySpan<int> handles, int replyTargetHandle, long timeout)
+        {
+            return ReplyAndReceive(out handleIndex, handles, replyTargetHandle, timeout, null);
+        }
+
+        internal Result ReplyAndReceive(
+            out int handleIndex, ReadOnlySpan<int> handles, int replyTargetHandle, long timeout, Action prepareReceive)
         {
             handleIndex = 0;
 
@@ -782,7 +789,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 {
                     result = replyTarget.Reply();
 
-                    if (result == Result.Success)
+                    if (result == Result.Success && prepareReceive == null)
                     {
                         KernelStatic.GetCurrentThread()?.RestoreIpcReceiveTemplate();
                     }
@@ -795,6 +802,9 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 {
                     timeout += _context.TimeManager.DefaultTimeIncrementNanoseconds;
                 }
+
+                // Managed servers reuse TLS for replies, close messages and incoming requests.
+                prepareReceive?.Invoke();
 
                 while ((result = _context.Synchronization.WaitFor(syncObjs, timeout, out handleIndex)) == Result.Success)
                 {
@@ -809,6 +819,8 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                     {
                         break;
                     }
+
+                    prepareReceive?.Invoke();
                 }
             }
 

@@ -24,6 +24,7 @@ namespace Ryujinx.HLE.HOS.Services
         // Having a size that is too low will cause failures as data copy will fail if the receiving buffer is
         // not large enough.
         private const int PointerBufferSize = 0x8000;
+        internal const int ReceiveTemplateSize = 2 * sizeof(ulong);
 
         private static uint[] DefaultCapabilities => [
             (((uint)KScheduler.CpuCoresCount - 1) << 24) + (((uint)KScheduler.CpuCoresCount - 1) << 16) + 0x63F7u,
@@ -208,9 +209,14 @@ namespace Ryujinx.HLE.HOS.Services
             ulong messagePtr = _selfThread.TlsAddress;
             _context.Syscall.SetHeapSize(out ulong heapAddr, 0x200000);
 
-            _selfProcess.CpuMemory.Write(messagePtr + 0x0, 0);
-            _selfProcess.CpuMemory.Write(messagePtr + 0x4, 2 << 10);
-            _selfProcess.CpuMemory.Write(messagePtr + 0x8, heapAddr | ((ulong)PointerBufferSize << 48));
+            void PrepareReceive()
+            {
+                Span<byte> template = stackalloc byte[ReceiveTemplateSize];
+                WriteReceiveTemplate(template, heapAddr);
+                _selfProcess.CpuMemory.Write(messagePtr, (ReadOnlySpan<byte>)template);
+            }
+
+            Action prepareReceive = PrepareReceive;
             int replyTargetHandle = 0;
 
             while (true)
@@ -244,7 +250,8 @@ namespace Ryujinx.HLE.HOS.Services
                     }
                 }
 
-                Result rc = _context.Syscall.ReplyAndReceive(out int signaledIndex, handles.AsSpan(0, handleCount), replyTargetHandle, -1);
+                Result rc = _context.Syscall.ReplyAndReceive(
+                    out int signaledIndex, handles.AsSpan(0, handleCount), replyTargetHandle, -1, prepareReceive);
 
                 _selfThread.HandlePostSyscall();
 
@@ -311,16 +318,23 @@ namespace Ryujinx.HLE.HOS.Services
                     {
                         DestroySession(handles[signaledIndex]);
                     }
-
-                    _selfProcess.CpuMemory.Write(messagePtr + 0x0, 0);
-                    _selfProcess.CpuMemory.Write(messagePtr + 0x4, 2 << 10);
-                    _selfProcess.CpuMemory.Write(messagePtr + 0x8, heapAddr | ((ulong)PointerBufferSize << 48));
                 }
 
                 ArrayPool<int>.Shared.Return(handles);
             }
 
             Dispose();
+        }
+
+        internal static void WriteReceiveTemplate(Span<byte> template, ulong pointerBufferAddress)
+        {
+            const uint SingleReceiveBuffer = 2u << 10;
+            const int ReceiveBufferSizeShift = 48;
+
+            BinaryPrimitives.WriteUInt32LittleEndian(template, 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(template[sizeof(uint)..], SingleReceiveBuffer);
+            BinaryPrimitives.WriteUInt64LittleEndian(
+                template[sizeof(ulong)..], pointerBufferAddress | ((ulong)PointerBufferSize << ReceiveBufferSizeShift));
         }
 
         private void DestroySession(int serverSessionHandle)
@@ -365,7 +379,6 @@ namespace Ryujinx.HLE.HOS.Services
                 }
             }
 
-            bool shouldReply = true;
             bool isTipcCommunication = false;
 
             _requestDataStream.SetLength(0);
@@ -464,7 +477,7 @@ namespace Ryujinx.HLE.HOS.Services
             else if (request.Type is IpcMessageType.CmifCloseSession or IpcMessageType.TipcCloseSession)
             {
                 DestroySession(serverSessionHandle);
-                shouldReply = false;
+                return false;
             }
             // If the type is past 0xF, we are using TIPC
             else if (request.Type > IpcMessageType.TipcCloseSession)
@@ -506,7 +519,7 @@ namespace Ryujinx.HLE.HOS.Services
                 MemoryStreamManager.Shared.ReleaseStream(responseStream);
             }
 
-            return shouldReply;
+            return true;
         }
 
         private IpcMessage ReadRequest()
