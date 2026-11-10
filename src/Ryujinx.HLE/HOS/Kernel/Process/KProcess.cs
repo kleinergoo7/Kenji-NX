@@ -87,7 +87,16 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
         private readonly LinkedList<KThread> _threads;
 
-        public System.Collections.Generic.IEnumerable<KThread> DebugThreads => _threads;
+        public KThread[] DebugThreads
+        {
+            get
+            {
+                lock (_threadingLock)
+                {
+                    return _threads.ToArray();
+                }
+            }
+        }
 
         public bool IsPaused { get; private set; }
 

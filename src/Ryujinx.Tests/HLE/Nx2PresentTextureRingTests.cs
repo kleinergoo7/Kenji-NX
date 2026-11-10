@@ -11,6 +11,17 @@ namespace Ryujinx.Tests.HLE
 {
     public class Nx2PresentTextureRingTests
     {
+        [TestCase(null, "1", 1, false)]
+        [TestCase("1", "1", 1, true)]
+        [TestCase(null, "8", 8, true)]
+        [TestCase("2", "8", 8, false)]
+        [TestCase("0", null, 0, false)]
+        [TestCase("invalid", null, 1, false)]
+        public void PresentThreadDumpUsesAnExplicitTrigger(string presentSetting, string periodicSetting, int present, bool expected)
+        {
+            Assert.That(INx2Vi2Session.ShouldDumpThreadsAtPresent(presentSetting, periodicSetting, present), Is.EqualTo(expected));
+        }
+
         [Test]
         public void HostFrameQueueReturnsImmediatelyAndPresentsOnlyTheAcceptedFrame()
         {

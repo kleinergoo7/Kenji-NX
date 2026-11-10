@@ -414,6 +414,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(229)]
         public ResultCode Present(ServiceCtx context) => PresentInternal(context, 229);
 
+        internal static bool ShouldDumpThreadsAtPresent(string presentSetting, string periodicSetting, int present)
+        {
+            // Legacy values above one still select a present. One enables periodic dumps.
+            string setting = presentSetting ?? (periodicSetting == "1" ? null : periodicSetting);
+            return int.TryParse(setting, out int target) && target > 0 && target == present;
+        }
+
         public ResultCode PresentInternal(ServiceCtx context, uint cmdId)
         {
             // Probe: the NX2 present request carries a GPU fence; the reference
@@ -511,10 +518,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             // Guest stacks of every application thread, once, at a choosable present count:
-            // NX2_THREAD_DUMP=<present number>. Prints the call path each parked thread is in.
-            if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") is string dumpAt &&
-                int.TryParse(dumpAt, out int dumpPresent) &&
-                Nx2Counters.Presents == dumpPresent)
+            // NX2_THREAD_DUMP_AT_PRESENT=<present number>. Prints the call path each parked thread is in.
+            if (ShouldDumpThreadsAtPresent(
+                Environment.GetEnvironmentVariable("NX2_THREAD_DUMP_AT_PRESENT"),
+                Environment.GetEnvironmentVariable("NX2_THREAD_DUMP"),
+                Nx2Counters.Presents))
             {
                 // Dump every process, not just the title: Switch 2 renders through the
                 // "Common" system process, and the GPU submit thread lives there.
@@ -537,9 +545,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             }
                         }
 
-                        if (thread.SignaledObj != null)
+                        if (thread.SignaledObj is { } signaled)
                         {
-                            waitInfo.Append($" signaled={thread.SignaledObj.GetType().Name}");
+                            waitInfo.Append($" signaled={signaled.GetType().Name}");
                         }
 
                         Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
