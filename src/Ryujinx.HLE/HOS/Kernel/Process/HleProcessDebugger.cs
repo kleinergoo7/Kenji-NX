@@ -155,8 +155,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             const uint moveX20ToX0 = 0xAA1403E0;
             const uint saveX20AndX19 = 0xA9014FF4;
             const uint loadMutexArgument = 0x9100E260; // add x0, x19, #0x38
-            const uint branchLinkMask = 0xFC000000;
             const uint branchLink = 0x94000000;
+            const uint branch = 0x14000000;
             const int savedX20Offset = 16;
             const int mutexOffset = 0x38;
             const int mutexWindowSize = 16;
@@ -210,6 +210,13 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                             trace.AppendLine($"      Guest mutex inner helper veneer=0x{innerVeneer:X} slot=0x{innerSlot:X} target=0x{innerTarget:X}");
                             if (innerTarget != 0 && (innerTarget & 3) == 0 && IsMapped(innerTarget, innerWindowSize))
                             {
+                                if (TryDecodeImmediateBranch(innerTarget, _owner.CpuMemory.Read<uint>(innerTarget), branch, out ulong body) &&
+                                    IsMapped(body, innerWindowSize))
+                                {
+                                    trace.AppendLine($"      Guest mutex inner entry 0x{innerTarget:X} branches to 0x{body:X}");
+                                    innerTarget = body;
+                                }
+
                                 trace.AppendLine($"      Guest mutex inner instructions at 0x{innerTarget:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(innerTarget, innerWindowSize))}");
                             }
                         }
@@ -246,12 +253,22 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 }
 
                 ulong pc = returnAddress - sizeof(uint);
-                uint opcode = _owner.CpuMemory.Read<uint>(pc);
-                // Shift the signed imm26 into the sign bit, then scale it by four.
-                int displacement = unchecked((int)(opcode << 6)) >> 4;
-                target = unchecked((ulong)((long)pc + displacement));
-                return (opcode & branchLinkMask) == branchLink;
+                return TryDecodeImmediateBranch(pc, _owner.CpuMemory.Read<uint>(pc), branchLink, out target);
             }
+        }
+
+        internal static bool TryDecodeImmediateBranch(ulong pc, uint instruction, uint branchOpcode, out ulong target)
+        {
+            target = 0;
+            if ((instruction & 0xFC000000) != branchOpcode)
+            {
+                return false;
+            }
+
+            // Sign-extend imm26 and scale it by the instruction size.
+            int displacement = unchecked((int)(instruction << 6)) >> 4;
+            target = unchecked((ulong)((long)pc + displacement));
+            return true;
         }
 
         internal static bool TryDecodeMutexFallbackSlot(ulong pc, uint adrp, uint ldr, uint add, uint branch, out ulong slot)
