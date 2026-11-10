@@ -73,7 +73,8 @@ namespace ARMeilleure.Translation
 
         public IPtcLoadState LoadDiskCache(PtcCacheInfo cacheInfo, bool enabled)
         {
-            _ptc.Initialize(cacheInfo, enabled, Memory.Type);
+            // Instrumented translations must never be loaded from or saved to the normal cache.
+            _ptc.Initialize(cacheInfo, enabled && NativeInterface.LockReturnProbePc == 0, Memory.Type);
             return _ptc;
         }
 
@@ -544,6 +545,15 @@ namespace ARMeilleure.Translation
 
                         if (opCode.Instruction.Emitter != null)
                         {
+                            if (!pptcTranslation && opCode is not OpCode32 &&
+                                NativeInterface.LockReturnProbePc != 0 && opCode.Address == NativeInterface.LockReturnProbePc)
+                            {
+                                context.StoreToContext();
+                                context.Call(typeof(NativeInterface).GetMethod(nameof(NativeInterface.Break)),
+                                    Const(opCode.Address), Const(NativeInterface.LockReturnProbeMarker));
+                                context.LoadFromContext();
+                            }
+
                             opCode.Instruction.Emitter(context);
                             // if we're pre-compiling PPTC functions, and we hit an Undefined instruction as the first
                             // instruction in the block, mark the function as blacklisted

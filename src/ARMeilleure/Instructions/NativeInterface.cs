@@ -9,6 +9,16 @@ namespace ARMeilleure.Instructions
 {
     static class NativeInterface
     {
+        // Outside the immediate range of a guest BRK instruction.
+        internal const int LockReturnProbeMarker = int.MinValue;
+        internal static readonly ulong LockReturnProbePc =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_LOCK_RETURN_PC"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong probePc) ? probePc : 0;
+        private static readonly ulong LockReturnProbeMutex =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_LOCK_RETURN_MUTEX"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong probeMutex) ? probeMutex : 0;
+        private static int _lockReturnProbeCount;
+
         private class ThreadContext
         {
             public ExecutionContext Context { get; }
@@ -39,6 +49,18 @@ namespace ARMeilleure.Instructions
         [UnmanagedCallersOnly]
         public static void Break(ulong address, int imm)
         {
+            if (imm == LockReturnProbeMarker)
+            {
+                ExecutionContext cpu = GetContext();
+                if ((LockReturnProbeMutex == 0 || cpu.GetX(19) == LockReturnProbeMutex) &&
+                    System.Threading.Interlocked.Increment(ref _lockReturnProbeCount) <= 8)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2 lock return pc=0x{address:X} tid={cpu.ThreadUid} w0=0x{(uint)cpu.GetX(0):X8} x19=0x{cpu.GetX(19):X} w20=0x{(uint)cpu.GetX(20):X8} tls=0x{cpu.TpidrroEl0:X}");
+                }
+                return;
+            }
+
             Statistics.PauseTimer();
 
             GetContext().OnBreak(address, imm);

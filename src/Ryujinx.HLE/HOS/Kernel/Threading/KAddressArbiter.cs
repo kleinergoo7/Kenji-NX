@@ -10,6 +10,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
     class KAddressArbiter
     {
         private const int HasListenersMask = 0x40000000;
+        private static readonly ulong TracedMutexAddress =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_MUTEX_TRACE_ADDR"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong traceAddress) ? traceAddress : 0;
+        private static int _mutexTraceCount;
 
         private readonly KernelContext _context;
 
@@ -71,6 +75,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             currentThread.ThreadHandleForUserMutex = requesterHandle;
 
             mutexOwner.AddMutexWaiter(currentThread);
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"wait ownerTid={mutexOwner.ThreadUid} ownerHandle=0x{ownerHandle:X} requester=0x{requesterHandle:X}");
+            }
 
             currentThread.Reschedule(ThreadSchedState.Paused);
 
@@ -78,6 +86,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             _context.CriticalSection.Enter();
 
             currentThread.MutexOwner?.RemoveMutexWaiter(currentThread);
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"resume result=0x{currentThread.ObjSyncResult.ErrorCode:X}");
+            }
 
             _context.CriticalSection.Leave();
 
@@ -105,10 +117,21 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 newOwnerThread.ObjSyncResult = result;
             }
 
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"unlock nextTid={newOwnerThread?.ThreadUid} word=0x{mutexValue:X8} result=0x{result.ErrorCode:X}");
+            }
             _context.CriticalSection.Leave();
 
             return result;
         }
+
+        private static bool ShouldTraceMutex(ulong address) =>
+            TracedMutexAddress != 0 && address == TracedMutexAddress && Interlocked.Increment(ref _mutexTraceCount) <= 64;
+
+        private static void TraceMutex(ulong address, string detail) =>
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
+                $"NX2 mutex handoff addr=0x{address:X} tid={KernelStatic.GetCurrentThread().ThreadUid} {detail}");
 
         public Result WaitProcessWideKeyAtomic(ulong mutexAddress, ulong condVarAddress, int threadHandle, long timeout)
         {
@@ -126,7 +149,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 return KernelResult.ThreadTerminating;
             }
 
-            (int mutexValue, _) = MutexUnlock(currentThread, mutexAddress);
+            (int mutexValue, KThread newOwnerThread) = MutexUnlock(currentThread, mutexAddress);
 
             KernelTransfer.KernelToUser(condVarAddress, 1);
 
@@ -135,6 +158,11 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 _context.CriticalSection.Leave();
 
                 return KernelResult.InvalidMemState;
+            }
+
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"condvar-release nextTid={newOwnerThread?.ThreadUid} word=0x{mutexValue:X8}");
             }
 
             currentThread.MutexAddress = mutexAddress;
