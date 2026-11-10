@@ -214,7 +214,8 @@ namespace Ryujinx.HLE.Loaders.Processes
         internal bool LoadNup(NupArchive archive)
         {
             using IFileSystem exeFs = archive.OpenExeFs();
-            ProcessResult processResult = exeFs.LoadUnpackedProgram(_device);
+            ProcessResult processResult = exeFs.LoadUnpackedProgram(
+                _device, includeFallbackTemporaryStorage: _device.CompatibilityProfile.Generation == ConsoleGeneration.Switch2);
             if (processResult.ProcessId == 0)
             {
                 return false;

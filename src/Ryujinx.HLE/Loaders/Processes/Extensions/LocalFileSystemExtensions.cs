@@ -37,7 +37,7 @@ namespace Ryujinx.HLE.Loaders.Processes
             return processResult;
         }
 
-        internal static ProcessResult LoadUnpackedProgram(this IFileSystem exeFs, Switch device)
+        internal static ProcessResult LoadUnpackedProgram(this IFileSystem exeFs, Switch device, bool includeFallbackTemporaryStorage = false)
         {
             MetaLoader metaLoader = exeFs.GetNpdm();
             BlitStruct<ApplicationControlProperty> nacpData = new(1);
@@ -47,7 +47,12 @@ namespace Ryujinx.HLE.Loaders.Processes
 
             if (programId != 0)
             {
-                ProcessLoaderHelper.EnsureSaveData(device, new ApplicationId(programId), nacpData);
+                LibHac.Result result = ProcessLoaderHelper.EnsureSaveData(device, new ApplicationId(programId), nacpData, includeFallbackTemporaryStorage);
+
+                if (includeFallbackTemporaryStorage && result.IsFailure())
+                {
+                    return ProcessResult.Failed;
+                }
             }
 
             return exeFs.Load(device, nacpData, metaLoader, 0);
