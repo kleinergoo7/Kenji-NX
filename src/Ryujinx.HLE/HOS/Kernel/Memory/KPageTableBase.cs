@@ -935,6 +935,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
             return Result.Success;
         }
 
+        public Result SetGpuMemoryAttribute(ulong address, ulong size, uint mask, uint value)
+        {
+            lock (_blockManager)
+            {
+                return _blockManager.SetGpuMemoryAttribute(address, size, mask, value);
+            }
+        }
+
         public Result SetMemoryAttribute(ulong address, ulong size, MemoryAttribute attributeMask, MemoryAttribute attributeValue)
         {
             lock (_blockManager)

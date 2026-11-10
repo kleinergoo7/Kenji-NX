@@ -2708,10 +2708,8 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         private static int _gpuAttributeLogs;
 
         [Svc(0x80)]
-        public Result SetGpuMemoryAttribute(ulong address, ulong size, ulong mask, ulong attribute)
+        public Result SetGpuMemoryAttribute(ulong address, ulong size, uint mask, uint attribute)
         {
-            // Switch 2 GPU-attributed mapping (T239 GPU-MMIO path). Switch 1 profiles
-            // are refused: without GPU attributes the mapping is meaningless there.
             KProcess process = KernelStatic.GetCurrentProcess();
 
             if (process?.CompatibilityProfile?.SupportsGpuMemoryAttributes != true)
@@ -2721,18 +2719,17 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 return KernelResult.InvalidCombination;
             }
 
-            // Env-gated debug dump (reference design): address/size/mask/attribute.
+            Result result = process.MemoryManager.SetGpuMemoryAttribute(address, size, mask, attribute);
+
             int n = System.Threading.Interlocked.Increment(ref _gpuAttributeLogs);
 
             if (System.Environment.GetEnvironmentVariable("NX2_SVC_LOG") == "1" && (n <= 4 || n % 500 == 0))
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
-                    $"NX2 svc80 map addr=0x{address:X} size=0x{size:X} mask=0x{mask:X} attr=0x{attribute:X} n={n}");
+                    $"NX2 svc80 addr=0x{address:X} size=0x{size:X} mask=0x{mask:X} attr=0x{attribute:X} result={result} n={n}");
             }
 
-            KMemoryPermission permission = (KMemoryPermission)((uint)mask & (uint)KMemoryPermission.UserMask);
-
-            return KPageTableBase.MapIoMemory((long)address, (long)size, permission);
+            return result;
         }
 
         [Svc(0x7d)]

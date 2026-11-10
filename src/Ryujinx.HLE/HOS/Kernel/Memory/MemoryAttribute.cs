@@ -13,6 +13,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
         DeviceMapped = 1 << 2,
         Uncached = 1 << 3,
         PermissionLocked = 1 << 4,
+        GpuAccessible = 1 << 5,
 
         IpcAndDeviceMapped = IpcMapped | DeviceMapped,
         BorrowedAndIpcMapped = Borrowed | IpcMapped,
