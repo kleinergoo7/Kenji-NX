@@ -1,10 +1,12 @@
 using Ryujinx.Common;
+using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Kernel.Common;
 using Ryujinx.HLE.HOS.Kernel.Memory;
 using Ryujinx.HLE.HOS.Kernel.Process;
 using Ryujinx.HLE.HOS.Kernel.Threading;
 using Ryujinx.Horizon.Common;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Ryujinx.HLE.HOS.Kernel.Ipc
 {
@@ -20,7 +22,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
             (MemoryState)0xfffce5d4 //This is invalid, shouldn't be accessed.
         ];
 
-        private readonly struct Message
+        private static int _pointerTransferFailures;
+
+        internal readonly struct Message
         {
             public ulong Address { get; }
             public ulong Size { get; }
@@ -47,6 +51,12 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
                 request.CustomCmdBuffAddr,
                 request.CustomCmdBuffSize)
             { }
+
+            internal Message(ulong address, ulong size)
+            {
+                Address = address;
+                Size = size;
+            }
         }
 
         private readonly struct MessageHeader
@@ -139,7 +149,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
             }
         }
 
-        private struct PointerBufferDesc
+        internal struct PointerBufferDesc
         {
             public uint ReceiveIndex { get; }
 
@@ -428,13 +438,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
                         descriptor,
                         serverMsg,
                         serverHeader.ReceiveListType,
-                        serverHeader.MessageSizeInWords,
+                        clientHeader.MessageSizeInWords,
                         receiveList,
                         ref recvListDstOffset,
                         out ulong recvListBufferAddress);
 
                     if (clientResult != Result.Success)
                     {
+                        LogPointerTransferFailure("request", clientThread, clientHeader, serverHeader, descriptor, serverMsg);
                         CleanUpForError();
 
                         return serverResult;
@@ -794,13 +805,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
                         descriptor,
                         clientMsg,
                         clientHeader.ReceiveListType,
-                        clientHeader.MessageSizeInWords,
+                        serverHeader.MessageSizeInWords,
                         receiveList,
                         ref recvListDstOffset,
                         out recvListBufferAddress);
 
                     if (clientResult != Result.Success)
                     {
+                        LogPointerTransferFailure("reply", request.ClientThread, serverHeader, clientHeader, descriptor, clientMsg);
                         CleanUpForError();
 
                         return serverResult;
@@ -989,11 +1001,23 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
             return receiveList;
         }
 
-        private static Result GetReceiveListAddress(
+        private static void LogPointerTransferFailure(
+            string direction, KThread client, MessageHeader source, MessageHeader destination, PointerBufferDesc pointer, Message buffer)
+        {
+            if (Nx2ProbeLog.Enabled("NX2_IPC_POINTER_LOG") && Interlocked.Increment(ref _pointerTransferFailures) <= 16)
+            {
+                Logger.Warning?.Print(LogClass.KernelIpc,
+                    $"HIPC {direction} pointer allocation failed for {client.Owner.Pid}:{client.ThreadUid} ({client.GetThreadName()}), " +
+                    $"sourceHeader={source.Word0:X8}/{source.Word1:X8} receiveMode={destination.ReceiveListType} " +
+                    $"receiveIndex={pointer.ReceiveIndex} pointerSize=0x{pointer.BufferSize:X} destinationSize=0x{buffer.Size:X}.");
+            }
+        }
+
+        internal static Result GetReceiveListAddress(
             PointerBufferDesc descriptor,
             Message message,
             uint recvListType,
-            uint messageSizeInWords,
+            uint sourceMessageSizeInWords,
             ulong[] receiveList,
             ref uint dstOffset,
             out ulong address)
@@ -1012,7 +1036,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
 
                 if (recvListType == 1)
                 {
-                    recvListBaseAddr = message.Address + messageSizeInWords * 4;
+                    // Like Atmosphère Mesosphère, start inline pointer data after the incoming message.
+                    recvListBaseAddr = message.Address + sourceMessageSizeInWords * sizeof(uint);
                     recvListEndAddr = message.Address + message.Size;
                 }
                 else /* if (recvListType == 2) */
@@ -1035,13 +1060,13 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
 
                 ulong endAddress = recvListBufferAddress + descriptor.BufferSize;
 
-                dstOffset = (uint)endAddress - (uint)recvListBaseAddr;
-
-                if (recvListBufferAddress + descriptor.BufferSize <= recvListBufferAddress ||
-                    recvListBufferAddress + descriptor.BufferSize > recvListEndAddr)
+                if (endAddress <= recvListBufferAddress || endAddress > recvListEndAddr)
                 {
                     return KernelResult.OutOfResource;
                 }
+
+                // A successful allocation is bounded by the destination buffer size.
+                dstOffset = (uint)(endAddress - recvListBaseAddr);
             }
             else /* if (recvListType > 2) */
             {
