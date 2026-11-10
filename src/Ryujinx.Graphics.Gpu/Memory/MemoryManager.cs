@@ -1149,7 +1149,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
                 if (gpuSize > available)
                 {
-                    gpuSize = available;
+                    return false;
                 }
 
                 MapLocked(handle, gpuStart, memory.Start + offset, gpuSize);

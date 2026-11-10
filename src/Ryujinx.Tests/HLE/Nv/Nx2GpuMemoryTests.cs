@@ -8,6 +8,32 @@ namespace Ryujinx.Tests.HLE.Nv
     public class Nx2GpuMemoryTests
     {
         [Test]
+        public void RejectsOversizedMappingWithoutReplacingExistingAlias()
+        {
+            const ulong original = 0x400000;
+            const ulong replacement = 0x500000;
+            const ulong alias = 0x600000;
+            const ulong page = 0x1000;
+            uint originalHandle = Nx2GpuMemory.Register(original, page);
+            uint replacementHandle = Nx2GpuMemory.Register(replacement, 2 * page);
+
+            try
+            {
+                Assert.IsTrue(Nx2GpuMemory.Map(alias, page, originalHandle, 0));
+                Assert.IsFalse(Nx2GpuMemory.Map(alias, 2 * page, replacementHandle, page));
+                AssertMapping(alias, original);
+                Assert.IsFalse(Nx2GpuMemory.TryResolveMapping(alias + page, out _));
+                Assert.IsTrue(Nx2GpuMemory.Map(alias, page, replacementHandle, page));
+                AssertMapping(alias, replacement + page);
+            }
+            finally
+            {
+                Nx2GpuMemory.Destroy(originalHandle);
+                Nx2GpuMemory.Destroy(replacementHandle);
+            }
+        }
+
+        [Test]
         public void DestroyRemovesAliasesAndPreservesReplacementMappings()
         {
             const ulong original = 0x100000;

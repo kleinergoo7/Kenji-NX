@@ -12,7 +12,9 @@ The working branch is `codex/nx2-submission-progress` on `kleinergoo7/Kenji-NX`.
 | Mario Kart World | BLOCKED | The paired guest run on `37c78aa` recorded eight GPFIFO submissions, zero tracked draws and 3,096 VI2 presents. |
 | Ocarina of Time | BLOCKED | The same paired build mounted the standalone NUP update and reached the SDK heap mutex fallback abort before its first present. |
 
-The solution built successfully and all 61 HLE tests passed. The GPU memory changes still need a paired guest run. A Switch 1 title was not run during this stage.
+GPU mapping now rejects a request that extends beyond its backing allocation. Sparse map IPC command 216 validates its request buffer and reports the completed prefix if an entry fails. The registry regression test verifies that a rejected oversized map preserves the prior alias.
+
+The solution built successfully and all 62 HLE tests passed. Sparse map IPC behavior still needs guest validation. In the paired run on `d2b5fbf`, Kart reached present 120 and Ocarina reproduced the same startup abort. A Switch 1 title was not run during this stage.
 
 **Date:** 2026-05-08 (workspace snapshot)  
 **Workspace:** `/home/reng/projects/ryujinx-nx2` · `Ryubing` branch `nx2-probes-wip` @ `282029a88` (snapshot) / base probe commit `ad8d88186`  
