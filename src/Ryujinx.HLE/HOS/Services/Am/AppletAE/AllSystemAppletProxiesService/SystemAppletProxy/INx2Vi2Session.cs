@@ -157,7 +157,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 $"NX2 progress t={_progressTicks / 60}s submits={Nx2Counters.Submits} presents={Nx2Counters.Presents} sparseCommit={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseCommitted >> 20}MiB dropped={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseDropped >> 20}MiB draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} unbound={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.UnboundDrops} mme={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoHits}+{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoMisses} 3d={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} emitted=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}] sp=[{SpValues()}] hot=[{HotPcs()}] gpuid=[{INx2GpuSession.DescribeSignals()}] fs=[{Ryujinx.HLE.HOS.Services.Fs.FsLoaderProgress.Describe()}] gsvmap=[{INx2GpuSession.DescribeMapTiming()}] bulk=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2BulkCounters.Describe()}]");
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                 $"NX2 calls {calls} ioctls=[{ioctls}] gpu=[{gpu}] sites=[{sites}] missing=[{missing}]");
-            try { Nx2ThreadDump.MaybeLogBuildIdentity(); Nx2ThreadDump.Tick(System.Threading.Volatile.Read(ref _device)?.System, _progressTicks / 60); } catch { }
+            try
+            { Nx2ThreadDump.MaybeLogBuildIdentity(); Nx2ThreadDump.Tick(System.Threading.Volatile.Read(ref _device)?.System, _progressTicks / 60); }
+            catch { }
         }
 
         [CommandTipc(0)]
@@ -772,42 +774,39 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 return;
             }
 
-            // Throttle: the CPU unswizzle copies up to ~16 MB per frame.
-            if (System.Threading.Interlocked.Increment(ref _presentCount) % 8 != 0)
-            {
-                return;
-            }
-
-            // The guest can reuse the image after the IPC reply. Snapshot it first.
-            byte[] source = new byte[(int)size];
-
-            try
-            {
-                process.CpuMemory.Read(address, source.AsSpan(0, (int)size));
-            }
-            catch (Exception ex)
-            {
-                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                    $"NX2 composite image={imageId} read of 0x{size:X} bytes at 0x{address:X} failed: {ex.GetType().Name}: {ex.Message}");
-
-                return;
-            }
-
             IRenderer renderer = context.Device.Gpu.Renderer;
-            context.Device.Gpu.Window.TryEnqueueHostFrame(swapBuffers =>
+            context.Device.Gpu.Window.TryCaptureHostFrame(() =>
             {
+                // The guest can reuse the image after the IPC reply. Snapshot it before returning.
+                byte[] source = new byte[(int)size];
+
                 try
                 {
-                    PresentSnapshot(renderer, swapBuffers, source, (int)pixelBytes, width, height,
-                        pitch, blockHeightLog2, imageId, address, pid);
+                    process.CpuMemory.Read(address, source.AsSpan());
                 }
                 catch (Exception ex)
                 {
-                    if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
-                    {
-                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
-                    }
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                        $"NX2 composite image={imageId} read of 0x{size:X} bytes at 0x{address:X} failed: {ex.GetType().Name}: {ex.Message}");
+
+                    return null;
                 }
+
+                return swapBuffers =>
+                {
+                    try
+                    {
+                        PresentSnapshot(renderer, swapBuffers, source, (int)pixelBytes, width, height,
+                            pitch, blockHeightLog2, imageId, address, pid);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
+                        {
+                            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
+                        }
+                    }
+                };
             });
         }
 
@@ -943,7 +942,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static uint _previousFenceId = uint.MaxValue;
         private static int _event11Logs;
         private static uint _previousFenceValue;
-        private static int _presentCount;
 
         private static int _pcSamples;
 

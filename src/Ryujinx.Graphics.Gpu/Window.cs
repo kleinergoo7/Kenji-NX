@@ -86,6 +86,7 @@ namespace Ryujinx.Graphics.Gpu
         }
 
         private readonly ConcurrentQueue<PresentationTexture> _frameQueue;
+        private readonly object _hostFrameCaptureLock = new();
         private Action<Action> _pendingHostFrame;
 
         private int _framesAvailable;
@@ -256,12 +257,32 @@ namespace Ryujinx.Graphics.Gpu
         {
             ArgumentNullException.ThrowIfNull(present);
 
-            if (Interlocked.CompareExchange(ref _pendingHostFrame, present, null) != null)
+            return TryCaptureHostFrame(() => present);
+        }
+
+        /// <summary>
+        /// Captures a frame on the caller's thread only when the host queue has room.
+        /// A null capture leaves the queue empty.
+        /// </summary>
+        public bool TryCaptureHostFrame(Func<Action<Action>> capture)
+        {
+            lock (_hostFrameCaptureLock)
             {
-                return false;
+                if (Volatile.Read(ref _pendingHostFrame) != null)
+                {
+                    return false;
+                }
+
+                Action<Action> present = capture();
+                if (present == null)
+                {
+                    return false;
+                }
+
+                Volatile.Write(ref _pendingHostFrame, present);
+                SignalFrameReady();
             }
 
-            SignalFrameReady();
             _context.GPFifo.Interrupt();
             return true;
         }

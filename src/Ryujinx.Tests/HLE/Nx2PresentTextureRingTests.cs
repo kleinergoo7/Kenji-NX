@@ -36,6 +36,32 @@ namespace Ryujinx.Tests.HLE
         }
 
         [Test]
+        public void HostFrameCaptureRunsOnlyWhenTheQueueHasRoom()
+        {
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer);
+            int presents = 0;
+
+            Assert.IsFalse(gpu.Window.TryCaptureHostFrame(() => null));
+            Assert.IsFalse(gpu.Window.ConsumeFrameAvailable());
+
+            Assert.IsTrue(gpu.Window.TryCaptureHostFrame(() => _ => presents++));
+            Assert.IsFalse(gpu.Window.TryCaptureHostFrame(() =>
+            {
+                Assert.Fail("A pending frame must prevent a second snapshot.");
+                return null;
+            }));
+
+            Assert.IsTrue(gpu.Window.ConsumeFrameAvailable());
+            gpu.Window.Present(() => { });
+            Assert.AreEqual(1, presents);
+            Assert.IsTrue(gpu.Window.TryCaptureHostFrame(() => _ => presents++));
+            Assert.IsTrue(gpu.Window.ConsumeFrameAvailable());
+            gpu.Window.Present(() => { });
+            Assert.AreEqual(2, presents);
+        }
+
+        [Test]
         public void ReusesThreeTexturesAndReleasesThemWhenSizeChanges()
         {
             List<ITexture> created = [];
