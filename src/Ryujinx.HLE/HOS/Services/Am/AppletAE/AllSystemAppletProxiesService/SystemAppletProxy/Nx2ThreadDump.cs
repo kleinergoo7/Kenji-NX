@@ -128,13 +128,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         string line = $"NX2_THREAD {tag} pid={proc.Key} name={proc.Value.Name} uid={thread.ThreadUid} tname={tname} " +
                                       $"sched={thread.SchedFlags} waitingSync={waitingSync} waitArb={waitingInArbitration}{mutexInfo} " +
                                       $"signaled={thread.SignaledObj?.GetType().Name ?? "-"} waits=[{string.Join("; ", waits)}]";
-                        bool focus = focusNames.Any(n => tname.Contains(n, StringComparison.OrdinalIgnoreCase)) || tname.Length == 0;
+                        bool focus = focusNames.Any(n => tname.Contains(n, StringComparison.OrdinalIgnoreCase)) ||
+                            tname.Length == 0 || IsBaseProcExecutor(tname);
                         if (focus || waitingSync)
                             Logger.Warning?.Print(LogClass.ServiceAm, line);
 
                         if (includeStacks && proc.Key == applicationPid && stacksRemaining > 0 &&
-                            (waitingSync || waitingInArbitration) && !thread.TerminationRequested &&
-                            ShouldDumpStallStack(tname))
+                            !thread.TerminationRequested && ShouldDumpStallStack(tname, waitingSync || waitingInArbitration))
                         {
                             stacksRemaining--;
                             DumpStallStack(thread, tag);
@@ -147,11 +147,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             catch (Exception e) { Logger.Warning?.Print(LogClass.ServiceAm, $"NX2_THREAD dump failed: {e.Message}"); }
         }
 
-        internal static bool ShouldDumpStallStack(string name)
+        private static bool IsBaseProcExecutor(string name) => name.StartsWith("BaseProcExecutor", StringComparison.Ordinal);
+
+        internal static bool ShouldDumpStallStack(string name, bool waiting)
         {
-            return name.Contains("MainThread", StringComparison.OrdinalIgnoreCase) ||
+            // The executor signals the module worker, so sample it even if it is idle or running.
+            return IsBaseProcExecutor(name) || (waiting && (
+                name.Contains("MainThread", StringComparison.OrdinalIgnoreCase) ||
                 name.StartsWith("ModuleSystemWorker", StringComparison.Ordinal) ||
-                name.StartsWith("nn.npln.", StringComparison.Ordinal);
+                name.StartsWith("nn.npln.", StringComparison.Ordinal)));
         }
 
         private static void DumpStallStack(KThread thread, string tag)
