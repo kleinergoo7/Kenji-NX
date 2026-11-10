@@ -190,17 +190,48 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             if (TryGetBranchTarget(fallbackReturn, out ulong helper) && IsMapped(helper, helperWindowSize))
             {
                 trace.AppendLine($"      Guest mutex fallback instructions at 0x{helper:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(helper, helperWindowSize))}");
-                if (TryDecodeMutexFallbackSlot(helper, _owner.CpuMemory.Read<uint>(helper),
-                    _owner.CpuMemory.Read<uint>(helper + 4), _owner.CpuMemory.Read<uint>(helper + 8),
-                    _owner.CpuMemory.Read<uint>(helper + 12), out ulong slot) && IsMapped(slot, sizeof(ulong)))
+                if (TryResolveVeneer(helper, out ulong slot, out ulong target))
                 {
-                    ulong target = _owner.CpuMemory.Read<ulong>(slot);
                     trace.AppendLine($"      Guest mutex fallback slot=0x{slot:X} target=0x{target:X}");
                     if ((target & 3) == 0 && target != 0 && IsMapped(target, helperWindowSize))
                     {
                         trace.AppendLine($"      Guest mutex resolved instructions at 0x{target:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(target, helperWindowSize))}");
+
+                        // The observed SDK wrapper passes the mutex's lock word at +4
+                        // to an inner helper before testing its return value.
+                        const int argumentOffset = 0x18;
+                        const int innerReturnOffset = 0x20;
+                        const uint addLockWordOffset = 0x91001000;
+                        const int innerWindowSize = 128;
+                        if (_owner.CpuMemory.Read<uint>(target + argumentOffset) == addLockWordOffset &&
+                            TryGetBranchTarget(target + innerReturnOffset, out ulong innerVeneer) &&
+                            TryResolveVeneer(innerVeneer, out ulong innerSlot, out ulong innerTarget))
+                        {
+                            trace.AppendLine($"      Guest mutex inner helper veneer=0x{innerVeneer:X} slot=0x{innerSlot:X} target=0x{innerTarget:X}");
+                            if (innerTarget != 0 && (innerTarget & 3) == 0 && IsMapped(innerTarget, innerWindowSize))
+                            {
+                                trace.AppendLine($"      Guest mutex inner instructions at 0x{innerTarget:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(innerTarget, innerWindowSize))}");
+                            }
+                        }
                     }
                 }
+            }
+
+            bool TryResolveVeneer(ulong address, out ulong slot, out ulong target)
+            {
+                slot = 0;
+                target = 0;
+                if (!IsMapped(address, 4 * sizeof(uint)) ||
+                    !TryDecodeMutexFallbackSlot(address, _owner.CpuMemory.Read<uint>(address),
+                        _owner.CpuMemory.Read<uint>(address + 4), _owner.CpuMemory.Read<uint>(address + 8),
+                        _owner.CpuMemory.Read<uint>(address + 12), out slot) ||
+                    !IsMapped(slot, sizeof(ulong)))
+                {
+                    return false;
+                }
+
+                target = _owner.CpuMemory.Read<ulong>(slot);
+                return true;
             }
 
             bool IsMapped(ulong address, int size) =>

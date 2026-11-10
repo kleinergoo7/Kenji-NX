@@ -778,8 +778,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 return;
             }
 
-            byte[] source = RentBuffer(ref _sourceBuffer, (int)size);
-            byte[] linear = RentBuffer(ref _linearBuffer, (int)pixelBytes);
+            // The guest can reuse the image after the IPC reply. Snapshot it first.
+            byte[] source = new byte[(int)size];
 
             try
             {
@@ -793,6 +793,29 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 return;
             }
 
+            IRenderer renderer = context.Device.Gpu.Renderer;
+            context.Device.Gpu.Window.TryEnqueueHostFrame(swapBuffers =>
+            {
+                try
+                {
+                    PresentSnapshot(renderer, swapBuffers, source, (int)pixelBytes, width, height,
+                        pitch, blockHeightLog2, imageId, address, pid);
+                }
+                catch (Exception ex)
+                {
+                    if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
+                    }
+                }
+            });
+        }
+
+        private static void PresentSnapshot(IRenderer renderer, Action swapBuffers, byte[] source,
+            int pixelBytes, uint width, uint height, ulong pitch, uint blockHeightLog2, uint imageId, ulong address, ulong pid)
+        {
+            PresentTextureRing textures = PresentTextures.GetValue(renderer, static _ => new());
+            byte[] linear = textures.GetLinearBuffer(pixelBytes);
             Nx2NativeObjects.Unswizzle(source, linear, (int)width, (int)height, pitch, (int)blockHeightLog2);
 
             RunFrameDumpControlOnce();
@@ -803,7 +826,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             // Per-composite stats + dumps (env-gated, observe-only). NX2_FRAME_DUMP enables dumps+stats.
             if (Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_FRAME_DUMP"))
             {
-                (ulong hash, double nonzeroFrac) = ComputeFrameStats(linear, (int)pixelBytes);
+                (ulong hash, double nonzeroFrac) = ComputeFrameStats(linear, pixelBytes);
                 bool logStats = compositeN <= 30 || compositeN % 100 == 0;
                 if (logStats)
                 {
@@ -838,7 +861,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 if (tag != null && System.Threading.Volatile.Read(ref _frameDumps) <= 6)
                 {
                     string path = Ryujinx.Common.Nx2LogConfinement.ResolveLogPath($"frame-{tag}-c{compositeN}-img{imageId}-{(int)width}x{(int)height}.rgba");
-                    System.IO.File.WriteAllBytes(path, linear.AsSpan(0, (int)pixelBytes).ToArray());
+                    System.IO.File.WriteAllBytes(path, linear.AsSpan(0, pixelBytes).ToArray());
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                         $"NX2 frame dump {tag} c#{compositeN} -> {path} ({(int)width}x{(int)height} nonzero={nonzeroFrac:F6} hash=0x{hash:X16})");
                 }
@@ -868,35 +891,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 SwizzleComponent.Blue,
                 SwizzleComponent.Alpha);
 
-            // The scratch buffer is reused by later guest presents. Queue a private copy
-            // so the IPC reply never waits on host presentation or a renderer command.
-            byte[] frame = linear.AsSpan(0, (int)pixelBytes).ToArray();
-            IRenderer renderer = context.Device.Gpu.Renderer;
-            if (!context.Device.Gpu.Window.TryEnqueueHostFrame(swapBuffers =>
-            {
-                try
-                {
-                    ITexture texture = PresentTextures.GetValue(renderer, static _ => new()).Rent(renderer, info);
-                    texture.SetData(MemoryOwner<byte>.RentCopy(frame));
-                    renderer.Window.Present(texture, crop, swapBuffers);
-                }
-                catch (Exception ex)
-                {
-                    if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
-                    {
-                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
-                    }
-                }
-            }))
-            {
-                return;
-            }
+            ITexture texture = textures.Rent(renderer, info);
+            texture.SetData(MemoryOwner<byte>.RentCopy(linear.AsSpan(0, pixelBytes)));
+            renderer.Window.Present(texture, crop, swapBuffers);
 
             if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 composite image={imageId} addr=0x{address:X} {width}x{height} blockLog2={blockHeightLog2} pid={pid}");
             }
-
         }
 
         private static int _frameDumps;
@@ -915,6 +917,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             private readonly ITexture[] _textures = new ITexture[3];
             private TextureCreateInfo _info;
             private int _index;
+            private byte[] _linearBuffer;
+
+            public byte[] GetLinearBuffer(int size) => RentBuffer(ref _linearBuffer, size);
 
             public ITexture Rent(IRenderer renderer, TextureCreateInfo info)
             {
@@ -938,8 +943,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static uint _previousFenceId = uint.MaxValue;
         private static int _event11Logs;
         private static uint _previousFenceValue;
-        private static byte[] _sourceBuffer;
-        private static byte[] _linearBuffer;
         private static int _presentCount;
 
         private static int _pcSamples;
