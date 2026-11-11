@@ -136,6 +136,43 @@ namespace Ryujinx.Tests.HLE
             Assert.That(memory.Read<int>(Page), Is.EqualTo(456));
         }
 
+        [Test]
+        public void AmpereEntryBoundaryBarrierKeepsFollowingMethodsAligned()
+        {
+            const ulong Page = 0x1000;
+            const ulong Commands = 0x1100;
+            const int BarrierWord = 0x28000000;
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = true };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel channel = gpu.CreateChannel();
+            channel.BindMemory(memory);
+
+            // The same word begins the first two entries and appears as data in
+            // the last entry. A split semaphore packet must survive the boundary.
+            int[] words = [BarrierWord, BarrierWord, 0x20040004, 0, 0x1008, BarrierWord, 0x01000002];
+            for (int index = 0; index < words.Length; index++)
+            {
+                memory.Write(Commands + (ulong)index * sizeof(int), words[index]);
+            }
+
+            const ulong OneWord = 1UL << 42;
+            const ulong NoPrefetch = 1UL << 63;
+            channel.PushEntries([
+                Commands | OneWord,
+                (Commands + 4) | (3 * OneWord) | NoPrefetch,
+                (Commands + 16) | (3 * OneWord),
+            ]);
+            gpu.GPFifo.DispatchCalls();
+
+            Assert.That(memory.Read<int>(0x1008), Is.EqualTo(BarrierWord));
+        }
+
         [TestCase(false, false, true, 4)]
         [TestCase(false, true, true, 3)]
         [TestCase(true, false, true, 4)]

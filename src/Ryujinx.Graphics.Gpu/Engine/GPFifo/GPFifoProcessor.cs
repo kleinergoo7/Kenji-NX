@@ -590,6 +590,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 {
                     CompressedMethod meth = Unsafe.As<int, CompressedMethod>(ref command);
 
+                    // WORKAROUND: Switch 2 FIFO captures contain the MEMBAR operand
+                    // as a standalone word at the start of a guest entry. Interpreting
+                    // it as an incrementing header consumes the following copy methods.
+                    const int StandaloneMembarOperand = 0x28000000;
+                    if (_context.IsAmpere && index == 0 && baseGpuVa != ulong.MaxValue &&
+                        command == StandaloneMembarOperand && commandBuffer.Length <= meth.MethodCount)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu,
+                            $"NX2 FIFO WORKAROUND: skipped standalone MEMBAR operand at 0x{gpuVa:X}");
+                        continue;
+                    }
+
                     if (TryFastUniformBufferUpdate(meth, commandBuffer, index))
                     {
                         index += meth.MethodCount;
