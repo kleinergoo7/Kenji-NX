@@ -243,7 +243,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             {
                 if (entry.Type == CommandBufferType.Callback)
                 {
-                    entry.Callback?.Invoke();
+                    GPFifoProcessor.RunAfterPendingCommands(_context, entry.Callback);
 
                     continue;
                 }
@@ -256,8 +256,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     flushCommandBuffer = false;
                 }
 
-                ReadOnlySpan<int> words = entry.Fetch(entry.Processor.MemoryManager, flushCommandBuffer);
-
                 // If we are changing the current channel,
                 // we need to force all the host state to be updated.
                 if (_prevChannelProcessor != entry.Processor)
@@ -266,7 +264,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     entry.Processor.ForceAllDirty();
                 }
 
-                entry.Processor.Process(entry.EntryAddress, words);
+                if (entry.Words != null)
+                {
+                    entry.Processor.Process(entry.EntryAddress, entry.Words);
+                }
+                else
+                {
+                    // Capture this entry, not the loop's next dequeue. The processor may
+                    // postpone the memory read until a semaphore acquire has completed.
+                    CommandBuffer buffer = entry;
+                    entry.Processor.Process(entry.EntryAddress,
+                        () => buffer.Fetch(buffer.Processor.MemoryManager, flushCommandBuffer));
+                }
             }
 
             GPFifoProcessor.TryResumeAll(_context);

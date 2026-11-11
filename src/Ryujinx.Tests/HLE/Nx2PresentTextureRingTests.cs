@@ -136,6 +136,161 @@ namespace Ryujinx.Tests.HLE
             Assert.That(memory.Read<int>(Page), Is.EqualTo(456));
         }
 
+        [TestCase(false, false, true, 4)]
+        [TestCase(false, true, true, 3)]
+        [TestCase(true, false, true, 4)]
+        [TestCase(true, true, true, 3)]
+        [TestCase(false, false, false, 3)]
+        [TestCase(false, true, false, 3)]
+        [TestCase(true, false, false, 3)]
+        [TestCase(true, true, false, 3)]
+        public void SemaphoreStallPreservesGuestCommandBufferFetchTiming(bool ampere, bool prefetch, bool blocked, int expected)
+        {
+            const ulong Page = 0x1000;
+            const ulong Commands = 0x1100;
+            const int SemaphorePacket = 0x20040004;
+            const int Acquire = 0x01000001;
+            const int Release = 0x01000002;
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = ampere };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel channel = gpu.CreateChannel();
+            channel.BindMemory(memory);
+
+            const int BufferCount = 2;
+            const ulong BufferStride = 0x100;
+            ulong[] entries = new ulong[BufferCount];
+            for (int buffer = 0; buffer < BufferCount; buffer++)
+            {
+                ulong address = Commands + (ulong)buffer * BufferStride;
+                int[] release = [SemaphorePacket, 0, 0x1008 + buffer * sizeof(int), 3 + buffer, Release];
+                for (int index = 0; index < release.Length; index++)
+                {
+                    memory.Write(address + (ulong)index * sizeof(int), release[index]);
+                }
+
+                // GPEntry bit 63 disables prefetch; its length is encoded in bits 42..62.
+                entries[buffer] = address | ((ulong)release.Length << 42) | (prefetch ? 0 : 1UL << 63);
+            }
+
+            memory.Write(0x1000, blocked ? 0 : 1);
+            channel.PushHostCommandBuffer([SemaphorePacket, 0, 0x1000, 1, Acquire]);
+            channel.PushEntries(entries);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(0x1008), Is.EqualTo(blocked ? 0 : 3));
+            Assert.That(memory.Read<int>(0x100c), Is.EqualTo(blocked ? 0 : 4));
+
+            // Publish new command payloads before releasing the channel's acquire.
+            memory.Write(Commands + 3 * sizeof(int), 4);
+            memory.Write(Commands + BufferStride + 3 * sizeof(int), 5);
+            memory.Write(0x1000, 1);
+            Assert.That(gpu.GPFifo.WaitForCommands(), Is.EqualTo(blocked));
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(0x1008), Is.EqualTo(expected));
+            Assert.That(memory.Read<int>(0x100c), Is.EqualTo(expected + 1));
+            Assert.That(gpu.GPFifo.WaitForCommands(), Is.False);
+        }
+
+        [Test]
+        public void GpuCompletionRunsOnceWhenNoChannelIsStalled()
+        {
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer);
+            int completions = 0;
+            gpu.GPFifo.RunAfterGpu(() => completions++);
+            gpu.GPFifo.DispatchCalls();
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(completions, Is.EqualTo(1));
+        }
+
+        [TestCase(1)]
+        [TestCase(2)]
+        public void GpuCompletionWaitsForEveryPreviouslySubmittedStalledChannel(int channels)
+        {
+            const ulong Page = 0x1000;
+            const int SemaphorePacket = 0x20040004;
+            const int Acquire = 0x01000001;
+            const int Release = 0x01000002;
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = true };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel first = gpu.CreateChannel();
+            using GpuChannel second = gpu.CreateChannel();
+            first.BindMemory(memory);
+            second.BindMemory(memory);
+            first.PushHostCommandBuffer([
+                SemaphorePacket, 0, 0x1000, 1, Acquire,
+                SemaphorePacket, 0, 0x1008, 3, Release,
+            ]);
+            if (channels == 2)
+            {
+                second.PushHostCommandBuffer([
+                    SemaphorePacket, 0, 0x1004, 2, Acquire,
+                    SemaphorePacket, 0, 0x100c, 4, Release,
+                ]);
+            }
+
+            int completions = 0;
+            gpu.GPFifo.RunAfterGpu(() =>
+            {
+                Assert.That(memory.Read<int>(0x1008), Is.EqualTo(3));
+                Assert.That(memory.Read<int>(0x100c), Is.EqualTo(channels == 2 ? 4 : 0));
+                completions++;
+            });
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(completions, Is.Zero);
+
+            memory.Write(0x1000, 1);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(completions, Is.EqualTo(channels == 1 ? 1 : 0));
+
+            memory.Write(0x1004, 2);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(completions, Is.EqualTo(1));
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(completions, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void GpuCompletionAllowsALaterChannelToReleaseThePendingAcquire()
+        {
+            const ulong Page = 0x1000;
+            const int SemaphorePacket = 0x20040004;
+            const int Acquire = 0x01000001;
+            const int Release = 0x01000002;
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = true };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel waiting = gpu.CreateChannel();
+            using GpuChannel releasing = gpu.CreateChannel();
+            waiting.BindMemory(memory);
+            releasing.BindMemory(memory);
+            waiting.PushHostCommandBuffer([
+                SemaphorePacket, 0, 0x1000, 1, Acquire,
+                SemaphorePacket, 0, 0x1008, 3, Release,
+            ]);
+            int observed = 0;
+            gpu.GPFifo.RunAfterGpu(() => observed = memory.Read<int>(0x1008));
+            releasing.PushHostCommandBuffer([SemaphorePacket, 0, 0x1000, 1, Release]);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(observed, Is.EqualTo(3));
+        }
+
         [Test]
         public void HostCommandBufferResumesAcrossTwoSemaphoreAcquires()
         {

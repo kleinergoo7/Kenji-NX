@@ -222,13 +222,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
         private sealed class StallException : System.Exception;
 
+        private readonly Nx2FifoTrace _fifoTrace = new(Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_FIFO_TRACE"));
+
         private bool _stalled;
         private ulong _stallAddress;
         private uint _stallValue;
         private bool _stallExact;
         private ulong _stallBaseVa;
         private int[] _stalledWords;
-        private readonly System.Collections.Generic.Queue<(ulong Address, int[] Words)> _deferredBuffers = new();
+        private readonly System.Collections.Generic.Queue<(ulong Address, int[] Words, CommandBufferFetcher Fetch, Action Callback)> _deferredBuffers = new();
         private long _stallSince;
         private bool _stallTimeoutReported;
 
@@ -283,6 +285,38 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             lock (Stalled)
             {
                 return Stalled.Exists(processor => processor._context == context);
+            }
+        }
+
+        /// <summary>
+        /// On the GPU thread, queues a completion behind every channel's prior suspended work.
+        /// Other channels remain runnable so they can release an acquire that guards that work.
+        /// </summary>
+        internal static void RunAfterPendingCommands(GpuContext context, Action callback)
+        {
+            GPFifoProcessor[] stalled;
+            lock (Stalled)
+            {
+                stalled = Stalled.FindAll(processor => processor._context == context).ToArray();
+            }
+
+            if (stalled.Length == 0)
+            {
+                callback();
+                return;
+            }
+
+            int remaining = stalled.Length;
+            foreach (GPFifoProcessor processor in stalled)
+            {
+                processor._deferredBuffers.Enqueue((0, null, null, () =>
+                {
+                    if (--remaining == 0)
+                    {
+                        callback();
+                    }
+                }
+                ));
             }
         }
 
@@ -365,7 +399,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
             while (!_stalled && _deferredBuffers.TryDequeue(out var next))
             {
-                ProcessWithStallHandling(next.Address, next.Words);
+                if (next.Callback != null)
+                {
+                    next.Callback();
+                }
+                else if (next.Words != null)
+                {
+                    ProcessWithStallHandling(next.Address, next.Words);
+                }
+                else
+                {
+                    Process(next.Address, next.Fetch());
+                }
             }
         }
 
@@ -461,15 +506,38 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
 
             if (_stalled)
             {
-                _deferredBuffers.Enqueue((baseGpuVa, commandBuffer.ToArray()));
+                _deferredBuffers.Enqueue((baseGpuVa, commandBuffer.ToArray(), null, null));
                 return;
             }
 
             ProcessWithStallHandling(baseGpuVa, commandBuffer);
         }
 
+        public delegate ReadOnlySpan<int> CommandBufferFetcher();
+
+        /// <summary>
+        /// Processes a guest buffer whose words must be fetched after preceding acquires complete.
+        /// </summary>
+        /// <param name="baseGpuVa">Base GPU virtual address of the command buffer</param>
+        /// <param name="fetch">Fetches the command words on the GPU thread</param>
+        public void Process(ulong baseGpuVa, CommandBufferFetcher fetch)
+        {
+            if (_stalled)
+            {
+                // A NoPrefetch entry can be written by the CPU or another channel before it
+                // releases our acquire. Retaining its address preserves that publication order.
+                _deferredBuffers.Enqueue((baseGpuVa, null, fetch, null));
+                return;
+            }
+
+            Process(baseGpuVa, fetch());
+        }
+
         private void ProcessWithStallHandling(ulong baseGpuVa, ReadOnlySpan<int> commandBuffer)
         {
+            _fifoTrace.Record(baseGpuVa, commandBuffer, _state.Method, _state.MethodCount, _state.SubChannel,
+                static message => Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu, message), _channel.GetHashCode());
+
             try
             {
                 ProcessLoop(baseGpuVa, commandBuffer, 0);
