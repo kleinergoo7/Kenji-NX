@@ -65,6 +65,77 @@ namespace Ryujinx.Tests.HLE
             Assert.That(INx2Vi2Session.GetPresentWaitFence(programId, (2u, 20u), (1u, 10u)), Is.EqualTo((id, value)));
         }
 
+        [TestCase(0xa140)]
+        [TestCase(0xc7c0)]
+        [TestCase(0xc797)]
+        [TestCase(0xb1c0)]
+        [TestCase(0xb197)]
+        public void InlineUploadFollowsTheBoundEngineOnEverySubchannel(int classId)
+        {
+            const ulong Page = 0x1000;
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = classId is 0xc7c0 or 0xc797 };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel channel = gpu.CreateChannel();
+            channel.BindMemory(memory);
+
+            for (int subchannel = 0; subchannel < 8; subchannel++)
+            {
+                int subchannelBits = subchannel << 13;
+                int destination = 0x1000 + subchannel * 8;
+                channel.PushHostCommandBuffer([
+                    0x20010000 | subchannelBits, classId,
+                    0x20040060 | subchannelBits, 8, 1, 0, destination,
+                    unchecked((int)0x8001006c) | subchannelBits,
+                    0x6002006d | subchannelBits, destination,
+                ]);
+                // A packet may span GPFIFO entries. Its second word must still reach the bound engine.
+                channel.PushHostCommandBuffer([destination + 4]);
+                gpu.GPFifo.DispatchCalls();
+                Assert.That(memory.Read<int>((ulong)destination), Is.EqualTo(destination), $"class=0x{classId:X} subchannel={subchannel}");
+                Assert.That(memory.Read<int>((ulong)destination + 4), Is.EqualTo(destination + 4), $"class=0x{classId:X} subchannel={subchannel} continuation");
+            }
+        }
+
+        [Test]
+        public void UnbindingInlineEnginePreventsUploadsUntilItIsBoundAgain()
+        {
+            const ulong Page = 0x1000;
+            using MemoryBlock backing = new(Page);
+            Ryujinx.Cpu.Jit.MemoryManager cpu = new(backing, 0x10000);
+            cpu.Map(Page, 0, Page, MemoryMapFlags.None);
+            IRenderer renderer = Stub.Create<IRenderer>((_, _) => null);
+            using GpuContext gpu = new(renderer) { IsAmpere = true };
+            gpu.RegisterProcess(1, cpu);
+            Ryujinx.Graphics.Gpu.Memory.MemoryManager memory = gpu.CreateMemoryManager(1, 0x10000);
+            memory.Map(Page, Page, Page, PteKind.Pitch);
+            using GpuChannel channel = gpu.CreateChannel();
+            channel.BindMemory(memory);
+
+            const int SubchannelBits = 2 << 13;
+            channel.PushHostCommandBuffer([
+                0x20010000 | SubchannelBits, 0xa140,
+                0x20040060 | SubchannelBits, 4, 1, 0, 0x1000,
+                unchecked((int)0x8001006c) | SubchannelBits,
+                0x20010000 | SubchannelBits, 0,
+                0x6001006d | SubchannelBits, 123,
+            ]);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(Page), Is.Zero);
+
+            channel.PushHostCommandBuffer([
+                0x20010000 | SubchannelBits, 0xa140,
+                0x6001006d | SubchannelBits, 456,
+            ]);
+            gpu.GPFifo.DispatchCalls();
+            Assert.That(memory.Read<int>(Page), Is.EqualTo(456));
+        }
+
         [Test]
         public void HostCommandBufferResumesAcrossTwoSemaphoreAcquires()
         {

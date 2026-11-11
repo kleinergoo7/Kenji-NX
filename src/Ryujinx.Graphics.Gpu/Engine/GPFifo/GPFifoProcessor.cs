@@ -559,7 +559,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryFastI2mBufferUpdate(ReadOnlySpan<int> commandBuffer, ref int offset)
         {
-            if (_state.Method == LoadInlineDataMethodOffset && _state.NonIncrementing && _state.SubChannel <= 2)
+            // Object binding can move an upload engine to any subchannel. Match Send's routing.
+            int engine = SubChannelEngine(_state.SubChannel);
+            if (_state.Method == LoadInlineDataMethodOffset && _state.NonIncrementing &&
+                engine is Engine3D or EngineCompute or EngineInlineToMemory)
             {
                 int availableCount = commandBuffer.Length - offset;
                 int consumeCount = Math.Min(_state.MethodCount, availableCount);
@@ -568,15 +571,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 Nx2BulkCounters.I2m(_state.Method, consumeCount);
                 Nx2BulkCounters.AddI2m(consumeCount);
 
-                if (_state.SubChannel == 0)
+                if (engine == Engine3D)
                 {
                     _3dClass.LoadInlineData(data);
                 }
-                else if (_state.SubChannel == 1)
+                else if (engine == EngineCompute)
                 {
                     _computeClass.LoadInlineData(data);
                 }
-                else /* if (_state.SubChannel == 2) */
+                else
                 {
                     _i2mClass.LoadInlineData(data);
                 }
