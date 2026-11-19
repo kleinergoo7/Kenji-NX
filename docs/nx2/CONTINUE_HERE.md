@@ -293,20 +293,36 @@ EG_COMPARE=
    **NEEDS_REFERENCE_PORT.** Caveat: whether this title's macro actually consumes word 0x27
    is inferred from Eglantine's title-1 notes, not verified at word level here (could not
    determine); the capability gap itself is certain.
-3. **Compute macro code bank is per-channel and selected by subchannel.** Here:
-   `GPFifoProcessor.cs:804-838` picks the compute macro bank purely from
-   `SubChannelEngine(subChannel)`, and the bank is created per channel at
-   `GPFifoProcessor.cs:489` (`_fifoClass = new GPFifoClass(...)`; see `GPFifoClass.cs:32-38,
-   485-549`). Eglantine: `kepler_compute.cpp:157-159` switches to the compute engine/positions
-   only when methods 0x45/0x47 were uploaded on the compute class, and all channels of the
-   process share **one** macro context (`control/channel_state.cpp:33-42, 79-89`;
-   `macro.h:277-281`; `NX2_NOTES.md` row 53, line 111). Consequence: a compute macro uploaded
-   on one channel is not visible to another here, and a method on a subchannel our class table
-   maps to 3D runs the 3D bank/state instead — either yields an empty/wrong compute macro and
-   no PCAS emission. Unverified whether upload and invocation span channels in this title.
-   **FIXABLE_HERE** (local bank/context change).
+3. **Area 1 — macro upload / positions / 0xE00 trigger mechanics match; the divergence is
+   bank location and selection.** Sub-point (a) upload offsets **0x45-0x48**: here
+   `ComputeClass.cs:22-25, 89-103` delegates to `GPFifoClass.cs:488-524`
+   (`KeepComputeMmeCode`/`AddComputeMmeCode`/`SetComputeMmeBindPointer`/`BindComputeMmeStart`);
+   Eglantine `kepler_compute.cpp:344-354` handles 0x45 `ClearCode`, 0x46 `AddCode`, 0x47
+   `native_bind_pointer`, 0x48 `positions[pointer++]`. (b) positions/entry points: here
+   3D `_macros[pointer] = new Macro(argument)` (`GPFifoClass.cs:406-413`) and compute
+   `_computeMacros[_computeStartPointer++] = new Macro(argument)` (`GPFifoClass.cs:511-524`);
+   Eglantine `maxwell_3d.cpp:1650` `positions[pointer] = value` and
+   `kepler_compute.cpp:352` `native_macro_positions[native_bind_pointer++] = argument`
+   (shared context at `macro.h:277-281`). (c) **0xE00-range trigger**: here
+   `GPFifoProcessor.cs:756-765` routes it by subchannel engine with
+   `Nx2MethodProbe.RecordMacro`, `:804-828` uses even offset = start / odd = push and index
+   `(offset >> 1) & 0x7F`, `MacroTuring.cs:719` rejects emitted `address >= 0xe00`, and
+   `Nx2MethodProbe.cs:34-35, 95, 150-157` classifies >=0xE00 as macro start/push words;
+   Eglantine `kepler_compute.cpp:165-172` (even = start, odd = parameter,
+   `((method - 0xe00) / 2) % positions.size()`) and `maxwell_3d.cpp:43, 1881`.
+   **No divergence found in (a)-(c) themselves** — the mechanisms are equivalent at an
+   0x80-position count. The actual divergence: here the compute macro bank is per-channel
+   (`GPFifoProcessor.cs:489`, `GPFifoClass.cs:32-38, 485-549`) and `GPFifoProcessor.cs:804-838`
+   picks it purely from `SubChannelEngine(subChannel)`; Eglantine `kepler_compute.cpp:157-159`
+   switches to the compute engine/positions only when 0x45/0x47 were uploaded on the compute
+   class, with all process channels sharing **one** macro context
+   (`control/channel_state.cpp:33-42, 79-89`; `macro.h:277-281`; `NX2_NOTES.md` row 53, line 111).
+   Consequence: a compute macro uploaded on one channel is not visible to another here, and a
+   method on a subchannel our class table maps to 3D runs the 3D bank/state instead — either
+   yields an empty/wrong compute macro and no PCAS emission. Unverified whether upload and
+   invocation span channels in this title. **FIXABLE_HERE** (local bank/context change).
 4. **`UsesMme64` is never set.** Here: `ComputeClass.cs:48` declares it with no assignment
-   anywhere in the tree (grep confirms reads only at `:142`, `:156`), so every dispatch is
+   anywhere in the tree (grep confirms reads only at `:142`, `:156`, `:175`), so every dispatch is
    tagged `QmdDispatchKind.Compute`. Eglantine enables the Turing/MME64 path on the Ampere flag
    (`control/channel_state.cpp:79-89`, `engines/maxwell_3d.cpp:85`, `kepler_compute.cpp:156`).
    Consequence: the MME64/QMD-3.0
