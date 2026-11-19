@@ -39,6 +39,26 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
     }
 
     /// <summary>
+    /// The three Kepler compute PCAS/QMD signal methods and their dispatch
+    /// eligibility (Eglantine kepler_compute.cpp:364-365). All three read the
+    /// QMD address from register 0xAD (SendPcasA), not from their own argument.
+    /// </summary>
+    static class PcasMethodAction
+    {
+        public const int SendPcasB = 0xAE;
+        public const int SendSignalingPcasB = 0xAF;
+        public const int SendPcasC = 0xB0;
+
+        /// <summary>0xAE always skips; 0xAF skips unless bit 1 is set; 0xB0 skips on low nibble 0 or 1.</summary>
+        public static bool Eligible(int method, int argument) => method switch
+        {
+            SendSignalingPcasB => (argument & 2) != 0,
+            SendPcasC => (argument & 15) >= 2,
+            _ => false,
+        };
+    }
+
+    /// <summary>
     /// Tracks compute dispatches for the MME64/QMD scheduler.
     /// v1.1 (Switch 2 enablement).
     /// </summary>

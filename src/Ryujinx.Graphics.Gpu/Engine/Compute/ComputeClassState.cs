@@ -239,7 +239,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         public uint SendSignalingPcasB;
         public readonly bool SendSignalingPcasBInvalidate => (SendSignalingPcasB & 0x1) != 0;
         public readonly bool SendSignalingPcasBSchedule => (SendSignalingPcasB & 0x2) != 0;
-        public fixed uint Reserved2C0[9];
+        // Compute method 0xB0, split out of the reserved block so it can carry its own callback.
+        public uint SendPcasC;
+        public fixed uint Reserved2C4[8];
         public uint SetShaderLocalMemoryNonThrottledA;
         public readonly int SetShaderLocalMemoryNonThrottledASizeUpper => (int)(SetShaderLocalMemoryNonThrottledA & 0xFF);
         public uint SetShaderLocalMemoryNonThrottledB;

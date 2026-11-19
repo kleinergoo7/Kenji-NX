@@ -64,7 +64,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
             {
                 { nameof(ComputeClassState.LaunchDma), new RwCallback(LaunchDma, null) },
                 { nameof(ComputeClassState.LoadInlineData), new RwCallback(LoadInlineData, null) },
+                { nameof(ComputeClassState.SendPcasB), new RwCallback(SendPcasB, null) },
                 { nameof(ComputeClassState.SendSignalingPcasB), new RwCallback(SendSignalingPcasB, null) },
+                { nameof(ComputeClassState.SendPcasC), new RwCallback(SendPcasC, null) },
             });
 
             _i2mClass = new InlineToMemoryClass(context, channel, initializeState: false);
@@ -133,13 +135,27 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         }
 
         /// <summary>
+        /// Observe-only PCAS/QMD signal writes (0xAE and 0xB0). Eglantine skips
+        /// dispatch for both; here they are only counted, never dispatched.
+        /// </summary>
+        private void SendPcasB(int argument)
+        {
+            Nx2PcasTrace.Enter(_state.State.SendPcasA, UsesMme64, PcasMethodAction.SendPcasB, argument);
+        }
+
+        private void SendPcasC(int argument)
+        {
+            Nx2PcasTrace.Enter(_state.State.SendPcasA, UsesMme64, PcasMethodAction.SendPcasC, argument);
+        }
+
+        /// <summary>
         /// Performs the compute dispatch operation.
         /// </summary>
         /// <param name="argument">Method call argument</param>
         private void SendSignalingPcasB(int argument)
         {
             // Observe-only PCAS entry trace: count every call before any early return.
-            Nx2PcasTrace.Enter(_state.State.SendPcasA, UsesMme64);
+            Nx2PcasTrace.Enter(_state.State.SendPcasA, UsesMme64, PcasMethodAction.SendSignalingPcasB, argument);
 
             MemoryManager memoryManager = _channel.MemoryManager;
 

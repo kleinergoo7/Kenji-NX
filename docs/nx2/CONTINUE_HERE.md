@@ -364,6 +364,36 @@ only candidates that break the chain before PCAS/dispatch; #3-#4 could prevent t
 emitting PCAS at all; #5-#7 are GPFIFO-stability gaps already observed not to fire in this
 title; #8 is healthy. Stop for a human decision on which divergence to fix first.
 
+## Phase 1g — cover all PCAS/QMD compute methods (Task 1g)
+
+Wired observe-only callbacks for all three Kepler compute PCAS/QMD signal methods
+(0xAE `SendPcasB`, 0xAF `SendSignalingPcasB`, 0xB0 `SendPcasC` — method index =
+byte offset / 4; QMD address still read from register 0xAD `SendPcasA` for all
+three). All three count into `Nx2PcasTrace` before any skip/return; dispatch
+behaviour and the existing 0xAF path are unchanged. Method→field offsets verified
+with `Marshal.OffsetOf` (0x2B4/0x2B8/0x2BC/0x2C0).
+
+Re-ran the 90 s direct Fast Fusion capture with
+`NX2_PATCH="" NX2_PCAS_TRACE=1 NX2_QMD_TRACE=1 NX2_METHOD_LOG=1` (Fast Fusion
+profile) into `.nx2-logs/run-20261119-195906/ocarina.log` (rc=124 expected
+timeout, 451 lines). New binary confirmed live: the `NX2 progress` line shows the
+new `mAE=… mAF=… mB0=… act=…` Summary format.
+
+- `NX2 progress t=60s … mme=73/4159/0+73 pcas=[calls=0 zero=0 nonzero=0 mme64=0 mAE=0 mAF=0 mB0=0 act=0] … draws=0`.
+- `NX2PCAS` lines: **0**; `NX2QMD` lines: **0**.
+- The `emitted=[…]` / `3d` histograms contain no `0xAE`/`0xAF`/`0xB0` (nor `0xAD`).
+- `draws` unchanged (still 0); `submits=4`, `presents=14600`.
+
+PCAS_COVERAGE=NONE (mAE=0 mAF=0 mB0=0, act=0) — no writes to any of 0xAE/0xAF/0xB0.
+`NX2QMD` lines: **no** (0). `draws`: **unchanged** (0).
+
+Meaning: the earlier "zero PCAS/QMD" reading is **not** a measurement artifact of
+wiring the trace to only 0xAF — with all three methods observed, the guest still
+writes none of them. This confirms Phase 1f's `MACRO_QMD=MACROS_RUN_NO_PCAS`: the
+chain breaks before PCAS (macro emission / compute-class routing), so the blocker
+is upstream. Per the brief's gate, stop for a human decision before further QMD
+work; do not port QMD ring/release logic on this evidence.
+
 ## TL;DR from a fresh clone
 
 ```bash

@@ -6,6 +6,9 @@ namespace Ryujinx.Tests.Graphics
 {
     public class Nx2PcasTraceTests
     {
+        [SetUp]
+        public void SetUp() => Nx2PcasTrace.Reset();
+
         [Test]
         public void EnterCountsCallsAndMme64()
         {
