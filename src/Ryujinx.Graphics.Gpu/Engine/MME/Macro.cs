@@ -66,7 +66,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     _executionEngine = new MacroTuring(
                         processor.MemoryManager,
                         processor.MmeDataRam,
-                        compute ? () => processor.ComputeMmeCodeGeneration : () => processor.MmeCodeGeneration);
+                        // Compute shares the 3D code bank, so memo invalidation follows its generation.
+                        () => processor.MmeCodeGeneration);
                     _turing = true;
                 }
                 else if (GraphicsConfig.EnableMacroHLE && MacroHLETable.TryGetMacroHLEFunction(code[Position..], context.Capabilities, out _hleFunction))

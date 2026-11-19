@@ -800,3 +800,14 @@ That single answer decides the next step, and it requires one run with the ROM.
   `NX2_PATCH`; `0x00025a0b` = session closed (fixed by registering `aud:u`).
 - **A green build is not a render.** Always check `NX2 progress` for `draws=`,
   and `NX2_FRAME_DUMP` non-zero bytes before claiming progress.
+
+## Phase 1l — compute macro code from the shared bank (Task 1)
+
+CODE_BANK_FIX=SUCCESS_EMITS — compute execution now reads the shared 3D code bank `_macroCode` (was the never-written `_computeMacroCode`) while keeping its own `Macro` slot array `_computeMacros` for execution state; the Turing memo generation key for compute is `MmeCodeGeneration` (was `ComputeMmeCodeGeneration`). `_computeMacroCode` and its upload delegates remain in place, unused. Maxwell path untouched (both edits are inside the NX2/Ampere-only branch and the compute-only methods).
+
+Verification: `bash tools/nx2/oracle-ab.sh 60` (Fast Fusion profile, `NX2_PATCH=""`). The first 60 s run ended before the 60 s `NX2 progress` tick, so it printed no counters (ours brightness N/A); a diagnostic re-run with `NX2_THREAD_DUMP=1` (same code, progress every 10 s) produced:
+
+- Oracle mean brightness `0.827416`, 30 shaders lowered, 15 pipelines; Ours `0`, shaders/pipelines 0. Gap **not narrowed** — frames are still all-zero.
+- `NX2 progress t=10s/20s ... mme=71/4214/0+71 mme3d=59 mmec=12 cemitted=[0x1D1=5 0xE4=5 0xEC=5 0xF4=5 0xFC=5 0x60=5 0x61=5 0x62=5 0x63=5 0x6C=5 0x6D=5] ... draws=0`.
+- Compute macro count `mmec=12` (was 14 with an empty bank). `cemitted` is now **non-empty**: 11 distinct registers, 5 emits each. The prior all-zero compute code bank is fixed at the macro-execution level.
+- Still `draws=0` and no presented image, so the guest render gate is a separate, still-open problem. Per the brief, the success signal (`cemitted` non-empty) is met; no further bank variant was attempted.

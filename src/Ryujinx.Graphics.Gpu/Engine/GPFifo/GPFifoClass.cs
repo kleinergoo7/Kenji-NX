@@ -545,7 +545,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// </summary>
         public void ComputeMmeStart(int index, int argument)
         {
-            _computeMacros[index].StartExecution(_context, _parent, _computeMacroCode, argument, true);
+            // Compute uploads land in the shared 3D code bank; only the Macro state is compute-owned.
+            _computeMacros[index].StartExecution(_context, _parent, _macroCode, argument, true);
         }
 
         /// <summary>
@@ -554,7 +555,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public void ComputeCallMme(int index, IDeviceState state)
         {
             Nx2MacroUploadTrace.LogSummaryOnce();
-            _computeMacros[index].Execute(_computeMacroCode, state);
+            _computeMacros[index].Execute(_macroCode, state);
         }
     }
 }
