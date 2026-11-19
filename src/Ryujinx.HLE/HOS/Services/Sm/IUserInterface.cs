@@ -101,6 +101,11 @@ namespace Ryujinx.HLE.HOS.Services.Sm
 
                     IpcService service = GetServiceInstance(type, context, serviceAttribute.Parameter);
 
+                    if (service is null)
+                    {
+                        Logger.Warning?.Print(LogClass.Service, $"NX2 service {name} could not be instantiated; guest will get a dead session");
+                    }
+
                     if (_commonServer is null)
                     {
                         _commonServer = new ServerBase(context.Device.System.KernelContext, "Common");
