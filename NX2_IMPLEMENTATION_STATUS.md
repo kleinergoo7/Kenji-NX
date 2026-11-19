@@ -1,5 +1,8 @@
 # NX2 (Nintendo Switch 2) Implementation Status — Kenji-NX/Ryubing integration
 
+> **Current state, build/run instructions and next steps: [`docs/nx2/CONTINUE_HERE.md`](docs/nx2/CONTINUE_HERE.md).**
+> The tables below are a historical snapshot (2026-11-10, different branch) — keep them for context only.
+
 ## Current branch update · 2026-11-10
 
 The working branch is `codex/nx2-submission-progress` on `kleinergoo7/Kenji-NX`. The Starforgejo reference HEAD is `bd99084`. The snapshot and historical findings below predate the current branch.
