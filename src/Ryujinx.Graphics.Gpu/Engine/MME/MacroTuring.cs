@@ -81,6 +81,44 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         private static int _failProbe;
         public static int MacrosRun;
 
+        // NX2 observe-only: split macros by engine so we can tell whether the guest
+        // ever invokes compute macros (the QMD/PCAS paths are unreachable otherwise).
+        public static int MacrosCompute;
+        public static int Macros3D;
+        internal static readonly System.Collections.Generic.Dictionary<uint, int> ComputeEmittedHistogram = new();
+        private const int MaxComputeEmittedEntries = 512;
+
+        private static readonly bool MmeEngineLogEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_MME_ENGINE") == "1";
+        private static int _computeEngineLogs;
+        private bool _currentCompute;
+        private List<(uint Addr, uint Val)> _computeEmits;
+
+        internal static void ResetMacroEngineCounters()
+        {
+            MacrosCompute = 0;
+            Macros3D = 0;
+            lock (ComputeEmittedHistogram)
+            {
+                ComputeEmittedHistogram.Clear();
+            }
+        }
+
+        internal static void RecordComputeEmitted(uint address)
+        {
+            lock (ComputeEmittedHistogram)
+            {
+                if (ComputeEmittedHistogram.TryGetValue(address, out int seen))
+                {
+                    ComputeEmittedHistogram[address] = seen + 1;
+                }
+                else if (ComputeEmittedHistogram.Count < MaxComputeEmittedEntries)
+                {
+                    ComputeEmittedHistogram[address] = 1;
+                }
+            }
+        }
+
         // Per-macro emit trace (NX2_MACRO_LOG=1): hash, length, and the exact
         // (register, value) stream each macro produces. This is how we tell
         // whether a draw macro is missing, misdecoded, or emitting the wrong register.
@@ -160,7 +198,25 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         /// <param name="arg0">First argument passed to the program</param>
         public void Execute(ReadOnlySpan<int> code, IDeviceState state, int arg0)
         {
+            Execute(code, state, arg0, false);
+        }
+
+        public void Execute(ReadOnlySpan<int> code, IDeviceState state, int arg0, bool compute)
+        {
             System.Threading.Interlocked.Increment(ref MacrosRun);
+
+            _currentCompute = compute;
+
+            if (compute)
+            {
+                System.Threading.Interlocked.Increment(ref MacrosCompute);
+            }
+            else
+            {
+                System.Threading.Interlocked.Increment(ref Macros3D);
+            }
+
+            _computeEmits = compute && MmeEngineLogEnabled ? new List<(uint, uint)>() : null;
 
             if (MacroLogEnabled && System.Threading.Interlocked.Increment(ref _macroTraceLogs) <= 80)
             {
@@ -220,6 +276,24 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     $"NX2 macro hash=0x{_currentMacroHash:X16} words={code.Length} instr={code.Length / InstructionWordCount} arg0=0x{(uint)arg0:X8} err={error ?? "ok"} emits={(_currentEmits != null ? _currentEmits.Count : 0)}:[{eb}]");
 
                 _currentEmits = null;
+            }
+
+            if (_computeEmits != null)
+            {
+                if (System.Threading.Interlocked.Increment(ref _computeEngineLogs) <= 200)
+                {
+                    System.Text.StringBuilder cb = new();
+
+                    for (int i = 0; i < _computeEmits.Count && i < 40; i++)
+                    {
+                        cb.Append($" {_computeEmits[i].Addr:X2}={_computeEmits[i].Val:X8}");
+                    }
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.Gpu,
+                        $"NX2MMEC compute emits={_computeEmits.Count}:[{cb}]");
+                }
+
+                _computeEmits = null;
             }
 
             if (!string.IsNullOrEmpty(error))
@@ -733,6 +807,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             if (_currentEmits != null)
             {
                 _currentEmits.Add((address, value));
+            }
+
+            if (_currentCompute)
+            {
+                RecordComputeEmitted(address);
+                _computeEmits?.Add((address, value));
             }
 
             int emitIndex = System.Threading.Interlocked.Increment(ref EmittedMethods);

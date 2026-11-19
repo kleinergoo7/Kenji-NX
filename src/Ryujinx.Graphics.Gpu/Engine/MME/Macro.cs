@@ -18,6 +18,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         private IMacroEE _executionEngine;
         private bool _executionPending;
         private bool _turing;
+        private bool _compute;
         private int _argument;
         private MacroHLEFunctionName _hleFunction;
         // Args pushed before StartExecution created the engine (the guest pushes
@@ -36,6 +37,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             _executionEngine = null;
             _executionPending = false;
             _turing = false;
+            _compute = false;
             _argument = 0;
             _hleFunction = MacroHLEFunctionName.None;
         }
@@ -51,6 +53,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         public void StartExecution(GpuContext context, GPFifoProcessor processor, ReadOnlySpan<int> code, int argument, bool compute = false)
         {
             _argument = argument;
+            _compute = compute;
 
             _executionPending = true;
 
@@ -131,11 +134,16 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     // Turing positions are instruction indices; the code array stores three
                     // words per instruction.
                     int wordOffset = Position * 3;
+                    ReadOnlySpan<int> macroCode = (uint)wordOffset <= (uint)code.Length ? code[wordOffset..] : ReadOnlySpan<int>.Empty;
 
-                    _executionEngine?.Execute(
-                        (uint)wordOffset <= (uint)code.Length ? code[wordOffset..] : ReadOnlySpan<int>.Empty,
-                        state,
-                        _argument);
+                    if (_executionEngine is MacroTuring turing)
+                    {
+                        turing.Execute(macroCode, state, _argument, _compute);
+                    }
+                    else
+                    {
+                        _executionEngine?.Execute(macroCode, state, _argument);
+                    }
                 }
                 else
                 {

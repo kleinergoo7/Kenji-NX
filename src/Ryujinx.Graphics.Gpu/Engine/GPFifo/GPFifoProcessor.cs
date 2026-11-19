@@ -20,6 +20,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
     public static class Nx2GpuStall
     {
         public static int MacrosRun => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacrosRun;
+        public static int Macros3D => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.Macros3D;
+        public static int MacrosCompute => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacrosCompute;
         public static int MacroMemoHits => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoHits;
         public static int MacroMemoMisses => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoMisses;
         public static int EmittedMethods => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedMethods;
@@ -137,6 +139,29 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public static string DescribeEmitted()
         {
             System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<uint, int>> list = new(Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedHistogram);
+
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            System.Text.StringBuilder sb = new();
+
+            foreach (System.Collections.Generic.KeyValuePair<uint, int> kv in list)
+            {
+                sb.Append($"0x{kv.Key:X}={kv.Value} ");
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>Full distribution of compute-macro-emitted method addresses.</summary>
+        public static string DescribeComputeEmitted()
+        {
+            System.Collections.Generic.Dictionary<uint, int> histogram = Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.ComputeEmittedHistogram;
+            System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<uint, int>> list;
+
+            lock (histogram)
+            {
+                list = new(histogram);
+            }
 
             list.Sort((a, b) => b.Value.CompareTo(a.Value));
 

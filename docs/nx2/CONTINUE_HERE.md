@@ -452,6 +452,48 @@ recorded INCONCLUSIVE; stop for a human decision before any further ring work. T
 observe-only ring implementation + tests are committed, but the ring is not wired into
 dispatch correctness.
 
+## Phase 1j — separate 3D and compute macros (Task 1j)
+
+Added observe-only per-engine macro counters and a compute-emitted register histogram
+(`MacroTuring.MacrosCompute`/`Macros3D`, `ComputeEmittedHistogram`), exposed as
+`mme3d=`/`mmec=`/`cemitted=[]` in `NX2 progress` plus an `NX2_MME_ENGINE=1`
+one-line-per-compute-macro log (`NX2MMEC`, capped 200). The `compute` flag already
+set by `GPFifoClass.ComputeMmeStart` now flows through `Macro.StartExecution` →
+`Macro.Execute` → `MacroTuring.Execute`. No dispatch behaviour changed. TDD: 3 new
+`Nx2MacroEngineTests` RED then GREEN.
+
+Ran the 90 s direct Fast Fusion capture with
+`NX2_PATCH="" NX2_MME_ENGINE=1 NX2_MACRO_LOG=1 NX2_METHOD_LOG=1` (Fast Fusion
+profile) under `xvfb-run` into
+`.nx2-logs/run-20261119-212507/ocarina.log` (rc=124 expected timeout). New binary
+confirmed live: the `NX2 progress` line carries `mme3d=`/`mmec=`/`cemitted=[]` and
+14 `NX2MMEC` lines are present.
+
+- `NX2 progress t=60s ... mme=73/4159/0+73 mme3d=59 mmec=14 cemitted=[] ... draws=0`
+  (59 + 14 = 73 = MacrosRun; consistent).
+- `NX2MMEC` lines: **14** (t=27.292–27.768 s), every one `compute emits=0:[]`.
+- All 14 are the same macro: `pos=0`, hash `0xFE72814514A90383`,
+  `words=65536 instr=21845`, `err=ok`, `emits=0`. That hash is exactly FNV-1a of
+  65536 zero words — the compute macro code bank the interpreter was handed is
+  **entirely zero**.
+- Top compute-emitted registers: **none** (`cemitted=[]`, empty histogram).
+- `NX2 mme exec`: 73 lines (59 3D + 14 compute), all `dram27=0x00000000`.
+- `NX2PCAS`=0, `NX2QMD`=0, draws=0; no `NX2 mfail` / `Turing macro failed`.
+
+MACRO_ENGINE=COMPUTE_MACROS_RUN
+
+Meaning: compute-class macros **are** invoked by the guest (mmec=14 > 0), so the
+"guest never calls compute macros" hypothesis is ruled out and the
+`ONLY_3D_MACROS` stop condition does not apply. But every compute macro runs an
+all-zero code bank and emits **no register at all** — not PCAS, not anything — so
+the QMD/PCAS chain is still unreached. The decisive follow-up is why the compute
+macro code bank is empty (compute MME code upload / bank selection), i.e. compute
+macro code decode/upload rather than compute macro invocation. Per the brief's
+gate, stop for a human decision before acting on this. Concern: the all-zero bank
+may mean the guest genuinely uploaded no compute code, **or** that our compute
+code-buffer selection sends the upload elsewhere (Phase 1f point #3); this
+observe-only task does not distinguish the two.
+
 ## TL;DR from a fresh clone
 
 ```bash
