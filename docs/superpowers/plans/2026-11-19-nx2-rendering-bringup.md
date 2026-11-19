@@ -259,6 +259,39 @@ git commit -m "nx2: watch the guest completion flag at its poll site"
 
 **Gate:** record `FLAG_WATCH=` and stop for a human decision before writing any fix based on it.
 
+### Task 1f: Compare our NX2 graphics path to Eglantine's working title 4
+
+**Files:**
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `EG_COMPARE=` with a ranked, evidence-backed divergence list)
+
+**Interfaces:**
+- Consumes: Eglantine reference at `/tmp/opencode/eglantine` (`NX2_NOTES.md` rows 45-57, 81-84, 115; source `src/video_core/dma_pusher.cpp`, `engines/maxwell_3d.cpp`, `engines/kepler_compute.cpp`, `macro.cpp`, `macro_turing.h`, `control/channel_state.cpp`); this repo's `ComputeClass.cs`, `Macro.cs`, `MacroTuring.cs`, `GPFifoClass.cs`/`GPFifoProcessor.cs`, `INx2GraphicsSystemSession.cs`, `INx2Vi2Session.cs`.
+- Produces: a ranked list of **concrete divergences** (file:line here vs file:line there), each labelled `FIXABLE_HERE` or `NEEDS_REFERENCE_PORT`, with the first candidate fix named.
+
+- [ ] **Step 1: Compare the four areas**
+
+For each area, read both implementations and record what ours does differently:
+  1. **Macro upload/binding** — how macro code is uploaded (method offsets `0x45`-`0x48` in `ComputeClass.cs`), where positions/entry points are stored, how a method in `[0xE00,0xE00+0x100)` triggers a macro, and whether the compute class uses the same macro context as 3D.
+  2. **MME data RAM** — per-channel storage, word `0x27` (QMD ring base), and whether any code schedules QMDs from it.
+  3. **GPFIFO acquire/resume and PB stability** — unmet-acquire suspension, split methods, and pushbuffer word consistency (`EDEN_NX2_PB_CHECK` equivalent).
+  4. **Window/native-image init** — gsv 1510/111/429/423, `Nx2NativeObjects.Layout`, and the chain into `NativeWindow::Present` / image acquire.
+
+- [ ] **Step 2: Write the ranked divergence list**
+
+In `docs/nx2/CONTINUE_HERE.md`, record `EG_COMPARE=` followed by a numbered list. Each item: our file:line, the Eglantine file:line it diverges from, the behavioural consequence, and `FIXABLE_HERE` / `NEEDS_REFERENCE_PORT`. Rank by how directly each divergence could explain "no macro emits PCAS / no dispatch / no draws". Do not write fix code.
+
+- [ ] **Step 3: Verify and commit**
+
+Run: `grep -n "EG_COMPARE=" docs/nx2/CONTINUE_HERE.md`
+Expected: the line and the ranked list are present.
+
+```bash
+git add docs/nx2/CONTINUE_HERE.md
+git commit -m "docs: compare NX2 graphics path with Eglantine title 4"
+```
+
+**Gate:** stop for a human decision on which divergence to fix first.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
