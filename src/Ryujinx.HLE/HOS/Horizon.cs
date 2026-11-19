@@ -120,6 +120,12 @@ namespace Ryujinx.HLE.HOS
             // SVC GetSystemTick derive from this, and a wrong rate skews init timing.
             TickSource = new TickSource(device.CompatibilityProfile.TickFrequency);
 
+            if (Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_TICK_LOG"))
+            {
+                Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
+                    $"Guest counter: CNTFRQ=0x{TickSource.Frequency:X} ({TickSource.Frequency} Hz) profile={device.CompatibilityProfile.Generation}");
+            }
+
             KernelContext = new KernelContext(
                 TickSource,
                 device,
