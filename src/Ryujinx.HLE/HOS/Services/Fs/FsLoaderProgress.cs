@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 using System.Collections.Concurrent;
 using System.Text;
+using Ryujinx.Common.Logging;
 
 namespace Ryujinx.HLE.HOS.Services.Fs
 {
@@ -31,6 +32,22 @@ namespace Ryujinx.HLE.HOS.Services.Fs
         private static readonly bool LogEnabled =
             System.Environment.GetEnvironmentVariable("NX2_FS_LOG") == "1";
         private static long _maxBlockOffset = -1;
+
+        // Application filesystem view (NX2_FS_TRACE). Observe-only: these counters never
+        // influence Fs results, they only describe what the application pid could access.
+        internal static readonly bool TraceEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_FS_TRACE") == "1";
+
+        private const int MaxTraceLines = 200;
+
+        private static long _appPid = -1;
+        private static long _filterPid = -1;
+        private static long _viewOpens;
+        private static long _contentOpens;
+        private static long _contentFails;
+        private static long _viewReads;
+        private static long _viewBytes;
+        private static long _traceLines;
 
         public static void OnRead(long bytes)
         {
@@ -97,6 +114,119 @@ namespace Ryujinx.HLE.HOS.Services.Fs
             }
 
             PathCounts.AddOrUpdate(path, 1, (_, v) => v + 1);
+        }
+
+        internal static void ResetFsView()
+        {
+            System.Threading.Interlocked.Exchange(ref _appPid, -1);
+            System.Threading.Interlocked.Exchange(ref _filterPid, -1);
+            System.Threading.Interlocked.Exchange(ref _viewOpens, 0);
+            System.Threading.Interlocked.Exchange(ref _contentOpens, 0);
+            System.Threading.Interlocked.Exchange(ref _contentFails, 0);
+            System.Threading.Interlocked.Exchange(ref _viewReads, 0);
+            System.Threading.Interlocked.Exchange(ref _viewBytes, 0);
+            System.Threading.Interlocked.Exchange(ref _traceLines, 0);
+        }
+
+        internal static void SetFsViewPid(ulong pid)
+        {
+            System.Threading.Interlocked.Exchange(ref _appPid, (long)pid);
+            System.Threading.Interlocked.Exchange(ref _filterPid, (long)pid);
+        }
+
+        // Runtime: fsp-srv handles guest Fs calls on its own thread and the IPC header
+        // carries no caller pid for these requests, so observe all traffic through the
+        // server and label it with the active application pid. Individual trace lines
+        // still show the raw caller pid.
+        internal static void SetFsViewAppPid(ulong pid)
+        {
+            System.Threading.Interlocked.Exchange(ref _appPid, (long)pid);
+        }
+
+        internal static void OnFsOpen(ulong pid, string path)
+        {
+            if (!IsViewPid(pid))
+            {
+                return;
+            }
+
+            System.Threading.Interlocked.Increment(ref _viewOpens);
+
+            if (IsContentPath(path))
+            {
+                System.Threading.Interlocked.Increment(ref _contentOpens);
+            }
+        }
+
+        internal static void OnFsOpenFail(ulong pid, string path)
+        {
+            if (!IsViewPid(pid))
+            {
+                return;
+            }
+
+            System.Threading.Interlocked.Increment(ref _viewOpens);
+
+            if (IsContentPath(path))
+            {
+                System.Threading.Interlocked.Increment(ref _contentFails);
+            }
+        }
+
+        internal static void OnFsRead(ulong pid, long bytes)
+        {
+            if (!IsViewPid(pid) || bytes <= 0)
+            {
+                return;
+            }
+
+            System.Threading.Interlocked.Increment(ref _viewReads);
+            System.Threading.Interlocked.Add(ref _viewBytes, bytes);
+        }
+
+        private static bool IsViewPid(ulong pid)
+        {
+            long filter = System.Threading.Interlocked.Read(ref _filterPid);
+
+            return filter < 0 || pid == (ulong)filter;
+        }
+
+        // Content = anything outside save/system/config-style paths.
+        private static bool IsContentPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            // "/save.bin" is this title's save file, not game content.
+            return path != "/save.bin" && !HasPathPrefix(path, "/save") && !HasPathPrefix(path, "/system") &&
+                !HasPathPrefix(path, "/config") && !HasPathPrefix(path, "/register") &&
+                !HasPathPrefix(path, "/device") && !HasPathPrefix(path, "/host");
+        }
+
+        private static bool HasPathPrefix(string path, string prefix)
+        {
+            return path == prefix || path.StartsWith(prefix + "/", System.StringComparison.Ordinal);
+        }
+
+        internal static string DescribeFsView()
+        {
+            return $"pid={System.Threading.Interlocked.Read(ref _appPid)} " +
+                $"opens={System.Threading.Interlocked.Read(ref _viewOpens)} " +
+                $"contentOpens={System.Threading.Interlocked.Read(ref _contentOpens)} " +
+                $"contentFails={System.Threading.Interlocked.Read(ref _contentFails)} " +
+                $"reads={System.Threading.Interlocked.Read(ref _viewReads)} " +
+                $"bytes={System.Threading.Interlocked.Read(ref _viewBytes)}";
+        }
+
+        internal static void Trace(string line)
+        {
+            if (TraceEnabled && System.Threading.Interlocked.Increment(ref _traceLines) <= MaxTraceLines)
+            {
+                Logger.Warning?.Print(LogClass.ServiceFs, $"NX2FSTRACE {line}");
+                Logger.Warning?.Print(LogClass.ServiceFs, $"NX2FSVIEW {DescribeFsView()}");
+            }
         }
 
         public static string Describe()

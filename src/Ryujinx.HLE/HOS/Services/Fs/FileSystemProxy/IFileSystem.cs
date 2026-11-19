@@ -22,6 +22,22 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             return SharedRef<LibHac.FsSrv.Sf.IFileSystem>.CreateCopy(in _fileSystem);
         }
 
+        // Path.ToString() prints the struct name; decode the request buffer itself.
+        private static string DecodeFsPath(ServiceCtx context)
+        {
+            var pathBuff = context.Request.PtrBuff[0];
+            System.ReadOnlySpan<byte> rawPath = context.Memory.GetSpan(pathBuff.Position, (int)pathBuff.Size);
+            string utf8 = System.Text.Encoding.UTF8.GetString(rawPath).Trim('\0');
+            string utf16 = System.Text.Encoding.Unicode.GetString(rawPath).Trim('\0');
+
+            return utf8.Length > 1 && utf8[0] == '/' ? utf8 : utf16;
+        }
+
+        private static void ArmFsViewTrace(ServiceCtx context)
+        {
+            FsLoaderProgress.SetFsViewAppPid(context.Device?.System?.DebugGetApplicationProcess()?.Pid ?? 0);
+        }
+
         [CommandCmif(0)]
         // CreateFile(u32 createOption, u64 size, buffer<bytes<0x301>, 0x19, 0x301> path)
         public ResultCode CreateFile(ServiceCtx context)
@@ -98,7 +114,22 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
         {
             ref readonly Path name = ref FileSystemProxyHelper.GetSfPath(context);
 
+            string tracePath = null;
+            ulong callerPid = 0;
+
+            if (FsLoaderProgress.TraceEnabled)
+            {
+                tracePath = DecodeFsPath(context);
+                callerPid = context.ClientProcessId;
+                ArmFsViewTrace(context);
+            }
+
             Result result = _fileSystem.Get.GetEntryType(out uint entryType, in name);
+
+            if (tracePath != null)
+            {
+                FsLoaderProgress.Trace($"op=entryType pid={callerPid} path=\"{tracePath}\" result=0x{result.Value:X8}");
+            }
 
             context.ResponseData.Write((int)entryType);
 
@@ -115,6 +146,19 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             using SharedRef<LibHac.FsSrv.Sf.IFile> file = new();
 
             string fsPath = name.ToString();
+            bool trace = FsLoaderProgress.TraceEnabled;
+            ulong callerPid = 0;
+
+            if (trace)
+            {
+                if (System.Environment.GetEnvironmentVariable("NX2_FS_LOG") != "1")
+                {
+                    fsPath = DecodeFsPath(context);
+                }
+
+                callerPid = context.ClientProcessId;
+                ArmFsViewTrace(context);
+            }
 
             // One-time dump of the movie module's PLT slot 0xd481a58 (resolves the
             // imported function that returns the 0x2 result) so we can identify it.
@@ -140,13 +184,27 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
                 System.ReadOnlySpan<byte> rawPath = context.Memory.GetSpan(pathBuff.Position, (int)pathBuff.Size);
                 string utf8 = System.Text.Encoding.UTF8.GetString(rawPath).Trim('\0');
                 string utf16 = System.Text.Encoding.Unicode.GetString(rawPath).Trim('\0');
-                fsPath = utf8.Length > 1 && utf8[1] == '/' ? utf8.Trim('\0', (char)0) : utf16;
+                fsPath = utf8.Length > 1 && utf8[0] == '/' ? utf8 : utf16;
                 Logger.Warning?.Print(LogClass.ServiceFs, $"NX2 fsopen path=\"{fsPath}\" utf8=\"{utf8}\" utf16=\"{utf16}\" mode={mode}");
             }
 
             FsLoaderProgress.OnOpen(fsPath);
 
             Result result = _fileSystem.Get.OpenFile(ref file.Ref, in name, mode);
+
+            if (trace)
+            {
+                if (result.IsSuccess())
+                {
+                    FsLoaderProgress.OnFsOpen(callerPid, fsPath);
+                }
+                else
+                {
+                    FsLoaderProgress.OnFsOpenFail(callerPid, fsPath);
+                }
+
+                FsLoaderProgress.Trace($"op=open pid={callerPid} path=\"{fsPath}\" result=0x{result.Value:X8}");
+            }
 
             if (result.IsSuccess())
             {
@@ -167,7 +225,22 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             ref readonly Path name = ref FileSystemProxyHelper.GetSfPath(context);
             using SharedRef<LibHac.FsSrv.Sf.IDirectory> dir = new();
 
+            string tracePath = null;
+            ulong callerPid = 0;
+
+            if (FsLoaderProgress.TraceEnabled)
+            {
+                tracePath = DecodeFsPath(context);
+                callerPid = context.ClientProcessId;
+                ArmFsViewTrace(context);
+            }
+
             Result result = _fileSystem.Get.OpenDirectory(ref dir.Ref, in name, mode);
+
+            if (tracePath != null)
+            {
+                FsLoaderProgress.Trace($"op=dirOpen pid={callerPid} path=\"{tracePath}\" result=0x{result.Value:X8}");
+            }
 
             if (result.IsSuccess())
             {

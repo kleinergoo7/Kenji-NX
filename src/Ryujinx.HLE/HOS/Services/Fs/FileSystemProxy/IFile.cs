@@ -34,6 +34,13 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
 
             context.ResponseData.Write(bytesRead);
 
+            if (FsLoaderProgress.TraceEnabled)
+            {
+                ulong callerPid = context.ClientProcessId;
+                FsLoaderProgress.OnFsRead(callerPid, bytesRead);
+                FsLoaderProgress.Trace($"op=read pid={callerPid} count=1 bytes={bytesRead} offset=0x{offset:X} result=0x{result.Value:X8}");
+            }
+
             return (ResultCode)result.Value;
         }
 

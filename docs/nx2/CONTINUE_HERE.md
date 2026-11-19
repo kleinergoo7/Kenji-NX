@@ -545,6 +545,31 @@ not measure it.
 
 Task 1l shared-bank fix reverted: wired correctly but `NO_COMPUTE_EMIT`, and risks 3D/compute Macro slot cross-talk; not a valid foundation.
 
+## Phase 1m — guest filesystem view (Task 1, `FS_VIEW=NO_CONTENT_ATTEMPT`)
+
+Decisive 90 s direct capture of `Fast_Fusion_Update_1.4.nup` (rc=124 expected timeout,
+`.nx2-logs/run-20261119-222700-task1-fsview-DECISIVE/ocarina.log`) with `NX2_PATCH=""`,
+`NX2_FS_TRACE=1 NX2_FS_LOG=1`, `--dram-size MemoryConfiguration12GiB
+--memory-manager-mode SoftwarePageTable --ignore-missing-services`. Observe-only: the
+trace adds counters and log lines but does not change any Fs result.
+
+- Final summary: `NX2FSVIEW pid=109 opens=5 contentOpens=0 contentFails=0 reads=1 bytes=23332`.
+  `pid=109` is the active application (`Process identity: Application pid=109` in the log).
+- All six traced operations are on the single path `/save.bin`, the only path opened:
+  `NX2FSTRACE op=open pid=83 path="/save.bin" result=0x00000202` (×2), then
+  `NX2FSTRACE op=open pid=83 path="/save.bin" result=0x00000000` (×3), and
+  `NX2FSTRACE op=read pid=83 count=1 bytes=23332 offset=0x0 result=0x00000000`.
+  No `/romfs`/`/rom` or any other content path was opened, queried or read.
+- `pid=83` on trace lines is the fsp-srv server pid: these guest Fs IPC requests carry
+  no caller pid at the service layer, so the trace observes all traffic through fsp-srv
+  while the summary is labelled with the active application pid. The raw per-line pid
+  is recorded verbatim.
+
+**`FS_VIEW=NO_CONTENT_ATTEMPT`** — `contentOpens == 0`; the only path opened was
+`/save.bin` (the title's save file, excluded from the content classification). The guest
+never attempted to open any of the 3,063 content files confirmed on disk. This value is
+input to Task 3.
+
 ## TL;DR from a fresh clone
 
 ```bash
