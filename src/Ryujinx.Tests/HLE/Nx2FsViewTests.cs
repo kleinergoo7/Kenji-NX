@@ -36,6 +36,8 @@ namespace Ryujinx.Tests.HLE
             FsLoaderProgress.OnFsRead(AppPid, 4096);
 
             Assert.That(FsLoaderProgress.DescribeFsView(),
+                Does.Contain("scope=all-fsp-srv activeAppPid=109 "));
+            Assert.That(FsLoaderProgress.DescribeFsView(),
                 Does.Contain("contentOpens=1 contentFails=1 reads=1 bytes=4096"));
         }
 

@@ -212,7 +212,7 @@ namespace Ryujinx.HLE.HOS.Services.Fs
 
         internal static string DescribeFsView()
         {
-            return $"pid={System.Threading.Interlocked.Read(ref _appPid)} " +
+            return $"scope=all-fsp-srv activeAppPid={System.Threading.Interlocked.Read(ref _appPid)} " +
                 $"opens={System.Threading.Interlocked.Read(ref _viewOpens)} " +
                 $"contentOpens={System.Threading.Interlocked.Read(ref _contentOpens)} " +
                 $"contentFails={System.Threading.Interlocked.Read(ref _contentFails)} " +

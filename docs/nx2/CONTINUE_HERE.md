@@ -553,8 +553,11 @@ Decisive 90 s direct capture of `Fast_Fusion_Update_1.4.nup` (rc=124 expected ti
 --memory-manager-mode SoftwarePageTable --ignore-missing-services`. Observe-only: the
 trace adds counters and log lines but does not change any Fs result.
 
-- Final summary: `NX2FSVIEW pid=109 opens=5 contentOpens=0 contentFails=0 reads=1 bytes=23332`.
-  `pid=109` is the active application (`Process identity: Application pid=109` in the log).
+- Final summary (current label format): `NX2FSVIEW scope=all-fsp-srv activeAppPid=109 opens=5 contentOpens=0 contentFails=0 reads=1 bytes=23332`.
+  `activeAppPid=109` is the active application (`Process identity: Application pid=109` in
+  the log). The capture predates the label-only change, so the logged line reads
+  `NX2FSVIEW pid=109 opens=5 contentOpens=0 contentFails=0 reads=1 bytes=23332` with the
+  identical counter values.
 - All six traced operations are on the single path `/save.bin`, the only path opened:
   `NX2FSTRACE op=open pid=83 path="/save.bin" result=0x00000202` (×2), then
   `NX2FSTRACE op=open pid=83 path="/save.bin" result=0x00000000` (×3), and
@@ -563,7 +566,10 @@ trace adds counters and log lines but does not change any Fs result.
 - `pid=83` on trace lines is the fsp-srv server pid: these guest Fs IPC requests carry
   no caller pid at the service layer, so the trace observes all traffic through fsp-srv
   while the summary is labelled with the active application pid. The raw per-line pid
-  is recorded verbatim.
+  is recorded verbatim. **Pid-scope caveat:** the counters cover *all* fsp-srv traffic,
+  not just pid 109; this is a superset of the application's own operations, so a zero
+  content-open count in the superset implies the application also made zero content opens
+  and the verdict is unaffected.
 
 **`FS_VIEW=NO_CONTENT_ATTEMPT`** — `contentOpens == 0`; the only path opened was
 `/save.bin` (the title's save file, excluded from the content classification). The guest
