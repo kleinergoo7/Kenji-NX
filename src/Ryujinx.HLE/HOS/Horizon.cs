@@ -116,7 +116,9 @@ namespace Ryujinx.HLE.HOS
 
         public Horizon(Switch device)
         {
-            TickSource = new TickSource(KernelConstants.CounterFrequency);
+            // Use the guest profile's tick rate (Switch 2 = 31.25 MHz); CNTFRQ_EL0 and
+            // SVC GetSystemTick derive from this, and a wrong rate skews init timing.
+            TickSource = new TickSource(device.CompatibilityProfile.TickFrequency);
 
             KernelContext = new KernelContext(
                 TickSource,

@@ -331,11 +331,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         {
             uint cpuBoostMode = context.RequestData.ReadUInt32();
 
-            if (cpuBoostMode > 1)
-            {
-                return ResultCode.InvalidParameters;
-            }
-
+            // Switch 2 passes boost-mode values outside the Switch 1 range (0/1);
+            // rejecting them returns 2128-0506, which aborts the guest during init.
             _apmSystemManagerServer.SetCpuBoostMode((Apm.CpuBoostMode)cpuBoostMode);
 
             // TODO: It signals an internal event of ICommonStateGetter. We have to determine where this event is used.
