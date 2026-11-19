@@ -164,6 +164,45 @@ guest never emits the PCAS/QMD-launch method — the chain breaks before PCAS, a
 macro emission. Per the plan gate the next task would be to fix macro emission;
 do **not** begin it without a human decision on this recorded result.
 
+## Phase 1d — disassemble the stalled guest loop (Task 1d)
+
+Code bytes were extracted from `/home/reng/Downloads/Fast_Fusion_Update_1.4.nup`
+with `tools/nx2/dump-guest-code.sh <nup> main <guest-va> <length> <out.bin>`,
+which reuses the repository's `NupArchive` + LibHac `NsoReader` (two runs gave an
+identical SHA-256). `cengine.nss` is the ExeFS `main` NSO: its real load base is
+`0x8520000` (Task 1's own symbolizer: `0x863d118 → cengine.nss:0x11d118`), its
+text section is at NSO file offset `0x108`, memory offset 0, size `0x4E02F0`,
+decompressed before slicing. `Nx2GuestCodeTests` locks down the same arithmetic
+with the brief's worked-example values (base `0x85CC000`, text RVA `0x61000`,
+file offset `0x11118`); see the task report for the reconciliation.
+
+Disassembly (`aarch64-linux-gnu-objdump -D -b binary -m aarch64`, VMA adjusted):
+
+- VA `0x863D118` (`cengine.nss:0x11d118`): the frame reached via `blr x8` at
+  `0x863D114` then loops over an array of 16-byte records at `[x19,#248]` (count
+  `[x19,#256]`), dispatching each via `blr [x22]` (`0x863D140`–`0x863D15C`) and
+  ending `bl 0x867bc24` / `bl 0x863b408` before `retab`. This is the per-frame
+  render-job dispatch that enters `nn::wsi::nv::OnPresentTexture` →
+  `NativeWindow::Present`.
+- VA `0x863B54C` (`cengine.nss:0x11b54c`): tiny thunk at `0x863B52C` —
+  `blr [vtable+0x28]` then tail-call `br [vtable+0x20]` after restoring `x30`;
+  a generic virtual forwarder.
+- VA `0x860B87C` (`cengine.nss:0xeb87c`): raw bytes `ldr x0,[x22]; ldr x8,[x0];
+  ldr x8,[x8,#272]; blr x8; tbz w0,#0,0x860B75C`. The enclosing function
+  (`0x860B6E0` prologue) issues the same `blr [vtable+0x110]` at `0x860B724` and
+  `0x860B754` and exits only on `tbnz w0,#0` (`0x860B728`/`0x860B758`).
+  **Reading (no symbols):** a virtual *completion poll* — it spins while bit 0
+  of the method's boolean return is 0.
+
+GUEST_LOOP=cengine.nss:0xeb87c (VA 0x860B87C) — virtual completion poll: `blr [vtable+0x110]` then `tbz w0,#0,0x860B75C`, spinning until bit 0 of the returned bool is 1 (the awaited job / present-completion reports done); the frames it calls (`cengine.nss:0x11b54c` → `0x11d118`, VA 0x863D118) lead into the per-frame render-job dispatch that calls `OnPresentTexture` → `NativeWindow::Present`, blocked on the `appmsg` event at `nnSdk:0x563C38`.
+
+evidence: `main.nso` text (decompressed) at file offsets `0x11d118`, `0x11b54c`,
+`0xeb87c`; Task 1 logs `run-20261119-162552-gate100/ocarina.log` L598–607 (MainThread
+stack identical at L658–661 of the gate5000 run), leaf `nnSdk:0x563c38` on `appmsg`.
+Gate: stop for a human decision before acting on what it names — the ROM has no
+symbols, so the function naming and the "what completes" part of the condition are
+interpretations of the raw bytes/disassembly recorded above, not symbol-level proof.
+
 ## TL;DR from a fresh clone
 
 ```bash
