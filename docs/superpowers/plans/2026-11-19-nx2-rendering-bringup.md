@@ -179,6 +179,46 @@ git commit -m "nx2: trace macro to PCAS to QMD dispatch link"
 
 **Gate:** the `MACRO_QMD=` value selects the next task — `MACROS_RUN_NO_PCAS` means fix macro emission; `PCAS_ONLY_ZERO_QMD` means find where the guest programs the PCAS QMD address; `PCAS_LAUNCH_NO_QMD_TRACE` means fix the dispatch path. Do not begin any of them without a human decision on the recorded result.
 
+### Task 1d: Disassemble the stalled guest loop
+
+**Files:**
+- Create: `tools/nx2/dump-guest-code.sh` (helper: NUP ExeFS → NSO section → raw binary at a guest VA)
+- Create: `src/Ryujinx.Tests/HLE/Nx2GuestCodeTests.cs` (address→file-offset mapping test, no disassembly dependency)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `GUEST_LOOP=`)
+
+**Interfaces:**
+- Consumes: the NUP file `/home/reng/Downloads/Fast_Fusion_Update_1.4.nup`; guest return addresses from the Task 1 stack capture (`0x863d118`, `0x863b54c`, `0x860b87c` in `cengine.nss`; module base `0x85CC000`); `aarch64-linux-gnu-objdump` (verified installed).
+- Produces: `tools/nx2/dump-guest-code.sh <nup> <module> <guest-va> <length> <out.bin>` extracting the 16-byte-aligned code bytes at that VA; a written analysis in `CONTINUE_HERE.md` naming the function/loop at each return address.
+
+- [ ] **Step 1: Write the failing address-mapping test**
+
+In `Nx2GuestCodeTests.cs`, assert that for a module loaded at VA `0x85CC000` with an NSO text section at file offset `0x1000`, guest VA `0x863d118` maps to file offset `0x11118` (and that an address outside the section is rejected). No disassembly in the test — just the arithmetic the shell helper must use.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2GuestCodeTests" -v q`
+Expected: FAIL — test file/type does not exist.
+
+- [ ] **Step 3: Implement the extraction helper and address mapping**
+
+Write `tools/nx2/dump-guest-code.sh` using the existing `NupArchive`/NSO layout knowledge (or, if the NUP parser cannot be reused from shell, a small `dotnet run` helper under `tools/nx2/`) to locate the module's text section and copy `length` bytes starting at the translated file offset. Verify with `sha256sum` that two runs produce identical output.
+
+- [ ] **Step 4: Disassemble the three return addresses**
+
+Run `aarch64-linux-gnu-objdump -D -b binary -m aarch64 <out.bin>` on each extracted slice. Identify the call sites that produced the Task 1 MainThread stack frames; read the surrounding control flow to name the engine loop (e.g. a resource/job wait, a file load, a service call). Record one `GUEST_LOOP=` line in `docs/nx2/CONTINUE_HERE.md` with the named function, its VA and the concrete condition it waits for.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2GuestCodeTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add tools/nx2 src/Ryujinx.Tests/HLE/Nx2GuestCodeTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: extract and disassemble the stalled guest loop"
+```
+
+**Gate:** record `GUEST_LOOP=` and stop for a human decision before acting on what it names — disassembly findings can be misattributed without symbols.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
