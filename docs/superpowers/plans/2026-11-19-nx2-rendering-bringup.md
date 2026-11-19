@@ -416,6 +416,48 @@ git commit -m "nx2: add QMD ring scheduling from MME data RAM"
 
 **Gate:** stop for a human decision on `QMD_RING=` before any further work.
 
+### Task 1j: Distinguish 3D vs compute macros and their emitted registers
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/MME/MacroTuring.cs` (per-engine macro counters, emitted-register histogram per engine)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/GPFifoProcessor.cs` (expose counters via `Nx2GpuStall`)
+- Modify: `src/Ryujinx.HLE/HOS/Services/Am/AppletAE/AllSystemAppletProxiesService/SystemAppletProxy/INx2Vi2Session.cs` (progress token `mme3d=`/`mmec=`)
+- Create: `src/Ryujinx.Tests/Graphics/Nx2MacroEngineTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `MACRO_ENGINE=`)
+
+**Interfaces:**
+- Consumes: `Macro.StartExecution(..., bool compute)` (`Macro.cs`) distinguishes compute vs 3D macros; `MacroTuring.Execute` at `:163` increments `MacrosRun`; `Nx2GpuStall.MacrosRun`/`EmittedMethods` and `DescribeEmitted()` are the existing progress tokens.
+- Produces: `MacroTuring.MacrosCompute`/`Macros3D` counters and `ComputeEmittedHistogram`; exposed as `mme3d=`/`mmec=` in `NX2 progress` plus a `NX2_MME_ENGINE=1` log of each compute macro's emitted register addresses.
+
+- [ ] **Step 1: Write the failing test**
+
+In `Nx2MacroEngineTests.cs`, assert that a synthetic execute recorded as `compute: true` increments `MacrosCompute` and not `Macros3D`, that `compute: false` does the reverse, and that `ComputeEmittedHistogram` records a register address passed to the emit path. Reset counters in `[SetUp]`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2MacroEngineTests" -v q`
+Expected: FAIL — counters do not exist.
+
+- [ ] **Step 3: Add per-engine counters and emit histogram**
+
+In `Macro.Execute`/`MacroTuring.Execute`, use the existing `compute` flag to increment the matching counter; in the emit path, record compute macro register addresses into `ComputeEmittedHistogram` (capped storage). Expose through `Nx2GpuStall` and add `mme3d=`/`mmec=` to the progress line. Add `NX2_MME_ENGINE=1` gated one-line-per-compute-macro log of emitted addresses (capped 200 lines). Observe-only; no dispatch change.
+
+- [ ] **Step 4: Run and record**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_MME_ENGINE=1 NX2_MACRO_LOG=1 NX2_METHOD_LOG=1`. Record `MACRO_ENGINE=` in `docs/nx2/CONTINUE_HERE.md` with: `mme3d=`/`mmec=` counts, the top compute-emitted registers, and one conclusion — `COMPUTE_MACROS_RUN` (mmec > 0), `ONLY_3D_MACROS` (mmec == 0), or `INCONCLUSIVE`. If `ONLY_3D_MACROS`, stop: the guest never invokes compute macros, so all QMD/PCAS paths are unreachable.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2MacroEngineTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/MME src/Ryujinx.Graphics.Gpu/Engine/GPFifo src/Ryujinx.HLE/HOS/Services/Am/AppletAE/AllSystemAppletProxiesService/SystemAppletProxy/INx2Vi2Session.cs src/Ryujinx.Tests/Graphics/Nx2MacroEngineTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: separate 3D and compute macro counters"
+```
+
+**Gate:** stop for a human decision on `MACRO_ENGINE=` before any fix based on it.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
