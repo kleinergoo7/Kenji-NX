@@ -15,5 +15,12 @@ namespace Ryujinx.HLE.HOS.Services.Am
 
             return ResultCode.Success;
         }
+
+        [CommandCmif(10)]
+        // Switch 2 alias of command 0; nn::oe::InitializeApplet opens the proxy with it.
+        public ResultCode OpenApplicationProxySwitch2(ServiceCtx context)
+        {
+            return OpenApplicationProxy(context);
+        }
     }
 }
