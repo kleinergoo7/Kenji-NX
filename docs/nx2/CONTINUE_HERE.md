@@ -101,6 +101,37 @@ QMD-release hypothesis should Task 2 GPU changes begin; otherwise revisit the
 finding with the human partner rather than starting GPU work against an
 unconfirmed blocker.
 
+## Phase 1b confirmation — QMD release / semaphore decode (Task 1b)
+
+Re-ran the 90 s direct Fast Fusion capture with the new observe-only traces
+(`NX2_QMD_TRACE=1 NX2_SEM_WATCH=1 NX2_SYNCPT_TRACE=1 NX2_FIFO_TRACE=1`,
+`NX2_PATCH=""`, Fast Fusion profile) into
+`.nx2-logs/run-20261119-173429-confirm1b/ocarina.log` (rc=124 expected timeout,
+1150 lines). The new binary is confirmed live: the `NX2SEM` line below came from
+the new `Nx2QmdTrace` class whose env gates are read at class init, and
+`NX2QMD qmd=0x` is present in the built `Ryujinx.Graphics.Gpu.dll` — so both
+gates were on.
+
+- `NX2QMD` lines: **0**. `SendSignalingPcasB` is the only `Read<ComputeQmd>` / QMD
+  dispatch entry in `ComputeClass.cs` (no alternate path); it was never called,
+  so the guest issued **no compute QMD dispatch** in the whole capture.
+- `NX2SEM` lines: 1 — `NX2SEM w addr=0x6782FF0010 value=0x7` at ~26 s, a GPFIFO
+  `Semaphored` 4-byte release, not a QMD release slot.
+- `NX2SPT`: the same 4 submits (sp 1/2, fences 0/1/0/2) with slot 0 signalled at
+  target 2; `NX2FIFO`: 745 lines; `NX2 progress t=60s ... submits=4 ... draws=0`.
+
+No QMD dispatch ⇒ there is no QMD address, release-slot address/payload or
+QMD-driven semaphore word to name: the release slots were never reached. The
+single semaphore word observed (`addr=0x6782FF0010 ← 7`) is a fifo semaphored
+release, not a compute→3D QMD release.
+
+CONFIRM=UPSTREAM_OF_QMD
+
+Meaning: the guest never submits compute QMD work, so the blocker is upstream of
+QMD dispatch — firing QMD releases / setting `UsesMme64` (Task 2) cannot fix it.
+Per the plan gate, Task 2 must not start; report to the human partner with this
+finding instead of writing GPU code against an unconfirmed blocker.
+
 ## TL;DR from a fresh clone
 
 ```bash

@@ -1,3 +1,4 @@
+using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.Device;
 using Ryujinx.Graphics.Gpu.Engine.GPFifo;
 using Ryujinx.Graphics.Gpu.Engine.InlineToMemory;
@@ -9,6 +10,7 @@ using Ryujinx.Graphics.Shader;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Ryujinx.Graphics.Gpu.Engine.Compute
 {
@@ -35,6 +37,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// v1.1 (Switch 2 enablement): tracks versioned compute dispatches.
         /// </summary>
         private readonly QmdScheduler _qmdScheduler = new();
+
+        // Env-gated (NX2_QMD_TRACE=1) observe-only QMD dispatch trace, capped at 200 lines.
+        private static int _qmdTraceLines;
 
         /// <summary>
         /// Whether the MME64 microcode engine handles QMD dispatch.
@@ -160,6 +165,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
             _qmdScheduler.Track(ref descriptor);
 
             ComputeQmd qmd = _channel.MemoryManager.Read<ComputeQmd>((ulong)qmdAddress << 8);
+
+            if (Nx2QmdTrace.QmdEnabled && Interlocked.Increment(ref _qmdTraceLines) <= 200)
+            {
+                string summary = Nx2QmdTrace.Describe(qmd, _fifoClass.MmeDataRam[0x27]);
+                Logger.Warning?.Print(LogClass.ServiceNv, $"NX2QMD qmd=0x{qmdAddress:X} {summary} mme64={UsesMme64}");
+            }
 
             ulong shaderGpuVa = ((ulong)_state.State.SetProgramRegionAAddressUpper << 32) | _state.State.SetProgramRegionB;
 

@@ -1,4 +1,5 @@
 using Ryujinx.Graphics.Device;
+using Ryujinx.Graphics.Gpu.Engine.Compute;
 using Ryujinx.Graphics.Gpu.Engine.MME;
 using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.Graphics.Gpu.Synchronization;
@@ -221,6 +222,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             {
                 int current = _parent.MemoryManager.Read<int>(address);
 
+                Nx2QmdTrace.WatchSemaphore(address, (uint)current, "r");
+
                 bool met = operation == SemaphoredOperation.Acquire
                     ? current == value
                     : (uint)current >= (uint)value;
@@ -235,6 +238,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             if (operation == SemaphoredOperation.Release)
             {
                 _parent.MemoryManager.Write(address, value);
+
+                Nx2QmdTrace.WatchSemaphore(address, (uint)value, "w");
 
                 if (Memory.Nx2GpuMemory.TryGetSemaphoreMirror(address, out ulong mirror))
                 {
