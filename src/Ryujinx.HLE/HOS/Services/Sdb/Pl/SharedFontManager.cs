@@ -5,6 +5,8 @@ using LibHac.FsSystem;
 using LibHac.Ncm;
 using LibHac.Tools.FsSystem;
 using LibHac.Tools.FsSystem.NcaUtils;
+using Microsoft.IO;
+using Ryujinx.Common.Logging;
 using Ryujinx.Common.Memory;
 using Ryujinx.HLE.Exceptions;
 using Ryujinx.HLE.FileSystem;
@@ -21,11 +23,29 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
     {
         private const uint FontKey = 0x06186249;
         private const uint BFTTFMagic = 0x18029a7f;
+        private const uint TtfSfntTrueType = 0x00010000;
+        private const uint TtfSfntCff = 0x4F54544F; // 'OTTO'
+        private const uint TtfSfntTrue = 0x74727565; // 'true'
+        private const uint TtfSfntTyp1 = 0x74797031; // 'typ1'
+
+        // Host fallback when no system titles are installed (same layout as below).
+        private static readonly string[] FallbackFontPaths =
+        [
+            "/usr/share/fonts/truetype/Carlito-Regular.ttf",
+            "/usr/share/fonts/truetype/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/Roboto-Regular.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+        ];
+
+        private sealed class MissingSystemFontException(string message) : InvalidSystemResourceException(message);
 
         private readonly Switch _device;
         private readonly SharedMemoryStorage _storage;
 
-        private struct FontInfo
+        internal struct FontInfo
         {
             public int Offset;
             public int Size;
@@ -38,6 +58,9 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
         }
 
         private Dictionary<SharedFontType, FontInfo> _fontData;
+
+        // Plain TTF copies after the BFTTF data (Switch 2 GetBuiltInFontData).
+        private Dictionary<SharedFontType, FontInfo> _builtInFontData;
 
         public SharedFontManager(Switch device, SharedMemoryStorage storage)
         {
@@ -53,6 +76,21 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
         }
 
         public void EnsureInitialized(ContentManager contentManager)
+        {
+            try
+            {
+                EnsureSystemFonts(contentManager);
+            }
+            catch (MissingSystemFontException ex) when (
+                _device.CompatibilityProfile.Generation == ConsoleGeneration.Switch2 &&
+                _device.Configuration.MemoryConfiguration == MemoryConfiguration.MemoryConfiguration12GiB)
+            {
+                Logger.Warning?.Print(LogClass.ServiceFs, ex.Message);
+                LoadFallbackFonts();
+            }
+        }
+
+        private void EnsureSystemFonts(ContentManager contentManager)
         {
             if (_fontData == null)
             {
@@ -105,7 +143,7 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                                 titleName = "Unknown";
                             }
 
-                            throw new InvalidSystemResourceException($"{titleName} ({fontTitle:x8}) system title not found! This font will not work, provide the system archive to fix this error. (See https://github.com/Ryujinx/Ryujinx#requirements for more information)");
+                            throw new MissingSystemFontException($"{titleName} ({fontTitle:x8}) system title not found! This font will not work, provide the system archive to fix this error.");
                         }
                     }
                     else
@@ -142,6 +180,183 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             _storage.GetRef<int>(offset + 4) = encryptedSize;
         }
 
+        public void EnsureBuiltInFonts(ContentManager contentManager)
+        {
+            if (_builtInFontData != null)
+            {
+                return;
+            }
+
+            try
+            {
+                EnsureSystemFonts(contentManager);
+            }
+            catch (Exception ex) when (ex is InvalidSystemResourceException || ex is ArgumentException)
+            {
+                LoadFallbackFonts();
+            }
+
+            AppendPlainTtfCopies();
+        }
+
+        public bool TryGetBuiltInFont(SharedFontType type, out FontInfo info)
+        {
+            EnsureBuiltInFonts(_device.System.ContentManager);
+
+            return _builtInFontData.TryGetValue(type, out info);
+        }
+
+        public int GetBuiltInFontsCount()
+        {
+            EnsureBuiltInFonts(_device.System.ContentManager);
+
+            return _builtInFontData.Count;
+        }
+
+        private void AppendPlainTtfCopies()
+        {
+            _builtInFontData = new Dictionary<SharedFontType, FontInfo>();
+
+            ulong offset = 0;
+
+            foreach (KeyValuePair<SharedFontType, FontInfo> entry in _fontData)
+            {
+                offset = Math.Max(offset, (ulong)(entry.Value.Offset + 8 + entry.Value.Size));
+            }
+
+            foreach (SharedFontType type in new[]
+            {
+                SharedFontType.JapanUsEurope,
+                SharedFontType.SimplifiedChinese,
+                SharedFontType.SimplifiedChineseEx,
+                SharedFontType.TraditionalChinese,
+                SharedFontType.Korean,
+                SharedFontType.NintendoEx,
+            })
+            {
+                FontInfo src = _fontData[type];
+
+                offset = (offset + 0xFFF) & ~0xFFFUL;
+
+                if (offset + (ulong)src.Size > (ulong)Horizon.FontSize)
+                {
+                    throw new InvalidSystemResourceException("The sum of all font size exceed the shared memory size.");
+                }
+
+                for (int i = 0; i < src.Size; i++)
+                {
+                    _storage.GetRef<byte>(offset + (ulong)i) = _storage.GetRef<byte>((ulong)(src.Offset + 8 + i));
+                }
+
+                _builtInFontData[type] = new FontInfo((int)offset, src.Size);
+                offset += (ulong)src.Size;
+            }
+        }
+
+        private void LoadFallbackFonts()
+        {
+            _storage.ZeroFill();
+
+            byte[] ttf = null;
+            string usedPath = null;
+
+            foreach (string path in FallbackFontPaths)
+            {
+                try
+                {
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    using FileStream stream = File.OpenRead(path);
+                    byte[] candidate = ReadFallbackFont(stream);
+                    if (candidate != null)
+                    {
+                        ttf = candidate;
+                        usedPath = path;
+                        break;
+                    }
+
+                    Logger.Warning?.Print(LogClass.ServiceFs, $"Host fallback font '{path}' has invalid size or format.");
+                }
+                catch (IOException)
+                {
+                    // Try the next candidate path.
+                }
+            }
+
+            if (ttf == null)
+            {
+                ttf = ReadBundledFallbackFont();
+                Logger.Info?.Print(LogClass.ServiceFs, "Using bundled fallback font 'DejaVu Sans' for shared fonts.");
+            }
+            else
+            {
+                Logger.Info?.Print(LogClass.ServiceFs, $"Using host fallback font '{usedPath}' for shared fonts.");
+            }
+
+            _fontData = new Dictionary<SharedFontType, FontInfo>();
+            ulong fontOffset = 0;
+
+            foreach (SharedFontType type in new[]
+            {
+                SharedFontType.JapanUsEurope,
+                SharedFontType.SimplifiedChinese,
+                SharedFontType.SimplifiedChineseEx,
+                SharedFontType.TraditionalChinese,
+                SharedFontType.Korean,
+                SharedFontType.NintendoEx,
+            })
+            {
+                WriteMagicAndSize(fontOffset, ttf.Length);
+
+                fontOffset += 8;
+
+                for (int i = 0; i < ttf.Length; i++)
+                {
+                    _storage.GetRef<byte>(fontOffset + (ulong)i) = ttf[i];
+                }
+
+                _fontData[type] = new FontInfo((int)fontOffset - 8, ttf.Length);
+                fontOffset += (ulong)ttf.Length;
+
+                if (fontOffset > (ulong)Horizon.FontSize)
+                {
+                    throw new InvalidSystemResourceException("The sum of all font size exceed the shared memory size.");
+                }
+            }
+
+            _builtInFontData = null;
+        }
+
+        internal static byte[] ReadBundledFallbackFont()
+        {
+            const string resourceName = "Resources.DejaVuSans.ttf";
+            using Stream stream = typeof(SharedFontManager).Assembly.GetManifestResourceStream(typeof(SharedFontManager), resourceName);
+
+            return (stream == null ? null : ReadFallbackFont(stream)) ??
+                throw new InvalidSystemResourceException($"Bundled shared font '{resourceName}' is missing or invalid.");
+        }
+
+        private static byte[] ReadFallbackFont(Stream stream)
+        {
+            // Shared memory reserves a header and one copy for each font type.
+            const int maxFontBytes = Horizon.FontSize / (int)SharedFontType.Count - 8;
+            if (stream.Length <= sizeof(uint) || stream.Length > maxFontBytes)
+            {
+                return null;
+            }
+
+            // The shared-memory limit fits in int and bounds the allocation.
+            byte[] data = new byte[(int)stream.Length];
+            stream.ReadExactly(data);
+
+            uint magic = BinaryPrimitives.ReadUInt32BigEndian(data);
+
+            return magic is TtfSfntTrueType or TtfSfntCff or TtfSfntTrue or TtfSfntTyp1 ? data : null;
+        }
+
         public int GetFontSize(SharedFontType fontType)
         {
             EnsureInitialized(_device.System.ContentManager);
@@ -161,7 +376,7 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             static uint KXor(uint data) => data ^ FontKey;
 
             using BinaryReader reader = new(bfttfStream);
-            using MemoryStream ttfStream = MemoryStreamManager.Shared.GetStream();
+            using RecyclableMemoryStream ttfStream = MemoryStreamManager.Shared.GetStream();
             using BinaryWriter output = new(ttfStream);
 
             if (KXor(reader.ReadUInt32()) != BFTTFMagic)

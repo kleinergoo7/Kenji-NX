@@ -19,6 +19,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             Prefetch,
             NoPrefetch,
+            Callback,
         }
 
         /// <summary>
@@ -35,6 +36,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             /// The type of the command buffer.
             /// </summary>
             public CommandBufferType Type;
+
+            /// <summary>
+            /// Runs when a Callback entry reaches the front of the queue, in GPU-thread
+            /// order behind every previously queued command buffer.
+            /// </summary>
+            public Action Callback;
 
             /// <summary>
             /// Fetched data.
@@ -111,6 +118,23 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// </summary>
         public void SignalNewEntries()
         {
+            _event.Set();
+        }
+
+        /// <summary>
+        /// Runs an action once the GPU thread has processed everything queued so far.
+        /// Unmap and destroy jobs complete this way (Eglantine SignalAfterGpu): the
+        /// backing must stay mapped until the queued work that reads it is done.
+        /// </summary>
+        /// <param name="callback">Action to run in GPU-thread order</param>
+        public void RunAfterGpu(Action callback)
+        {
+            _commandBufferQueue.Enqueue(new CommandBuffer
+            {
+                Type = CommandBufferType.Callback,
+                Callback = callback,
+            });
+
             _event.Set();
         }
 
@@ -194,7 +218,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <returns>True if commands were received, false if wait timed out</returns>
         public bool WaitForCommands()
         {
-            return !_commandBufferQueue.IsEmpty || (_event.WaitOne(8) && !_commandBufferQueue.IsEmpty);
+            if (!_commandBufferQueue.IsEmpty)
+            {
+                return true;
+            }
+
+            _event.WaitOne(8);
+            return !_commandBufferQueue.IsEmpty || GPFifoProcessor.HasStalledChannels(_context);
         }
 
         /// <summary>
@@ -205,9 +235,19 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             // Use this opportunity to also dispose any pending channels that were closed.
             _context.RunDeferredActions();
 
+            // A semaphore release may have landed since the last dispatch: resume those first.
+            GPFifoProcessor.TryResumeAll(_context);
+
             // Process command buffers.
             while (_ibEnable && !_interrupt && _commandBufferQueue.TryDequeue(out CommandBuffer entry))
             {
+                if (entry.Type == CommandBufferType.Callback)
+                {
+                    GPFifoProcessor.RunAfterPendingCommands(_context, entry.Callback);
+
+                    continue;
+                }
+
                 bool flushCommandBuffer = true;
 
                 if (_flushSkips != 0)
@@ -215,8 +255,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     _flushSkips--;
                     flushCommandBuffer = false;
                 }
-
-                ReadOnlySpan<int> words = entry.Fetch(entry.Processor.MemoryManager, flushCommandBuffer);
 
                 // If we are changing the current channel,
                 // we need to force all the host state to be updated.
@@ -226,8 +264,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     entry.Processor.ForceAllDirty();
                 }
 
-                entry.Processor.Process(entry.EntryAddress, words);
+                if (entry.Words != null)
+                {
+                    entry.Processor.Process(entry.EntryAddress, entry.Words);
+                }
+                else
+                {
+                    // Capture this entry, not the loop's next dequeue. The processor may
+                    // postpone the memory read until a semaphore acquire has completed.
+                    CommandBuffer buffer = entry;
+                    entry.Processor.Process(entry.EntryAddress,
+                        () => buffer.Fetch(buffer.Processor.MemoryManager, flushCommandBuffer));
+                }
             }
+
+            GPFifoProcessor.TryResumeAll(_context);
 
             _interrupt = false;
         }

@@ -6,6 +6,7 @@ namespace Ryujinx.Graphics.Nvdec
     {
         private FFmpeg.H264.Decoder _h264Decoder;
         private FFmpeg.Vp8.Decoder _vp8Decoder;
+        private FFmpeg.Av1.Decoder _av1Decoder;
 
         public FFmpeg.H264.Decoder GetH264Decoder()
         {
@@ -15,6 +16,11 @@ namespace Ryujinx.Graphics.Nvdec
         public FFmpeg.Vp8.Decoder GetVp8Decoder()
         {
             return _vp8Decoder ??= new FFmpeg.Vp8.Decoder();
+        }
+
+        public FFmpeg.Av1.Decoder GetAv1Decoder()
+        {
+            return _av1Decoder ??= new FFmpeg.Av1.Decoder();
         }
 
         public void Dispose()

@@ -14,6 +14,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
 
         public bool IsLight => _parent.IsLight;
 
+        public string Name => _parent.Name;
+
         public KClientPort(KernelContext context, KPort parent, int maxSessions) : base(context)
         {
             _maxSessions = maxSessions;

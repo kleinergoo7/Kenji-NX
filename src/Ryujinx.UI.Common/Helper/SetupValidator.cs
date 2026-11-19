@@ -1,9 +1,10 @@
 using Ryujinx.Common.Logging;
+using Ryujinx.Common.UI;
 using Ryujinx.HLE.FileSystem;
 using System;
 using System.IO;
 
-namespace Ryujinx.UI.Common.Helper
+namespace Ryujinx.Ava.Utilities
 {
     /// <summary>
     /// Ensure installation validity
@@ -12,18 +13,11 @@ namespace Ryujinx.UI.Common.Helper
     {
         public static bool IsFirmwareValid(ContentManager contentManager, out UserError error)
         {
-            bool hasFirmware = contentManager.GetCurrentFirmwareVersion() != null;
+            error = contentManager.GetCurrentFirmwareVersion() != null
+                ? UserError.Success
+                : UserError.NoFirmware;
 
-            if (hasFirmware)
-            {
-                error = UserError.Success;
-
-                return true;
-            }
-
-            error = UserError.NoFirmware;
-
-            return false;
+            return error is UserError.Success;
         }
 
         public static bool CanFixStartApplication(ContentManager contentManager, string baseApplicationPath, UserError error, out SystemVersion firmwareVersion)
@@ -37,7 +31,7 @@ namespace Ryujinx.UI.Common.Helper
                 firmwareVersion = null;
             }
 
-            return error == UserError.NoFirmware && Path.GetExtension(baseApplicationPath).ToLowerInvariant() == ".xci" && firmwareVersion != null;
+            return error == UserError.NoFirmware && Path.GetExtension(baseApplicationPath).Equals(".xci", StringComparison.OrdinalIgnoreCase) && firmwareVersion != null;
         }
 
         public static bool TryFixStartApplication(ContentManager contentManager, string baseApplicationPath, UserError error, out UserError outError)
@@ -75,12 +69,11 @@ namespace Ryujinx.UI.Common.Helper
 
                             return true;
                         }
-                        catch (Exception) { }
+                        catch
+                        {
+                            // ignored
+                        }
                     }
-
-                    outError = error;
-
-                    return false;
                 }
             }
 
@@ -96,10 +89,12 @@ namespace Ryujinx.UI.Common.Helper
                 string baseApplicationExtension = Path.GetExtension(baseApplicationPath).ToLowerInvariant();
 
                 // NOTE: We don't force homebrew developers to install a system firmware.
-                if (baseApplicationExtension is ".nro" or ".nso")
+                // WORKAROUND: unpacked Switch 2 titles also boot without firmware (verified
+                // headless); missing system archives get HLE fallbacks at runtime instead.
+                // Remove once firmware-gated features are required at load time.
+                if (baseApplicationExtension is ".nro" or ".nso" or ".nup" || Directory.Exists(baseApplicationPath))
                 {
                     error = UserError.Success;
-
                     return true;
                 }
 

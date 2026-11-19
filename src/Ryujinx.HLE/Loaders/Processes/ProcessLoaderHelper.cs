@@ -94,21 +94,16 @@ namespace Ryujinx.HLE.Loaders.Processes
             return device.System.LibHacHorizonManager.NsClient.Fs.RegisterProgramIndexMapInfo(mapInfo[..programCount]);
         }
 
-        public static LibHac.Result EnsureSaveData(Switch device, ApplicationId applicationId, BlitStruct<ApplicationControlProperty> applicationControlProperty)
+        public static LibHac.Result EnsureSaveData(Switch device, ApplicationId applicationId,
+            BlitStruct<ApplicationControlProperty> applicationControlProperty, bool includeFallbackTemporaryStorage = false)
         {
             Logger.Info?.Print(LogClass.Application, "Ensuring required savedata exists.");
 
-            ref ApplicationControlProperty control = ref applicationControlProperty.Value;
+            ApplicationControlProperty control = applicationControlProperty.Value;
 
             if (LibHac.Common.Utilities.IsZeros(applicationControlProperty.ByteSpan))
             {
-                // If the current application doesn't have a loaded control property, create a dummy one and set the savedata sizes so a user savedata will be created.
-                control = ref new BlitStruct<ApplicationControlProperty>(1).Value;
-
-                // The set sizes don't actually matter as long as they're non-zero because we use directory savedata.
-                control.UserAccountSaveDataSize = 0x4000;
-                control.UserAccountSaveDataJournalSize = 0x4000;
-                control.SaveDataOwnerId = applicationId.Value;
+                control = CreateFallbackSaveDataControl(applicationId, includeFallbackTemporaryStorage);
 
                 Logger.Warning?.Print(LogClass.Application, "No control file was found for this game. Using a dummy one instead. This may cause inaccuracies in some games.");
             }
@@ -130,6 +125,19 @@ namespace Ryujinx.HLE.Loaders.Processes
             }
 
             return resultCode;
+        }
+
+        internal static ApplicationControlProperty CreateFallbackSaveDataControl(ApplicationId applicationId, bool includeTemporaryStorage)
+        {
+            return new ApplicationControlProperty
+            {
+                UserAccountSaveDataSize = 0x4000,
+                UserAccountSaveDataJournalSize = 0x4000,
+                SaveDataOwnerId = applicationId.Value,
+                // NUP can launch without a control archive. Give its temporary save
+                // a fallback quota so the SDK can mount the LibHac temporary space.
+                TemporaryStorageSize = includeTemporaryStorage ? 64 * 1024 * 1024 : 0,
+            };
         }
 
         public static bool LoadKip(KernelContext context, KipExecutable kip)
@@ -416,6 +424,8 @@ namespace Ryujinx.HLE.Loaders.Processes
                 }
             }
 
+            ApplyStartupPatches(process, codeStart, codeSize);
+
             process.DefaultCpuCore = meta.DefaultCpuId;
 
             context.Processes.TryAdd(process.Pid, process);
@@ -464,6 +474,70 @@ namespace Ryujinx.HLE.Loaders.Processes
             updater.SetApplicationProcessProperty(process.Pid, new ApplicationProcessProperty() { ProgramIndex = programIndex });
 
             return processResult;
+        }
+
+        // Applies env-provided guest code patches (NX2_PATCH=addr:word[,addr:word...]) before the
+        // process starts, so that the JIT compiles the patched instructions instead of the originals.
+        private static void ApplyStartupPatches(KProcess process, ulong codeStart, uint codeSize)
+        {
+            string requested = Environment.GetEnvironmentVariable("NX2_PATCH");
+
+            if (string.IsNullOrEmpty(requested))
+            {
+                return;
+            }
+
+            ulong codeEnd = codeStart + codeSize;
+            int printed = 0;
+
+            foreach (string part in requested.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (printed++ >= 32)
+                {
+                    break;
+                }
+
+                string[] kv = part.Split(':', StringSplitOptions.RemoveEmptyEntries);
+
+                if (kv.Length != 2)
+                {
+                    Logger.Warning?.Print(LogClass.Loader, $"NX2_PATCH_LOAD refusing '{part}'");
+
+                    continue;
+                }
+
+                string addressText = kv[0].Trim();
+                string wordText = kv[1].Trim();
+
+                if (addressText.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    addressText = addressText[2..];
+                }
+
+                if (wordText.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    wordText = wordText[2..];
+                }
+
+                if (!ulong.TryParse(addressText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out ulong address) ||
+                    !uint.TryParse(wordText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out uint word))
+                {
+                    Logger.Warning?.Print(LogClass.Loader, $"NX2_PATCH_LOAD refusing '{part}'");
+
+                    continue;
+                }
+
+                if (address < codeStart || address + 4 > codeEnd)
+                {
+                    Logger.Warning?.Print(LogClass.Loader, $"NX2_PATCH_LOAD 0x{address:X}: outside code range 0x{codeStart:X}-0x{codeEnd:X}");
+
+                    continue;
+                }
+
+                process.CpuMemory.Write(address, word);
+
+                Logger.Warning?.Print(LogClass.Loader, $"NX2_PATCH_LOAD 0x{address:X} <- 0x{word:X8}");
+            }
         }
 
         public static Result LoadIntoMemory(KProcess process, IExecutable image, ulong baseAddress)

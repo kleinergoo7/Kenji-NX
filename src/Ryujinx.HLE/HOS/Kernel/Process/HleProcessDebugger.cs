@@ -55,6 +55,11 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             IExecutionContext context = thread.Context;
 
             StringBuilder trace = new();
+            const int instructionWindowSize = 0x80;
+            const int maxStackFrames = 64;
+            int instructionWindowsRemaining =
+                !context.IsAarch32 && Environment.GetEnvironmentVariable("NX2_ABORT_LOG") == "1" ? 12 : 0;
+            ulong mutexSlowReturn = 0;
 
             trace.AppendLine($"Process: {_owner.Name}, PID: {_owner.Pid}");
 
@@ -74,10 +79,28 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 if (AnalyzePointer(out PointerInfo info, address, thread))
                 {
                     trace.AppendLine($"   0x{address:x16}\t{info.ImageDisplay}\t{info.SubDisplay}");
+
+                    if (instructionWindowsRemaining > 0 &&
+                        info.SubName?.Contains("TlsHeapCentral::LockMutexSlow_()", StringComparison.Ordinal) == true)
+                    {
+                        mutexSlowReturn = address;
+                    }
                 }
                 else
                 {
                     trace.AppendLine($"   0x{address:x16}");
+                }
+
+                if (instructionWindowsRemaining > 0 && address >= instructionWindowSize &&
+                    address <= _owner.MemoryManager.AddrSpaceEnd && (address & 3) == 0)
+                {
+                    ulong start = address - instructionWindowSize;
+
+                    if (_owner.CpuMemory.IsRangeMapped(start, instructionWindowSize))
+                    {
+                        instructionWindowsRemaining--;
+                        trace.AppendLine($"      Guest instructions at 0x{start:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(start, instructionWindowSize))}");
+                    }
                 }
             }
 
@@ -85,7 +108,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             {
                 ulong framePointer = context.GetX(11);
 
-                while (framePointer != 0)
+                for (int frame = 0; frame < maxStackFrames && framePointer != 0; frame++)
                 {
                     if ((framePointer & 3) != 0 ||
                         !_owner.CpuMemory.IsMapped(framePointer) ||
@@ -103,7 +126,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             {
                 ulong framePointer = context.GetX(29);
 
-                while (framePointer != 0)
+                for (int frame = 0; frame < maxStackFrames && framePointer != 0; frame++)
                 {
                     if ((framePointer & 7) != 0 ||
                         !_owner.CpuMemory.IsMapped(framePointer) ||
@@ -112,13 +135,181 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                         break;
                     }
 
-                    AppendTrace(_owner.CpuMemory.Read<ulong>(framePointer + 8));
+                    ulong returnAddress = _owner.CpuMemory.Read<ulong>(framePointer + 8);
+
+                    if (mutexSlowReturn != 0)
+                    {
+                        AppendHeapMutexState(trace, framePointer, returnAddress, mutexSlowReturn);
+                        mutexSlowReturn = 0;
+                    }
+
+                    AppendTrace(returnAddress);
 
                     framePointer = _owner.CpuMemory.Read<ulong>(framePointer);
                 }
             }
 
             return trace.ToString();
+        }
+
+        private void AppendHeapMutexState(StringBuilder trace, ulong framePointer, ulong callerReturn, ulong fallbackReturn)
+        {
+            const uint moveX20ToX0 = 0xAA1403E0;
+            const uint saveX20AndX19 = 0xA9014FF4;
+            const uint loadMutexArgument = 0x9100E260; // add x0, x19, #0x38
+            const uint branchLink = 0x94000000;
+            const uint branch = 0x14000000;
+            const int savedX20Offset = 16;
+            const int mutexOffset = 0x38;
+            const int mutexWindowSize = 16;
+            const int helperWindowSize = 64;
+            const int fallbackReturnOffset = 0x64;
+
+            // The observed SDK passes the heap in X20 and saves it at FP+16 in LockMutexSlow_.
+            // Match the call site and frame prologue before interpreting saved guest registers.
+            if (callerReturn < 8 || !IsMapped(callerReturn - 8, 8) ||
+                _owner.CpuMemory.Read<uint>(callerReturn - 8) != moveX20ToX0)
+            {
+                return;
+            }
+
+            if (fallbackReturn < fallbackReturnOffset ||
+                !IsMapped(fallbackReturn - fallbackReturnOffset, fallbackReturnOffset) ||
+                _owner.CpuMemory.Read<uint>(fallbackReturn - fallbackReturnOffset + 8) != saveX20AndX19 ||
+                _owner.CpuMemory.Read<uint>(fallbackReturn - 8) != loadMutexArgument ||
+                !IsMapped(framePointer, savedX20Offset + sizeof(ulong)))
+            {
+                return;
+            }
+
+            ulong heap = _owner.CpuMemory.Read<ulong>(framePointer + savedX20Offset);
+            if (heap <= ulong.MaxValue - mutexOffset && IsMapped(heap + mutexOffset, mutexWindowSize))
+            {
+                ulong mutex = heap + mutexOffset;
+                trace.AppendLine($"      Guest heap mutex at 0x{mutex:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(mutex, mutexWindowSize))}");
+            }
+
+            if (TryGetBranchTarget(fallbackReturn, out ulong helper) && IsMapped(helper, helperWindowSize))
+            {
+                trace.AppendLine($"      Guest mutex fallback instructions at 0x{helper:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(helper, helperWindowSize))}");
+                if (TryResolveVeneer(helper, out ulong slot, out ulong target))
+                {
+                    trace.AppendLine($"      Guest mutex fallback slot=0x{slot:X} target=0x{target:X}");
+                    if ((target & 3) == 0 && target != 0 && IsMapped(target, helperWindowSize))
+                    {
+                        trace.AppendLine($"      Guest mutex resolved instructions at 0x{target:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(target, helperWindowSize))}");
+
+                        // The observed SDK wrapper passes the mutex's lock word at +4
+                        // to an inner helper before testing its return value.
+                        const int argumentOffset = 0x18;
+                        const int innerReturnOffset = 0x20;
+                        const uint addLockWordOffset = 0x91001000;
+                        const int innerWindowSize = 128;
+                        if (_owner.CpuMemory.Read<uint>(target + argumentOffset) == addLockWordOffset &&
+                            TryGetBranchTarget(target + innerReturnOffset, out ulong innerVeneer) &&
+                            TryResolveVeneer(innerVeneer, out ulong innerSlot, out ulong innerTarget))
+                        {
+                            trace.AppendLine($"      Guest mutex inner helper veneer=0x{innerVeneer:X} slot=0x{innerSlot:X} target=0x{innerTarget:X}");
+                            // SDK import entries can alternate between direct jumps and
+                            // indirect veneers. Bound the walk even if guest pointers cycle.
+                            const int maxHops = 6;
+                            for (int hop = 0; hop < maxHops && IsCodeMapped(innerTarget, 4 * sizeof(uint)); hop++)
+                            {
+                                if (TryDecodeImmediateBranch(innerTarget, _owner.CpuMemory.Read<uint>(innerTarget), branch, out ulong next))
+                                {
+                                    trace.AppendLine($"      Guest mutex inner entry 0x{innerTarget:X} branches to 0x{next:X}");
+                                }
+                                else if (TryResolveVeneer(innerTarget, out ulong nextSlot, out next))
+                                {
+                                    trace.AppendLine($"      Guest mutex inner veneer=0x{innerTarget:X} slot=0x{nextSlot:X} target=0x{next:X}");
+                                }
+                                else
+                                {
+                                    break;
+                                }
+
+                                if (next == innerTarget)
+                                {
+                                    break;
+                                }
+
+                                innerTarget = next;
+                            }
+
+                            if (IsCodeMapped(innerTarget, innerWindowSize))
+                            {
+                                trace.AppendLine($"      Guest mutex inner instructions at 0x{innerTarget:X}: {Convert.ToHexString(_owner.CpuMemory.GetSpan(innerTarget, innerWindowSize))}");
+                            }
+                        }
+                    }
+                }
+            }
+
+            bool TryResolveVeneer(ulong address, out ulong slot, out ulong target)
+            {
+                slot = 0;
+                target = 0;
+                if (!IsMapped(address, 4 * sizeof(uint)) ||
+                    !TryDecodeMutexFallbackSlot(address, _owner.CpuMemory.Read<uint>(address),
+                        _owner.CpuMemory.Read<uint>(address + 4), _owner.CpuMemory.Read<uint>(address + 8),
+                        _owner.CpuMemory.Read<uint>(address + 12), out slot) ||
+                    !IsMapped(slot, sizeof(ulong)))
+                {
+                    return false;
+                }
+
+                target = _owner.CpuMemory.Read<ulong>(slot);
+                return true;
+            }
+
+            bool IsMapped(ulong address, int size) =>
+                address <= _owner.MemoryManager.AddrSpaceEnd - (ulong)size && _owner.CpuMemory.IsRangeMapped(address, (ulong)size);
+
+            bool IsCodeMapped(ulong address, int size) => address != 0 && (address & 3) == 0 && IsMapped(address, size);
+
+            bool TryGetBranchTarget(ulong returnAddress, out ulong target)
+            {
+                target = 0;
+                if (returnAddress < sizeof(uint) || !IsMapped(returnAddress - sizeof(uint), sizeof(uint)))
+                {
+                    return false;
+                }
+
+                ulong pc = returnAddress - sizeof(uint);
+                return TryDecodeImmediateBranch(pc, _owner.CpuMemory.Read<uint>(pc), branchLink, out target);
+            }
+        }
+
+        internal static bool TryDecodeImmediateBranch(ulong pc, uint instruction, uint branchOpcode, out ulong target)
+        {
+            target = 0;
+            if ((instruction & 0xFC000000) != branchOpcode)
+            {
+                return false;
+            }
+
+            // Sign-extend imm26 and scale it by the instruction size.
+            int displacement = unchecked((int)(instruction << 6)) >> 4;
+            target = unchecked((ulong)((long)pc + displacement));
+            return true;
+        }
+
+        internal static bool TryDecodeMutexFallbackSlot(ulong pc, uint adrp, uint ldr, uint add, uint branch, out ulong slot)
+        {
+            slot = 0;
+
+            // Match ADRP X16, LDR X17, [X16, #imm], ADD X16, X16, #imm, BR X17.
+            if ((adrp & 0x9F00001F) != 0x90000010 || (ldr & 0xFFC003FF) != 0xF9400211 ||
+                (add & 0xFFC003FF) != 0x91000210 || branch != 0xD61F0220)
+            {
+                return false;
+            }
+
+            uint immediate = (((adrp >> 5) & 0x7FFFF) << 2) | ((adrp >> 29) & 3);
+            long pages = unchecked((int)(immediate << 11)) >> 11;
+            long page = (long)(pc & ~0xFFFUL) + (pages << 12);
+            slot = unchecked((ulong)(page + (((ldr >> 10) & 0xFFF) * sizeof(ulong))));
+            return true;
         }
 
         public string GetCpuRegisterPrintout(KThread thread)
@@ -486,6 +677,242 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             if (Interlocked.CompareExchange(ref _loaded, 1, 0) == 0)
             {
                 ScanMemoryForTextSegments();
+                DumpRequestedSymbols();
+                DumpRequestedReads();
+                ApplyRequestedPatches();
+            }
+        }
+
+        // Agent probe (AGENTS.md section 9): resolve guest addresses to module symbols so an
+        // offline analysis can name the functions the guest calls. NX2_SYMBOL_ADDR holds
+        // comma-separated hex addresses; results are capped so a typo cannot flood the log.
+        private void DumpRequestedSymbols()
+        {
+            string requested = Environment.GetEnvironmentVariable("NX2_SYMBOL_ADDR");
+
+            if (string.IsNullOrEmpty(requested))
+            {
+                return;
+            }
+
+            int printed = 0;
+
+            foreach (string part in requested.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (printed++ >= 32)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_SYMBOL capped at 32 addresses (ignoring '{requested}')");
+                    break;
+                }
+
+                string text = part.Trim();
+
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = text[2..];
+                }
+
+                if (!ulong.TryParse(text, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out ulong address))
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_SYMBOL refusing '{text}': not a hex address");
+                    continue;
+                }
+
+                Image image = GetImage(address, out int index);
+
+                if (image == null)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_SYMBOL 0x{address:X}: no image");
+                    continue;
+                }
+
+                if (!TryGetSubName(image, address, out ElfSymbol symbol))
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_SYMBOL 0x{address:X}: {image.Name}+0x{address - image.BaseAddress:X} no symbol");
+                    continue;
+                }
+
+                string name = symbol.Name;
+
+                if (name.StartsWith("_Z", StringComparison.Ordinal))
+                {
+                    name = Demangler.Parse(name);
+                }
+
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                    $"NX2_SYMBOL 0x{address:X}: {image.Name}+0x{address - image.BaseAddress:X} {name}+0x{address - symbol.Value:X} (image {index}, size 0x{symbol.Size:X})");
+            }
+        }
+
+        private bool TryParseHexAddress(string text, out ulong address)
+        {
+            text = text.Trim();
+
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[2..];
+            }
+
+            return ulong.TryParse(text, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out address);
+        }
+
+        private string DescribeAddress(ulong address)
+        {
+            Image image = GetImage(address, out int index);
+
+            if (image == null)
+            {
+                return "no image";
+            }
+
+            if (!TryGetSubName(image, address, out ElfSymbol symbol))
+            {
+                return $"{image.Name}+0x{address - image.BaseAddress:X} (image {index})";
+            }
+
+            string name = symbol.Name;
+
+            if (name.StartsWith("_Z", StringComparison.Ordinal))
+            {
+                name = Demangler.Parse(name);
+            }
+
+            return $"{image.Name}+0x{address - image.BaseAddress:X} {name}+0x{address - symbol.Value:X} (image {index})";
+        }
+
+        private void DumpRequestedReads()
+        {
+            string pointers = Environment.GetEnvironmentVariable("NX2_READ_PTR");
+
+            if (!string.IsNullOrEmpty(pointers))
+            {
+                int printed = 0;
+
+                foreach (string part in pointers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (printed++ >= 32)
+                    {
+                        break;
+                    }
+
+                    if (!TryParseHexAddress(part, out ulong address))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        ulong value = _owner.CpuMemory.Read<ulong>(address);
+
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                            $"NX2_READ_PTR 0x{address:X} = 0x{value:X} {DescribeAddress(value)}");
+                    }
+                    catch (InvalidMemoryRegionException)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                            $"NX2_READ_PTR 0x{address:X}: unreadable");
+                    }
+                }
+            }
+
+            string strings = Environment.GetEnvironmentVariable("NX2_READ_CSTR");
+
+            if (!string.IsNullOrEmpty(strings))
+            {
+                int printed = 0;
+
+                foreach (string part in strings.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (printed++ >= 32)
+                    {
+                        break;
+                    }
+
+                    if (!TryParseHexAddress(part, out ulong address))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        System.Text.StringBuilder sb = new();
+
+                        for (int i = 0; i < 256; i++)
+                        {
+                            byte b = _owner.CpuMemory.Read<byte>(address + (ulong)i);
+
+                            if (b == 0)
+                            {
+                                break;
+                            }
+
+                            sb.Append((char)b);
+                        }
+
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                            $"NX2_READ_CSTR 0x{address:X}: \"{sb}\"");
+                    }
+                    catch (InvalidMemoryRegionException)
+                    {
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                            $"NX2_READ_CSTR 0x{address:X}: unreadable");
+                    }
+                }
+            }
+        }
+
+        private void ApplyRequestedPatches()
+        {
+            string requested = Environment.GetEnvironmentVariable("NX2_PATCH");
+
+            if (string.IsNullOrEmpty(requested))
+            {
+                return;
+            }
+
+            int printed = 0;
+
+            foreach (string part in requested.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (printed++ >= 32)
+                {
+                    break;
+                }
+
+                string[] kv = part.Split(':', StringSplitOptions.RemoveEmptyEntries);
+
+                string wtext = kv.Length >= 2 ? kv[1].Trim() : string.Empty;
+
+                if (wtext.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    wtext = wtext[2..];
+                }
+
+                if (kv.Length != 2 ||
+                    !TryParseHexAddress(kv[0], out ulong address) ||
+                    !uint.TryParse(wtext, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out uint word))
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_PATCH refusing '{part}'");
+                    continue;
+                }
+
+                try
+                {
+                    _owner.CpuMemory.Write<uint>(address, word);
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_PATCH 0x{address:X} <- 0x{word:X8}");
+                }
+                catch (InvalidMemoryRegionException)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2_PATCH 0x{address:X}: unreadable");
+                }
             }
         }
 

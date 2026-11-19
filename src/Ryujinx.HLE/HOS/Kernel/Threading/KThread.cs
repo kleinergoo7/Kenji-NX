@@ -52,7 +52,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         public ulong AffinityMask { get; private set; }
 
         public ulong ThreadUid { get; private set; }
-        
+
         public bool IsThreadNamed { get; set; }
 
         private long _totalTimeRunning;
@@ -75,6 +75,32 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         private ulong _tlsAddress;
 
         public ulong TlsAddress => _tlsAddress;
+
+        private ulong _ipcRecvTemplateLo;
+        private ulong _ipcRecvTemplateHi;
+        private bool _hasIpcRecvTemplate;
+
+        /// <summary>
+        /// Saves the server-side receive-list template (header words and heap entry)
+        /// so it can be restored after a reply consumed the TLS message buffer.
+        /// </summary>
+        public void SaveIpcReceiveTemplate(ulong lo, ulong hi)
+        {
+            _ipcRecvTemplateLo = lo;
+            _ipcRecvTemplateHi = hi;
+            _hasIpcRecvTemplate = true;
+        }
+
+        public void RestoreIpcReceiveTemplate()
+        {
+            if (!_hasIpcRecvTemplate)
+            {
+                return;
+            }
+
+            Owner.CpuMemory.Write(TlsAddress + 0, _ipcRecvTemplateLo);
+            Owner.CpuMemory.Write(TlsAddress + 8, _ipcRecvTemplateHi);
+        }
 
         public KSynchronizationObject[] WaitSyncObjects { get; }
         public int[] WaitSyncHandles { get; }
@@ -133,6 +159,15 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
         public bool WaitingInArbitration { get; set; }
 
+        // Address-arbiter wait description, kept for startup stall dumps. The guest word
+        // is compared with the expected value at dump time: a changed word with the thread
+        // still queued means a wakeup was lost, an unchanged word means nothing signalled.
+        public ArbitrationType ArbitrationWaitType { get; set; }
+        public ulong ArbitrationWaitValue { get; set; }
+        public long ArbitrationWaitStartTimestamp { get; set; }
+
+        private static int _threadLogCount;
+
         private readonly Lock _activityOperationLock = new();
 
         internal readonly ManualResetEventSlim DebugHalt = new(false);
@@ -148,7 +183,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             {
                 SiblingsPerCore[i] = new LinkedListNode<KThread>(this);
             }
-            
+
             _mutexWaiters = [];
             _pinnedWaiters = [];
 
@@ -171,6 +206,15 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             if ((uint)type > 3)
             {
                 throw new ArgumentException($"Invalid thread type \"{type}\".");
+            }
+
+            // Diagnostic (AGENTS.md section 9): thread lifecycle for the missing-render-thread
+            // question. Env-gated, capped; confinement via the log system.
+            if (System.Environment.GetEnvironmentVariable("NX2_THREAD_LOG") == "1" &&
+                System.Threading.Interlocked.Increment(ref _threadLogCount) <= 300)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
+                    $"NX2 thread start uid={ThreadUid} pc=0x{entrypoint:X} prio={priority} core={cpuCore} stack=0x{stackTop:X} pid={owner?.Pid}");
             }
 
             PreferredCore = cpuCore;
@@ -214,7 +258,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 is64Bits = true;
             }
 
-            HostThread = new Thread(ThreadStart);
+            HostThread = new Thread(ThreadStart) { Name = "HLE.KThread" };
 
             Context = owner?.CreateExecutionContext() ?? new ProcessExecutionContext();
 
@@ -574,7 +618,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
                 ThreadSchedState lowNibble = SchedFlags & ThreadSchedState.LowMask;
 
-                if (lowNibble != ThreadSchedState.Paused && lowNibble != ThreadSchedState.Running)
+                if (lowNibble is not ThreadSchedState.Paused and not ThreadSchedState.Running)
                 {
                     KernelContext.CriticalSection.Leave();
 
@@ -1357,7 +1401,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         {
             Owner?.RemoveThread(this);
 
-            if (_tlsAddress != 0 && Owner?.FreeThreadLocalStorage(_tlsAddress) != Result.Success)
+            if (_tlsAddress != 0 && Owner.FreeThreadLocalStorage(_tlsAddress) != Result.Success)
             {
                 throw new InvalidOperationException("Unexpected failure freeing thread local storage.");
             }
@@ -1556,11 +1600,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 }
                 return Encoding.UTF8.GetString(nameBytes.ToArray());
 
-            } catch (InvalidMemoryRegionException)
+            }
+            catch (InvalidMemoryRegionException)
             {
                 Logger.Warning?.Print(LogClass.Kernel, "Failed to get thread name.");
                 return "";
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Logger.Error?.Print(LogClass.Kernel, $"Error getting thread name: {e.Message}");
                 return "";
             }

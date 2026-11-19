@@ -1,6 +1,10 @@
+using LibHac.Common;
+using LibHac.Ns;
 using Ryujinx.Audio.Backends.CompatLayer;
 using Ryujinx.Audio.Integration;
+using Ryujinx.Common;
 using Ryujinx.Common.Configuration;
+using Ryujinx.Common.Logging;
 using Ryujinx.Cpu;
 using Ryujinx.Graphics.Gpu;
 using Ryujinx.HLE.FileSystem;
@@ -11,14 +15,28 @@ using Ryujinx.HLE.Loaders.Processes;
 using Ryujinx.HLE.UI;
 using Ryujinx.Memory;
 using System;
+using System.IO;
+using System.Text;
 
 namespace Ryujinx.HLE
 {
     public class Switch : IDisposable
     {
+        /// <summary>
+        /// Currently running emulated Switch, if there is one.
+        /// <para>
+        /// Proper usage of this property null checks it before use, unless the caller is certain that the emulation is running.
+        /// </para>
+        /// <para>
+        /// In case the emulation is running, there might be a way to directly pass the <see cref="Switch" /> instance, which is preferred.
+        /// </para>
+        /// <para>
+        /// The instance is set to <c>this</c> on any <see cref="Switch" /> instantiation, and set to <c>null</c> on any <see cref="Switch" /> disposal.
+        /// </para>
+        /// </summary>
         public static Switch Shared { get; private set; }
 
-        public HLEConfiguration Configuration { get; }
+        public HleConfiguration Configuration { get; }
         public IHardwareDeviceDriver AudioDeviceDriver { get; }
         public MemoryBlock Memory { get; }
         public GpuContext Gpu { get; }
@@ -32,7 +50,7 @@ namespace Ryujinx.HLE
             get => System?.TickSource?.TickScalar ?? ITickSource.RealityTickScalar;
             set => System.TickSource.TickScalar = value;
         }
-        
+
         public ProcessLoader Processes { get; }
         public PerformanceStatistics Statistics { get; }
         public Hid Hid { get; }
@@ -40,20 +58,34 @@ namespace Ryujinx.HLE
         public IHostUIHandler UIHandler { get; }
         public Debugger.Debugger Debugger { get; }
 
-        public int CpuCoresCount = 4; // Switch has a quad-core Tegra X1 SoC
+        public int CpuCoresCount = 8; // Switch 2 (Tegra T239) SoC has 8 CPU cores
 
-        public VSyncMode VSyncMode { get; set; } = VSyncMode.Switch;
-        public bool CustomVSyncIntervalEnabled { get; set; } = false;
+        /// <summary>
+        /// Console generation the emulated title targets. All feature gates read
+        /// from here instead of ad-hoc flags.
+        /// </summary>
+        public CompatibilityProfile CompatibilityProfile => Configuration.CompatibilityProfile;
+
+        /// <summary>
+        /// Overrides the emulated CPU core count (CLI: --cpu-cores).
+        /// </summary>
+        public static int? CpuCoresOverride { get; set; }
+
+        public VSyncMode VSyncMode { get; set; }
+        public bool CustomVSyncIntervalEnabled { get; set; }
         public int CustomVSyncInterval { get; set; }
         public long TargetVSyncInterval { get; set; } = 60;
 
         public bool IsFrameAvailable => Gpu.Window.IsFrameAvailable;
 
-        public Switch(HLEConfiguration configuration)
+        public DirtyHacks DirtyHacks { get; }
+
+        public Switch(HleConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration.GpuRenderer);
             ArgumentNullException.ThrowIfNull(configuration.AudioDeviceDriver);
             ArgumentNullException.ThrowIfNull(configuration.UserChannelPersistence);
+            ArgumentNullException.ThrowIfNull(configuration.CompatibilityProfile);
 
             Configuration = configuration;
             FileSystem = Configuration.VirtualFileSystem;
@@ -64,8 +96,10 @@ namespace Ryujinx.HLE
                 : MemoryAllocationFlags.Reserve | MemoryAllocationFlags.Mirrorable;
 
 #pragma warning disable IDE0055 // Disable formatting
+            DirtyHacks        = new DirtyHacks(Configuration.Hacks);
             AudioDeviceDriver = new CompatLayerHardwareDeviceDriver(Configuration.AudioDeviceDriver);
-            Memory            = new MemoryBlock(Configuration.MemoryConfiguration.ToDramSize(), memoryAllocationFlags);
+            Memory            = new MemoryBlock(Configuration.MemoryConfiguration.DramSize, memoryAllocationFlags);
+            CpuCoresCount     = CpuCoresOverride ?? 8; // T239 has 8 cores; e.g. Mario Kart World requests cores 0-5 in its NPDM kernel caps
             Gpu               = new GpuContext(Configuration.GpuRenderer);
             Debugger          = Configuration.EnableGdbStub ? new Debugger.Debugger(this, Configuration.GdbStubPort) : null;
             System            = new HOS.Horizon(this);
@@ -86,40 +120,11 @@ namespace Ryujinx.HLE
             System.EnablePtc                        = Configuration.EnablePtc;
             System.FsIntegrityCheckLevel            = Configuration.FsIntegrityCheckLevel;
             System.GlobalAccessLogMode              = Configuration.FsGlobalAccessLogMode;
+            
             UpdateVSyncInterval();
 #pragma warning restore IDE0055
-            
+
             Shared = this;
-        }
-
-        public bool LoadCart(string exeFsDir, string romFsFile = null)
-        {
-            return Processes.LoadUnpackedNca(exeFsDir, romFsFile);
-        }
-
-        public bool LoadXci(string xciFile, ulong applicationId = 0)
-        {
-            return Processes.LoadXci(xciFile, applicationId);
-        }
-
-        public bool LoadNca(string ncaFile)
-        {
-            return Processes.LoadNca(ncaFile);
-        }
-
-        public bool LoadNsp(string nspFile, ulong applicationId = 0)
-        {
-            return Processes.LoadNsp(nspFile, applicationId);
-        }
-
-        public bool LoadProgram(string fileName)
-        {
-            return Processes.LoadNxo(fileName);
-        }
-
-        public bool WaitFifo()
-        {
-            return Gpu.GPFifo.WaitForCommands();
         }
 
         public void ProcessFrame()
@@ -129,26 +134,20 @@ namespace Ryujinx.HLE
             Gpu.GPFifo.DispatchCalls();
         }
 
-        public bool ConsumeFrameAvailable()
-        {
-            return Gpu.Window.ConsumeFrameAvailable();
-        }
-
-        public void PresentFrame(Action swapBuffersCallback)
-        {
-            Gpu.Window.Present(swapBuffersCallback);
-        }
-
-        public void IncrementCustomVSyncInterval()
+        public int IncrementCustomVSyncInterval()
         {
             CustomVSyncInterval += 1;
             UpdateVSyncInterval();
+
+            return CustomVSyncInterval;
         }
 
-        public void DecrementCustomVSyncInterval()
+        public int DecrementCustomVSyncInterval()
         {
             CustomVSyncInterval -= 1;
             UpdateVSyncInterval();
+
+            return CustomVSyncInterval;
         }
 
         public void UpdateVSyncInterval()
@@ -173,30 +172,53 @@ namespace Ryujinx.HLE
             TickScalar = TurboMode ? Configuration.TickScalar : ITickSource.RealityTickScalar;
         }
 
-        public void SetVolume(float volume)
+        private NupArchive _nupArchive;
+
+        public bool LoadNup(string path)
         {
-            AudioDeviceDriver.Volume = Math.Clamp(volume, 0f, 1f);
+            if (_nupArchive != null)
+            {
+                Logger.Error?.Print(LogClass.Loader, $"Cannot load NUP '{path}' while another NUP is mounted.");
+                return false;
+            }
+
+            try
+            {
+                _nupArchive = NupArchive.Open(path);
+                string package = _nupArchive.IsStandaloneUpdate ? "standalone update" : "base package";
+                Logger.Info?.Print(LogClass.Loader, $"Mounted NUP {package} directly from '{path}'.");
+
+                if (!Processes.LoadNup(_nupArchive))
+                {
+                    Logger.Error?.Print(LogClass.Loader, $"Could not start the selected package from NUP '{path}'.");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or DecoderFallbackException or HorizonResultException or ZstdSharp.ZstdException)
+            {
+                Logger.Error?.Print(LogClass.Loader, $"Cannot load NUP '{path}': {ex.Message}");
+                return false;
+            }
         }
 
-        public float GetVolume()
-        {
-            return AudioDeviceDriver.Volume;
-        }
+        public bool LoadCart(string exeFsDir, string romFsFile = null) => Processes.LoadUnpackedNca(exeFsDir, romFsFile);
+        public bool LoadXci(string xciFile, ulong applicationId = 0) => Processes.LoadXci(xciFile, applicationId);
+        public bool LoadNca(string ncaFile, BlitStruct<ApplicationControlProperty>? customNacpData = null) => Processes.LoadNca(ncaFile, customNacpData);
+        public bool LoadNsp(string nspFile, ulong applicationId = 0) => Processes.LoadNsp(nspFile, applicationId);
+        public bool LoadProgram(string fileName) => Processes.LoadNxo(fileName);
 
-        public void EnableCheats()
-        {
-            ModLoader.EnableCheats(Processes.ActiveApplication.ProgramId, TamperMachine);
-        }
+        public void SetVolume(float volume) => AudioDeviceDriver.Volume = Math.Clamp(volume, 0f, 1f);
+        public float GetVolume() => AudioDeviceDriver.Volume;
+        public bool IsAudioMuted() => AudioDeviceDriver.Volume == 0;
 
-        public bool IsAudioMuted()
-        {
-            return AudioDeviceDriver.Volume == 0;
-        }
+        public void EnableCheats() => ModLoader.EnableCheats(Processes.ActiveApplication.ProgramId, TamperMachine);
 
-        public void DisposeGpu()
-        {
-            Gpu.Dispose();
-        }
+        public bool WaitFifo() => Gpu.GPFifo.WaitForCommands();
+        public bool ConsumeFrameAvailable() => Gpu.Window.ConsumeFrameAvailable();
+        public void PresentFrame(Action swapBuffersCallback) => Gpu.Window.Present(swapBuffersCallback);
+        public void DisposeGpu() => Gpu.Dispose();
 
         public void Dispose()
         {
@@ -212,9 +234,12 @@ namespace Ryujinx.HLE
                 System.Dispose();
                 AudioDeviceDriver.Dispose();
                 FileSystem.Dispose();
+                _nupArchive?.Dispose();
+                _nupArchive = null;
                 Memory.Dispose();
                 Debugger?.Dispose();
 
+                TitleIDs.CurrentApplication.Value = null;
                 Shared = null;
             }
         }

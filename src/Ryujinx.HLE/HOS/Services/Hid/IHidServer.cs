@@ -131,6 +131,26 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             return ResultCode.Success;
         }
 
+        [CommandCmif(26)]
+        // ActivateDebugMouse(nn::applet::AppletResourceUserId)
+        public ResultCode ActivateDebugMouse(ServiceCtx context)
+        {
+            long appletResourceUserId = context.RequestData.ReadInt64();
+
+            context.Device.Hid.DebugMouse.Active = true;
+
+            // Initialize entries to avoid issues with some games.
+
+            for (int entry = 0; entry < Hid.SharedMemEntryCount; entry++)
+            {
+                context.Device.Hid.DebugMouse.Update();
+            }
+
+            Logger.Stub?.PrintStub(LogClass.ServiceHid, new { appletResourceUserId });
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(31)]
         // ActivateKeyboard(nn::applet::AppletResourceUserId)
         public ResultCode ActivateKeyboard(ServiceCtx context)
@@ -588,19 +608,15 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             int sixAxisSensorHandle = context.RequestData.ReadInt32();
 
             // 4 byte struct w/ 4-byte alignment
-            // 0x0 	0x4 	TypeValue
-            // 0x0 	0x1 	NpadStyleIndex
-            // 0x1 	0x1 	PlayerNumber
-            // 0x2 	0x1 	DeviceIdx 
 
-            // uint typeValue = (uint) sixAxisSensorHandle;
-            // uint npadStyleIndex = (uint) sixAxisSensorHandle & 0xff;
-            int playerNumber = (sixAxisSensorHandle << 8) & 0xff;
-            // uint deviceIdx= ((uint) sixAxisSensorHandle << 16) & 0xff;
-            // uint unknown = ((uint) sixAxisSensorHandle << 24) & 0xff;
+            // uint typeValue = (uint) sixAxisSensorHandle;                 // 0x0 	0x4 	TypeValue
+            // uint npadStyleIndex = (uint) sixAxisSensorHandle & 0xff;     // 0x0 	0x1 	NpadStyleIndex
+            int playerNumber = (sixAxisSensorHandle << 8) & 0xff;           // 0x1 	0x1 	PlayerNumber
+                                                                            // uint deviceIdx= ((uint) sixAxisSensorHandle << 16) & 0xff;   // 0x2 	0x1 	DeviceIdx 
+                                                                            // uint unknown = ((uint) sixAxisSensorHandle << 24) & 0xff;
 
-            // 32bit sign extension padding
-            // if = 0, + offset, else - offset
+            // 32bit sign extension padding -> if = 0, + offset, else - offset
+
             // npadStyleIndex = ((npadStyleIndex & 0x8000) == 0) ? npadStyleIndex | 0xFFFF0000 : npadStyleIndex & 0xFFFF0000;
             // playerNumber = ((playerNumber & 0x8000) == 0) ? playerNumber | 0xFFFF0000 : playerNumber & 0xFFFF0000;
             // deviceIdx = ((deviceIdx & 0x8000) == 0) ? deviceIdx | 0xFFFF0000 : deviceIdx & 0xFFFF0000;
@@ -611,21 +627,8 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             // TODO: link to context.Device.Hid.Npads.SixAxisActive when properly implemented
             // We currently do not support stopping or starting SixAxisTracking.
-            // It is just always tracking, the bool is unused.
-            // See Ryujinx.HLE.HOS.Services.Hid.NpadDevices
 
-            // common cases: if
-            //     controller is keyboard (keyboards don't have gyroscopes, silly goose!)
-            //     controller has no gyroscope
-            //     SixAxisActive == false
-            //     SixAxisTracking == false
-            // then isAtRest = true
-            // else check gyroscopic activity
-
-            // check gyroscopic activity
-            bool isAtRest = context.Device.Hid.Npads.isAtRest(playerNumber);
-
-            context.ResponseData.Write(isAtRest);
+            context.ResponseData.Write(context.Device.Hid.Npads.isAtRest(playerNumber));
             return ResultCode.Success;
         }
 
@@ -640,7 +643,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             context.ResponseData.Write(_isFirmwareUpdateAvailableForSixAxisSensor);
 
             Logger.Stub?.PrintStub(LogClass.ServiceHid, new { appletResourceUserId, sixAxisSensorHandle, _isFirmwareUpdateAvailableForSixAxisSensor });
-            
+
             return ResultCode.Success;
         }
 
@@ -713,7 +716,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             return ResultCode.Success;
         }
-        
+
         [CommandCmif(92)]
         // SetGestureOutputRanges(pid, ushort Unknown0)
         public ResultCode SetGestureOutputRanges(ServiceCtx context)
@@ -1172,59 +1175,54 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             NpadStyleIndex deviceType = (NpadStyleIndex)deviceHandle.DeviceType;
             NpadIdType npadIdType = (NpadIdType)deviceHandle.PlayerId;
 
-            if (deviceType is < NpadStyleIndex.System or >= NpadStyleIndex.FullKey)
+            if (!HidUtils.IsValidNpadIdType(npadIdType))
             {
-                if (!HidUtils.IsValidNpadIdType(npadIdType))
-                {
-                    return ResultCode.InvalidNpadIdType;
-                }
-
-                if (deviceHandle.Position > 1)
-                {
-                    return ResultCode.InvalidDeviceIndex;
-                }
-
-                VibrationDeviceType vibrationDeviceType = VibrationDeviceType.None;
-
-                if (Enum.IsDefined(deviceType))
-                {
-                    vibrationDeviceType = VibrationDeviceType.LinearResonantActuator;
-                }
-                else if ((uint)deviceType == 8)
-                {
-                    vibrationDeviceType = VibrationDeviceType.GcErm;
-                }
-
-                VibrationDevicePosition vibrationDevicePosition = VibrationDevicePosition.None;
-
-                if (vibrationDeviceType == VibrationDeviceType.LinearResonantActuator)
-                {
-                    if (deviceHandle.Position == 0)
-                    {
-                        vibrationDevicePosition = VibrationDevicePosition.Left;
-                    }
-                    else if (deviceHandle.Position == 1)
-                    {
-                        vibrationDevicePosition = VibrationDevicePosition.Right;
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException($"{nameof(deviceHandle.Position)} contains an invalid value: {deviceHandle.Position}");
-                    }
-                }
-
-                VibrationDeviceValue deviceInfo = new()
-                {
-                    DeviceType = vibrationDeviceType,
-                    Position = vibrationDevicePosition,
-                };
-
-                context.ResponseData.WriteStruct(deviceInfo);
-
-                return ResultCode.Success;
+                return ResultCode.InvalidNpadIdType;
             }
 
-            return ResultCode.InvalidNpadDeviceType;
+            if (deviceHandle.Position > 1)
+            {
+                return ResultCode.InvalidDeviceIndex;
+            }
+
+            VibrationDeviceType vibrationDeviceType = VibrationDeviceType.None;
+
+            if (Enum.IsDefined(deviceType))
+            {
+                vibrationDeviceType = VibrationDeviceType.LinearResonantActuator;
+            }
+            else if ((uint)deviceType == 8)
+            {
+                vibrationDeviceType = VibrationDeviceType.GcErm;
+            }
+
+            VibrationDevicePosition vibrationDevicePosition = VibrationDevicePosition.None;
+
+            if (vibrationDeviceType == VibrationDeviceType.LinearResonantActuator)
+            {
+                if (deviceHandle.Position == 0)
+                {
+                    vibrationDevicePosition = VibrationDevicePosition.Left;
+                }
+                else if (deviceHandle.Position == 1)
+                {
+                    vibrationDevicePosition = VibrationDevicePosition.Right;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"{nameof(deviceHandle.Position)} contains an invalid value: {deviceHandle.Position}");
+                }
+            }
+
+            VibrationDeviceValue deviceInfo = new()
+            {
+                DeviceType = vibrationDeviceType,
+                Position = vibrationDevicePosition,
+            };
+
+            context.ResponseData.WriteStruct(deviceInfo);
+
+            return ResultCode.Success;
         }
 
         [CommandCmif(201)]
@@ -1421,6 +1419,40 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             //       And return false if (npadIdType >= (NpadIdType)8 && npadIdType != NpadIdType.Handheld && npadIdType != NpadIdType.Unknown)
 
             context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
+
+        private static int _npad214Count;
+
+        [CommandCmif(214)] // Switch 2 HID revision
+        // 214(npad id, applet resource user id): input poll added with the Switch 2 HID
+        // revision. The reference Switch 2 emulator (NX Infinity v1.1) adds no IHidServer
+        // handler for it either — it is auto-stubbed there too — and the guest keeps
+        // running, so an empty success is the correct parity behavior, not a missing path.
+        public ResultCode GetNpadState214(ServiceCtx context)
+        {
+            int npadId = context.RequestData.ReadInt32();
+            long appletResourceUserId = context.RequestData.ReadInt64();
+
+            // One-shot steady-loop snapshot: NX2_HID_DUMP=<call number>. Triggered from a
+            // 60 Hz poll so the dump lands while a frame should be submitted, not at present.
+            int n = System.Threading.Interlocked.Increment(ref _npad214Count);
+
+            if (n == 1)
+            {
+                Logger.Stub?.PrintStub(LogClass.ServiceHid, new { npadId, appletResourceUserId });
+            }
+
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.WatchState(context);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_HID_DUMP") is string dumpAt &&
+                int.TryParse(dumpAt, out int dumpCall) &&
+                n == dumpCall)
+            {
+                Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.Dump(
+                    context, $"hid214#{n}");
+            }
 
             return ResultCode.Success;
         }

@@ -18,6 +18,10 @@ namespace Ryujinx.Audio.Renderer.Server
         /// </summary>
         public const int BaseRevisionMagic = ('R' << 0) | ('E' << 8) | ('V' << 16) | ('0' << 24);
 
+        // Native Switch 2 renderer revisions use a lowercase v. REV16 uses
+        // the existing feature gates and retains its native magic in replies.
+        private const int NativeRevision16Magic = ('R' << 0) | ('E' << 8) | ('v' << 16) | (('0' + 16) << 24);
+
         /// <summary>
         /// REV1: first revision.
         /// </summary>
@@ -206,7 +210,8 @@ namespace Ryujinx.Audio.Renderer.Server
         /// <returns>Returns true if the given revision is valid/supported</returns>
         public static bool CheckValidRevision(int revision)
         {
-            return GetRevisionNumber(revision) <= GetRevisionNumber(ProcessRevision);
+            return revision == NativeRevision16Magic ||
+                GetRevisionNumber(revision) <= GetRevisionNumber(ProcessRevision);
         }
 
         /// <summary>

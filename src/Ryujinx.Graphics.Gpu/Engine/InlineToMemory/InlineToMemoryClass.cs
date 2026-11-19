@@ -1,4 +1,5 @@
 using Ryujinx.Common;
+using Ryujinx.Common.Logging;
 using Ryujinx.Common.Memory;
 using Ryujinx.Graphics.Device;
 using Ryujinx.Graphics.Gpu.Memory;
@@ -35,7 +36,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
         private int _lineLengthIn;
         private int _lineCount;
 
-        private bool _finished;
+        private bool _finished = true;
 
         private int[] _buffer;
 
@@ -99,10 +100,24 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
         /// <param name="argument">Method call argument</param>
         public void LaunchDma(ref InlineToMemoryClassState state, int argument)
         {
+            _finished = true;
+            ulong dstGpuVa = ((ulong)state.OffsetOutUpperValue << 32) | state.OffsetOut;
+
+            if (!TryGetTransferSize(state.LineLengthIn, state.LineCount, out _size))
+            {
+                Logger.Error?.Print(LogClass.Gpu,
+                    $"Inline DMA size exceeds the supported range: destination=0x{dstGpuVa:X} lineLength=0x{state.LineLengthIn:X} lineCount=0x{state.LineCount:X}");
+                return;
+            }
+
+            if (_size == 0)
+            {
+                return;
+            }
+
             _isLinear = (argument & 1) != 0;
 
             _offset = 0;
-            _size = (int)(BitUtils.AlignUp<uint>(state.LineLengthIn, 4) * state.LineCount);
 
             int count = _size / 4;
 
@@ -110,8 +125,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
             {
                 _buffer = new int[count];
             }
-
-            ulong dstGpuVa = ((ulong)state.OffsetOutUpperValue << 32) | state.OffsetOut;
 
             _dstGpuVa = dstGpuVa;
             _dstX = state.SetDstOriginBytesXV;
@@ -127,6 +140,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
             _finished = false;
         }
 
+        internal static bool TryGetTransferSize(uint lineLength, uint lineCount, out int size)
+        {
+            ulong bytes = BitUtils.AlignUp<ulong>(lineLength, 4) * lineCount;
+            size = bytes <= int.MaxValue ? (int)bytes : 0;
+            return bytes <= int.MaxValue;
+        }
+
         /// <summary>
         /// Pushes a block of data to the Inline-to-Memory engine.
         /// </summary>
@@ -135,7 +155,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
         {
             if (!_finished)
             {
-                int copySize = Math.Min(data.Length, _buffer.Length - _offset);
+                int copySize = Math.Min(data.Length, _size / sizeof(int) - _offset);
                 data[..copySize].CopyTo(new Span<int>(_buffer).Slice(_offset, copySize));
 
                 _offset += copySize;
@@ -169,6 +189,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
         /// </summary>
         private void FinishTransfer()
         {
+            _finished = true;
+
             MemoryManager memoryManager = _channel.MemoryManager;
 
             Span<byte> data = MemoryMarshal.Cast<int, byte>(new Span<int>(_buffer))[.._size];
@@ -269,8 +291,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
 
                 _context.AdvanceSequence();
             }
-
-            _finished = true;
         }
     }
 }

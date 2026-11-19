@@ -63,6 +63,12 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
         public KProcessCapabilities Capabilities { get; private set; }
 
+        /// <summary>
+        /// Console generation the title targets. Sessions and SVCs read feature
+        /// gates from here instead of branching on ad-hoc flags.
+        /// </summary>
+        public CompatibilityProfile CompatibilityProfile { get; }
+
         public bool AllowCodeMemoryForJit { get; private set; }
 
         public ulong TitleId { get; private set; }
@@ -80,6 +86,17 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
         public ulong UserExceptionContextAddress { get; private set; }
 
         private readonly LinkedList<KThread> _threads;
+
+        public KThread[] DebugThreads
+        {
+            get
+            {
+                lock (_threadingLock)
+                {
+                    return _threads.ToArray();
+                }
+            }
+        }
 
         public bool IsPaused { get; private set; }
 
@@ -103,6 +120,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             _freeTlsPages = new SortedDictionary<ulong, KTlsPageInfo>();
 
             Capabilities = new KProcessCapabilities();
+
+            CompatibilityProfile = KernelContext.Device.CompatibilityProfile;
 
             AllowCodeMemoryForJit = allowCodeMemoryForJit;
 
@@ -314,9 +333,17 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             if (KernelContext.EnableVersionChecks)
             {
-                if (requiredKernelVersionMajor > KernelVersionMajor ||
-                    requiredKernelVersionMajor != KernelVersionMajor && requiredKernelVersionMajor < 3 ||
-                    requiredKernelVersionMinor > KernelVersionMinor)
+                if (requiredKernelVersionMajor > KernelVersionMajor)
+                {
+                    return KernelResult.InvalidCombination;
+                }
+
+                if (requiredKernelVersionMajor is not KernelVersionMajor and < 3)
+                {
+                    return KernelResult.InvalidCombination;
+                }
+
+                if (requiredKernelVersionMinor > KernelVersionMinor)
                 {
                     return KernelResult.InvalidCombination;
                 }
@@ -463,7 +490,6 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             Result result = Result.Success;
 
-
             if (_fullTlsPages.TryGetValue(tlsPageAddr, out KTlsPageInfo pageInfo))
             {
                 // TLS page was full, free slot and move to free pages tree.
@@ -511,7 +537,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             return result;
         }
 
-        private void GenerateRandomEntropy()
+        private static void GenerateRandomEntropy()
         {
             // TODO.
         }
@@ -664,7 +690,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                     return result;
                 }
 
-                result = HandleTable.GenerateHandle(mainThread, out int mainThreadHandle);
+                result = GenerateThreadHandle(mainThread, out int mainThreadHandle);
 
                 if (result != Result.Success)
                 {
@@ -718,6 +744,18 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
                 Signal();
             }
+        }
+
+        internal Result GenerateThreadHandle(KThread thread, out int handle)
+        {
+            Result result = HandleTable.GenerateHandle(thread, out handle);
+
+            if (result == Result.Success)
+            {
+                KTlsPageInfo.InitializeThreadHandle(CpuMemory, thread.TlsAddress, CompatibilityProfile.Generation, handle);
+            }
+
+            return result;
         }
 
         public Result InitializeThread(
@@ -901,10 +939,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             {
                 if (State >= ProcessState.Started)
                 {
-                    if (State is ProcessState.Started
-                        or ProcessState.Crashed
-                        or ProcessState.Attached
-                        or ProcessState.DebugSuspended)
+                    if (State is ProcessState.Started or
+                        ProcessState.Crashed or
+                        ProcessState.Attached or
+                        ProcessState.DebugSuspended)
                     {
                         SetState(ProcessState.Exiting);
 
@@ -942,12 +980,16 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             lock (_processLock)
             {
-                if (State is >= ProcessState.Started
-                    and (ProcessState.Started or ProcessState.Attached or ProcessState.DebugSuspended))
+                if (State >= ProcessState.Started)
                 {
-                    SetState(ProcessState.Exiting);
+                    if (State is ProcessState.Started or
+                        ProcessState.Attached or
+                        ProcessState.DebugSuspended)
+                    {
+                        SetState(ProcessState.Exiting);
 
-                    shallTerminate = true;
+                        shallTerminate = true;
+                    }
                 }
             }
 
@@ -1109,7 +1151,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
         {
             KernelContext.CriticalSection.Enter();
 
-            if (State != ProcessState.Exiting && State != ProcessState.Exited)
+            if (State is not ProcessState.Exiting and not ProcessState.Exited)
             {
                 if (pause)
                 {
@@ -1272,7 +1314,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 {
                     return false;
                 }
-                
+
                 _kernelContext.CriticalSection.Enter();
                 _steppingThread = target;
                 bool waiting = target.MutexOwner != null || target.WaitingSync || target.WaitingInArbitration;

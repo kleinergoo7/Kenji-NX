@@ -73,7 +73,8 @@ namespace Ryujinx.Horizon.Sdk.Audio.Detail
             {
                 workBufferSize = 0;
 
-                Logger.Warning?.Print(LogClass.ServiceAudio, $"Library Revision REV{BehaviourInfo.GetRevisionNumber(parameter.Configuration.Revision)} is not supported!");
+                int revision = parameter.Configuration.Revision;
+                Logger.Warning?.Print(LogClass.ServiceAudio, $"Library Revision REV{BehaviourInfo.GetRevisionNumber(revision)} (0x{revision:X8}) is not supported!");
 
                 return AudioResult.UnsupportedRevision;
             }

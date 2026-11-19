@@ -439,6 +439,14 @@ namespace Ryujinx.Headless
                             return false;
                         }
                         break;
+                    case ".nup":
+                        if (!_emulationContext.LoadNup(path))
+                        {
+                            _emulationContext.Dispose();
+                            return false;
+                        }
+
+                        break;
                     case ".nsp":
                     case ".pfs0":
                         Logger.Info?.Print(LogClass.Application, "Loading as NSP.");
@@ -474,7 +482,7 @@ namespace Ryujinx.Headless
             }
             else
             {
-                Logger.Warning?.Print(LogClass.Application, $"Couldn't load '{options.InputPath}'. Please specify a valid XCI/NCA/NSP/PFS0/NRO file.");
+                Logger.Warning?.Print(LogClass.Application, $"Couldn't load '{options.InputPath}'. Please specify a valid XCI/NCA/NSP/NUP/PFS0/NRO file.");
 
                 _emulationContext.Dispose();
 

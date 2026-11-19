@@ -1,8 +1,10 @@
+using Gommon;
 using Ryujinx.Common.Logging;
 using Ryujinx.HLE.Exceptions;
 using Ryujinx.HLE.HOS.Ipc;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -11,6 +13,24 @@ namespace Ryujinx.HLE.HOS.Services
 {
     abstract class IpcService
     {
+        // Diagnostic: per-service-command call counts, printed with the NX2 progress line.
+        public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> CallCounts = [];
+
+        // Gated TIPC request/response word dump (NX2_TIPC_DUMP=1) for the NX2 services.
+        // Used to compare our handshake replies with the working oracle's.
+        private static readonly bool TipcDumpEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_TIPC_DUMP") == "1";
+        private static int _tipcDumpCount;
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> TipcSeen = new();
+
+        /// <summary>Commands answered by a fake success because no handler exists.</summary>
+        public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> MissingCalls = new();
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> UnimplementedLogged = [];
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _missingLogCounts = new();
+
         public IReadOnlyDictionary<int, MethodInfo> CmifCommands { get; }
         public IReadOnlyDictionary<int, MethodInfo> TipcCommands { get; }
 
@@ -24,21 +44,42 @@ namespace Ryujinx.HLE.HOS.Services
         // cache array so we don't recreate it all the time
         private object[] _parameters = [null];
 
-        public IpcService(ServerBase server = null)
+        public IpcService(ServerBase server = null, bool registerTipc = false)
         {
-            CmifCommands = typeof(IpcService).Assembly.GetTypes()
-                .Where(type => type == GetType())
-                .SelectMany(type => type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public))
-                .SelectMany(methodInfo => methodInfo.GetCustomAttributes(typeof(CommandCmifAttribute))
-                .Select(command => (((CommandCmifAttribute)command).Id, methodInfo)))
+            Stopwatch sw = Stopwatch.StartNew();
+
+            CmifCommands = GetType()
+                .GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public)
+                .SelectMany(methodInfo => methodInfo.GetCustomAttributes<CommandCmifAttribute>()
+                .Select(command => (command.Id, methodInfo)))
                 .ToDictionary(command => command.Id, command => command.methodInfo);
 
-            TipcCommands = typeof(IpcService).Assembly.GetTypes()
-                .Where(type => type == GetType())
-                .SelectMany(type => type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public))
-                .SelectMany(methodInfo => methodInfo.GetCustomAttributes(typeof(CommandTipcAttribute))
-                .Select(command => (((CommandTipcAttribute)command).Id, methodInfo)))
-                .ToDictionary(command => command.Id, command => command.methodInfo);
+            sw.Stop();
+
+            Logger.Debug?.Print(
+                LogClass.Emulation,
+                $"{CmifCommands.Count} Cmif commands loaded in {sw.ElapsedTicks} ticks ({Stopwatch.Frequency} tps).",
+                GetType().AsPrettyString()
+            );
+
+            if (registerTipc)
+            {
+                sw.Start();
+
+                TipcCommands = GetType()
+                    .GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public)
+                    .SelectMany(methodInfo => methodInfo.GetCustomAttributes<CommandTipcAttribute>()
+                        .Select(command => (command.Id, methodInfo)))
+                    .ToDictionary(command => command.Id, command => command.methodInfo);
+
+                sw.Stop();
+
+                Logger.Debug?.Print(
+                    LogClass.Emulation,
+                    $"{TipcCommands.Count} Tipc commands loaded in {sw.ElapsedTicks} ticks ({Stopwatch.Frequency} tps).",
+                    GetType().AsPrettyString()
+                );
+            }
 
             Server = server;
 
@@ -114,6 +155,41 @@ namespace Ryujinx.HLE.HOS.Services
 #pragma warning restore IDE0059
             int commandId = (int)context.RequestData.ReadInt64();
 
+            CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
+
+            if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+            {
+                var cmifCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+
+                if (cmifCaller != null)
+                {
+                    string cmifKey = $"{GetType().Name}:{commandId}";
+                    int n = TipcSeen.AddOrUpdate(cmifKey, 1, (_, v) => v + 1);
+
+                    if (n == 1 || n % 500 == 0)
+                    {
+                        ulong clientPid = context.Request.HandleDesc is { HasPId: true } ? context.Request.HandleDesc.PId : 0;
+
+                        Logger.Warning?.Print(LogClass.KernelIpc,
+                            $"NX2 tipc {cmifKey} client={clientPid} server={context.Process.Pid} thread={cmifCaller.Owner.Pid}:{cmifCaller.ThreadUid}({cmifCaller.GetThreadName()}) n={n}");
+                    }
+                }
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_GSV_LOG") == "1" &&
+                GetType().Name == "INx2GraphicsSystemSession")
+            {
+                int n = CallCounts[$"{GetType().Name}:{commandId}"];
+
+                if (n == 1 || n % 500 == 0)
+                {
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 gsvcall {commandId} n={n}");
+                }
+            }
+
+            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
+                (int)(context.Thread?.ThreadUid ?? 0), service.GetType().Name, commandId); } catch { }
+
             bool serviceExists = service.CmifCommands.TryGetValue(commandId, out MethodInfo processRequest);
 
             if (context.Device.Configuration.IgnoreMissingServices || serviceExists)
@@ -127,14 +203,39 @@ namespace Ryujinx.HLE.HOS.Services
                     Logger.Trace?.Print(LogClass.KernelIpc, $"{service.GetType().Name}: {processRequest.Name}");
 
                     _parameters[0] = context;
-                    
-                    result = (ResultCode)processRequest.Invoke(service, _parameters)!;
+
+                    result = (ResultCode)processRequest.Invoke(service, _parameters);
                 }
                 else
                 {
                     string serviceName = (service is not DummyService dummyService) ? service.GetType().FullName : dummyService.ServiceName;
 
-                    Logger.Warning?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
+                    Logger.Debug?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
+
+                    // Diagnostic: show the payload of unimplemented commands once each, so a
+                    // guest retry loop names the call it is missing.
+                    string key = $"{service.GetType().Name}:{commandId}";
+
+                    if (UnimplementedLogged.TryAdd(key, 0))
+                    {
+                        System.IO.Stream request = context.RequestData.BaseStream;
+                        long saved = request.Position;
+                        request.Position = 0;
+
+                        int length = (int)Math.Min(request.Length, 0x40);
+                        byte[] raw = new byte[length];
+
+                        request.ReadExactly(raw, 0, length);
+                        request.Position = saved;
+
+                        string words = string.Join(' ', System.Linq.Enumerable.Select(
+                            System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(raw.AsSpan(0, length & ~3)).ToArray(),
+                            w => w.ToString("X8")));
+
+                        ulong missPc = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread()?.Context.Pc ?? 0;
+
+                        Logger.Warning?.Print(LogClass.KernelIpc, $"UNIMPLEMENTED {key} pc=0x{missPc:X} words=[{words}]");
+                    }
                 }
 
                 if (_isDomain)
@@ -166,6 +267,73 @@ namespace Ryujinx.HLE.HOS.Services
         {
             int commandId = (int)context.Request.Type - 0x10;
 
+            CallCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
+
+            bool tipcDump = false;
+            string tipcReq = string.Empty;
+
+            string tipcType = GetType().Name;
+
+            if (TipcDumpEnabled &&
+                (tipcType == "INx2Vi2Session" ||
+                 tipcType == "INx2GraphicsSystemSession" ||
+                 tipcType == "DummyService") &&
+                System.Threading.Interlocked.Increment(ref _tipcDumpCount) <= 6000)
+            {
+                tipcDump = true;
+
+                try
+                {
+                    System.IO.Stream rs = context.RequestData.BaseStream;
+                    long save = rs.Position;
+                    rs.Seek(0, System.IO.SeekOrigin.Begin);
+                    System.Text.StringBuilder sb = new();
+
+                    for (int i = 0; i < 16 && rs.Position + 4 <= rs.Length; i++)
+                    {
+                        sb.Append($"{context.RequestData.ReadUInt32():X8} ");
+                    }
+
+                    rs.Position = save;
+                    tipcReq = sb.ToString();
+                }
+                catch
+                {
+                    tipcReq = "<unreadable>";
+                }
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_TIPC_LOG") == "1")
+            {
+                var tipcCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+
+                if (tipcCaller != null)
+                {
+                    string tipcKey = $"{GetType().Name}:{commandId}";
+                    int n = TipcSeen.AddOrUpdate(tipcKey, 1, (_, v) => v + 1);
+
+                    if (n == 1 || n % 500 == 0)
+                    {
+                        Logger.Warning?.Print(LogClass.KernelIpc,
+                            $"NX2 tipc {tipcKey} server={context.Process.Pid} thread={tipcCaller.Owner.Pid}:{tipcCaller.ThreadUid}({tipcCaller.GetThreadName()}) n={n}");
+                    }
+                }
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_GSV_LOG") == "1" &&
+                GetType().Name == "INx2GraphicsSystemSession")
+            {
+                int n = CallCounts[$"{GetType().Name}:{commandId}"];
+
+                if (n == 1 || n % 500 == 0)
+                {
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 gsvcall {commandId} n={n}");
+                }
+            }
+
+            try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
+                (int)(context.Thread?.ThreadUid ?? 0), GetType().Name, commandId); } catch { }
+
             bool serviceExists = TipcCommands.TryGetValue(commandId, out MethodInfo processRequest);
 
             if (context.Device.Configuration.IgnoreMissingServices || serviceExists)
@@ -179,17 +347,80 @@ namespace Ryujinx.HLE.HOS.Services
                     Logger.Debug?.Print(LogClass.KernelIpc, $"{GetType().Name}: {processRequest.Name}");
 
                     _parameters[0] = context;
-                    
-                    result = (ResultCode)processRequest.Invoke(this, _parameters)!;
+
+                    result = (ResultCode)processRequest.Invoke(this, _parameters);
                 }
                 else
                 {
                     string serviceName;
 
-
                     serviceName = (this is not DummyService dummyService) ? GetType().FullName : dummyService.ServiceName;
 
-                    Logger.Warning?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
+                    Logger.Debug?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
+
+                    // Silently answered correctly-looking is indistinguishable from working:
+                    // count every command the emulator fakes, so a missing submission path is
+                    // visible instead of looking like a guest that simply sends nothing.
+                    MissingCalls.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1);
+
+                    // Targeted probe (AGENTS.md section 9): dump request words for
+                    // auto-stubbed commands so real handlers can be written. Env-gated,
+                    // capped; log confinement via Nx2ProbeLog/Nx2LogConfinement.
+                    if (System.Environment.GetEnvironmentVariable("NX2_MISSING_LOG") == "1" &&
+                        _missingLogCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1) <= 2)
+                    {
+                        try
+                        {
+                            long saved = context.RequestData.BaseStream.Position;
+                            context.RequestData.BaseStream.Seek(0, SeekOrigin.Begin);
+                            int words = (int)System.Math.Min(12, context.RequestData.BaseStream.Length / 4);
+                            System.Text.StringBuilder sb = new();
+                            for (int i = 0; i < words; i++)
+                            {
+                                sb.Append($"{context.RequestData.ReadUInt32():X8} ");
+                            }
+                            context.RequestData.BaseStream.Seek(saved, SeekOrigin.Begin);
+                            var pc = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread()?.Context.Pc ?? 0;
+                            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                                $"NX2 missing {GetType().Name}:{commandId} pc=0x{pc:X} req=[{sb}]");
+                        }
+                        catch (System.Exception ex)
+                        {
+                            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                                $"NX2 missing {GetType().Name}:{commandId} unreadable: {ex.GetType().Name}");
+                        }
+                    }
+                }
+
+                if (tipcDump)
+                {
+                    try
+                    {
+                        System.IO.Stream ws = context.ResponseData.BaseStream;
+                        long end = ws.Position;
+                        long save = ws.Position;
+                        System.Text.StringBuilder sb = new();
+
+                        if (end > 4)
+                        {
+                            ws.Seek(4, System.IO.SeekOrigin.Begin);
+
+                            long count = System.Math.Min(64, end - 4);
+                            byte[] bytes = new byte[count];
+                            int read = ws.Read(bytes, 0, (int)count);
+
+                            for (int i = 0; i + 4 <= read; i += 4)
+                            {
+                                sb.Append($"{System.BitConverter.ToUInt32(bytes, i):X8} ");
+                            }
+                        }
+
+                        ws.Position = save;
+
+                        Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                            $"NX2DUMP {GetType().Name}:{commandId} req=[{tipcReq.TrimEnd()}] resp=[{sb.ToString().TrimEnd()}]");
+                    }
+                    catch { }
                 }
 
                 context.ResponseData.BaseStream.Seek(0, SeekOrigin.Begin);
@@ -222,6 +453,19 @@ namespace Ryujinx.HLE.HOS.Services
 
                 context.Response.HandleDesc = IpcHandleDesc.MakeMove(clientSessionHandle);
             }
+        }
+
+        protected void MakeSessionObject(ServiceCtx context, IpcService obj)
+        {
+            obj.TrySetServer(Server);
+
+            context.Device.System.KernelContext.Syscall.CreateSession(out int serverSessionHandle, out int clientSessionHandle, false, 0);
+
+            Logger.Warning?.Print(LogClass.KernelIpc, $"MakeSessionObject: server={serverSessionHandle:X8} client={clientSessionHandle:X8}");
+
+            Server.AddSessionObj(serverSessionHandle, obj);
+
+            context.Response.HandleDesc = IpcHandleDesc.MakeCopy(clientSessionHandle);
         }
 
         protected T GetObject<T>(ServiceCtx context, int index) where T : IpcService

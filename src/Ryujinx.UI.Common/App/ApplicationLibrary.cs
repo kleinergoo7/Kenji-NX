@@ -347,6 +347,23 @@ namespace Ryujinx.UI.App.Common
 
                             break;
                         }
+                    case ".nup":
+                        {
+                            Span<byte> magic = stackalloc byte[4];
+                            if (file.Read(magic) != magic.Length || !magic.SequenceEqual("NUP\u0001"u8))
+                            {
+                                Logger.Warning?.Print(LogClass.Application, $"Invalid NUP header in '{applicationPath}'.");
+                                return false;
+                            }
+
+                            applications.Add(new ApplicationData
+                            {
+                                Icon = _nspIcon,
+                                Name = Path.GetFileNameWithoutExtension(applicationPath),
+                            });
+
+                            break;
+                        }
                     case ".nsp":
                     case ".pfs0":
                         {
