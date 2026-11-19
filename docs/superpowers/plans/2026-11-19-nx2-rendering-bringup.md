@@ -458,6 +458,48 @@ git commit -m "nx2: separate 3D and compute macro counters"
 
 **Gate:** stop for a human decision on `MACRO_ENGINE=` before any fix based on it.
 
+### Task 1k: Trace compute macro code upload
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs` (log 0x45-0x48 writes)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/GPFifoClass.cs` (log `KeepComputeMmeCode`/`AddComputeMmeCode`/`SetComputeMmeBindPointer`/`BindComputeMmeStart`)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/Nx2PcasTrace.cs` or new `Nx2MacroUploadTrace.cs` (shared env gate/cap)
+- Create: `src/Ryujinx.Tests/Graphics/Nx2MacroUploadTraceTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `COMPUTE_UPLOAD=`)
+
+**Interfaces:**
+- Consumes: `ComputeClass.cs:100-112` (methods 0x45-0x48 delegate to `_fifoClass.KeepComputeMmeCode`/`AddComputeMmeCode`/`SetComputeMmeBindPointer`/`BindComputeMmeStart`); `GPFifoClass.cs:488-550` (compute code bank writes into `_computeMacroCode`); Eglantine `kepler_compute.cpp:344-354,165-172` and `maxwell_3d.cpp:858,1650,1842` (how macro code/positions are uploaded and bound).
+- Produces: `NX2_MME_UPLOAD=1` gated, capped logging of each upload method call: offset/index, word count, first/last code words, and a running non-zero-word count for the compute code bank; plus a summary at first compute macro execution stating the bank's non-zero word count and hash.
+
+- [ ] **Step 1: Write the failing test**
+
+In `Nx2MacroUploadTraceTests.cs`, assert that recording a code word with value `0x1234` increments the non-zero count and changes the bank hash, while recording `0x0` leaves the non-zero count unchanged; and that the summary renders `nonzero=1` / `nonzero=0` correctly. Reset state in `[SetUp]`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2MacroUploadTraceTests" -v q`
+Expected: FAIL — trace helper does not exist.
+
+- [ ] **Step 3: Add the observe-only upload trace**
+
+Gate with `NX2_MME_UPLOAD=1` (reuse the existing `Nx2QmdTrace`/`Nx2PcasTrace` env/cap pattern). Log each of the four upload methods with its argument; in `AddComputeMmeCode`, track a running non-zero-word count and hash over `_computeMacroCode` writes. At the first compute macro execution (where `mmec` increments), log a one-line summary `NX2MMEUP bank nonzero=<n> hash=<h> words=65536`. No upload/decode behaviour change.
+
+- [ ] **Step 4: Run and record**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_MME_UPLOAD=1 NX2_MME_ENGINE=1 NX2_MACRO_LOG=1`. In `docs/nx2/CONTINUE_HERE.md`, record `COMPUTE_UPLOAD=` as one of: `GUEST_SENT_CODE` (non-zero code words were written to the bank but execution still saw zeros — misrouting), `NO_CODE_SENT` (no non-zero words ever written — guest did not upload compute macro code), or `INCONCLUSIVE`. Cite the per-method counts and the bank summary.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2MacroUploadTraceTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/Compute src/Ryujinx.Graphics.Gpu/Engine/GPFifo src/Ryujinx.Tests/Graphics/Nx2MacroUploadTraceTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: trace compute macro code upload"
+```
+
+**Gate:** stop for a human decision on `COMPUTE_UPLOAD=` — `GUEST_SENT_CODE` means fix routing; `NO_CODE_SENT` means the guest never uploads compute macro code (look upstream in guest/cengine).
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
