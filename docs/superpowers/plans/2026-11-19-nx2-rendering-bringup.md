@@ -374,6 +374,48 @@ git commit -m "nx2: verify NUP package completeness"
 
 **Gate:** stop for a human decision; if `NUP_COMPLETE=NO`, the next step is obtaining the base NUP rather than any emulator change.
 
+### Task 1i: QMD ring scheduling from MME data-RAM word 0x27
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/QmdDescriptor.cs` (ring state)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs` (use ring base when dispatching QMDs)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/MME/MacroTuring.cs` (observe DWRITE to word 0x27)
+- Create: `src/Ryujinx.Tests/Graphics/Nx2QmdRingTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `QMD_RING=`)
+
+**Interfaces:**
+- Consumes: Eglantine `native_qmd.h:59-160` (`NativeQmdScheduler::Signal`, PCAS actions 3/2 load, 7 decrement, 12 increment; dependencies from `qmd[4]>>14`; QMD version `0x30` at `qmd[18]&0xff`; release slots 24/28/52; process-global QMD table), `NX2_NOTES.md` row 84 (each channel writes its ring base to data RAM `0x27`, macro 0xda reads it); our `MacroTuring.cs:570-576` (DWRITE case 31) and `:139` (`DataRamWrites`).
+- Produces: `internal class Nx2QmdRing { public void SetBase(ulong baseVa); public int DispatchCount { get; } public void Schedule(ulong qmdVa, int action); }` and a `QmdDescriptor.RingBase` field. Observe-only logging when `NX2_QMD_RING=1` for any DWRITE to word `0x27`.
+
+- [ ] **Step 1: Write the failing tests**
+
+In `Nx2QmdRingTests.cs`, assert: (a) `SetBase(0x123400)` then `Schedule` records a dispatch keyed by the QMD VA; (b) a second `Schedule` for the same VA with action `7` (decrement) updates the existing entry rather than adding a new one; (c) a descriptor built with `RingBase` renders `ring=0x123400` in its description.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2QmdRingTests" -v q`
+Expected: FAIL — `Nx2QmdRing` does not exist.
+
+- [ ] **Step 3: Implement the ring scheduler and DWRITE observation**
+
+Add `Nx2QmdRing` with a process-global table (per Eglantine row 84), feed `RingBase` from data RAM word `0x27` at QMD dispatch in `ComputeClass`, and log `NX2QMRING base=0x... qmd=0x... action=...` when `NX2_QMD_RING=1`. In `MacroTuring.cs` DWRITE case 31, when the destination is `0x27` and the env gate is on, log the written value (capped 200 lines). No change to dispatch correctness for Maxwell titles; NX2-only.
+
+- [ ] **Step 4: Run and record the premise check FIRST**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_QMD_RING=1 NX2_PCAS_TRACE=1 NX2_QMD_TRACE=1 NX2_MACRO_LOG=1`. Before treating the port as useful, check `NX2QMRING base=` lines: prior captures show `dram27=0x0` on all 73 macros. Record `QMD_RING=` as one of: `BASE_WRITTEN` (guest writes a nonzero word 0x27), `BASE_NEVER_WRITTEN` (no DWRITE to 0x27 ever observed), or `INCONCLUSIVE`. If `BASE_NEVER_WRITTEN`, stop — the guest does not use this path in Fast Fusion and no further ring work is justified.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2QmdRingTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/Compute src/Ryujinx.Graphics.Gpu/Engine/MME/MacroTuring.cs src/Ryujinx.Tests/Graphics/Nx2QmdRingTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: add QMD ring scheduling from MME data RAM"
+```
+
+**Gate:** stop for a human decision on `QMD_RING=` before any further work.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
