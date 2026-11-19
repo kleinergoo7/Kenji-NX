@@ -343,6 +343,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             return ResultCode.Success;
         }
 
+        [CommandCmif(67)]
+        // CancelCpuBoostMode()
+        public ResultCode CancelCpuBoostMode(ServiceCtx context)
+        {
+            _apmSystemManagerServer.SetCpuBoostMode(Apm.CpuBoostMode.Disabled);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(91)] // 7.0.0+
         // GetCurrentPerformanceConfiguration() -> nn::apm::PerformanceConfiguration
         public ResultCode GetCurrentPerformanceConfiguration(ServiceCtx context)
