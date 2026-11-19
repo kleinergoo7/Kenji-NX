@@ -1,0 +1,242 @@
+# NX2 Rendering Bring-up Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Get Fast Fusion (Switch 2 NUP) from zero-draw, all-zero presents to a drawn non-black frame, by closing the documented NX2 GPU-pipeline gaps in verified increments.
+
+**Architecture:** One shared pipeline, generation-flagged rather than forked: the existing GPFIFO/MME/QMD/shader-cache classes gain NX2 behaviour behind `IsAmpere`/`UsesNx2` flags; the only new shader code is an SM86 opcode table plus IR-to-IR rewrites feeding the existing translator and backend. Work proceeds in small, individually testable commits, each verified with the diagnostics already in the tree.
+
+**Tech Stack:** C# / .NET 11, Ryujinx GPU and HLE layers, xUnit tests under `src/Ryujinx.Tests`, Eglantine `nx2` branch as read-only algorithm reference (`/tmp/opencode/eglantine`).
+
+**Spec:** `docs/superpowers/specs/2026-11-19-nx2-rendering-design.md`
+
+## Global Constraints
+
+- Author every commit `kleinergoo7 <348551191+kleinergoo7@users.noreply.github.com>`; push to `origin` = github.com/kleinergoo7/Kenji-NX. Never push to the `kenji-nx` (Forgejo) remote.
+- Keep exactly two local branches: `kenji-nx2-oot-bringup` and `archive/nx2-oot-pre-kenji-rebase`. Never modify the archive branch.
+- Build: `dotnet build Ryujinx.slnx -c Debug` (SDK pinned 11.0.100). Smoke test: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2SwizzleTests"` → 3 passed.
+- Fast Fusion runs require `NX2_PATCH=""` and the standard profile: `--dram-size MemoryConfiguration12GiB --memory-manager-mode SoftwarePageTable --ignore-missing-services`.
+- ROM: `/home/reng/Downloads/Fast_Fusion_Update_1.4.nup` (not in repo). Logs and dumps land in git-ignored scratch `.nx2-logs/`; never commit them.
+- Small focused commits, 50/72 messages; keep `.nup`, `.rgba`, `.png` out of git.
+- Stop rule: if three consecutive fixes in one phase fail to move its chosen verification signal, stop and revisit the design with the human partner.
+
+## Review Focus
+
+1. **A Maxwell shader decoded with the Ampere flag (or vice versa)** must keep producing the same program — pinned in Task 4 by a Maxwell fixture passed through the generation-flagged `Decoder.Decode`.
+2. **QMD release writes with the wrong width or missing slots** silently deadlock the 3D queue — pinned in Task 2 by tests asserting 4-byte writes at slots 24, 28 and 52 and bit-19 max semantics.
+3. **Parked split methods leaking across submissions** swallow unrelated later entries — pinned in Task 3 by a test asserting `Clear()` at submission end and the 16-entry eviction cap.
+4. **NX2 characteristics tail (`+0xb4 = 64`, versions `0x70..0x80 = 0x40`) regressions** break TSG subcontexts, reintroducing "no command memory" — pinned in Task 2 by a guard test on the existing tail writer.
+5. **No draws even after the GPU path is fixed** means the blocker is in the guest, not the emulator — pinned in Task 1 by a mandatory evidence gate before Task 2 begins, and by the stop rule above.
+
+---
+
+### Task 0: Record the Phase 0 triage result and route
+
+**Files:**
+- Modify: `docs/nx2/CONTINUE_HERE.md` (status + last-verified block)
+- Reference log: `.nx2-logs/run-20261119-160446/ocarina.log`
+
+**Interfaces:**
+- Consumes: existing `NX2_FIFO_TRACE`, `NX2_SUBMIT_LOG`, `NX2_SYNCPT_TRACE`, `NX2_METHOD_LOG` output.
+- Produces: one of two routes — `ROUTE=GUEST_GATE` or `ROUTE=GPU_PIPELINE` — recorded in the doc.
+
+- [ ] **Step 1: Write the measured result into `docs/nx2/CONTINUE_HERE.md`**
+
+Record these facts verbatim from the referenced log: 4 submits on syncpoints 1 and 2 with `inc=1`/`inc=2`; `NX2 spincr id=1 now=1`, `id=2 now=2`; `NX2SPT 201-slot=0 hostAtSig=2`; `NX2FIFO` entries captured fully (`captured == words`) with `pendingMethod=0x0` at entry; `NX2 progress` still `draws=0`; characteristics tail written (0xE0/0xD0 NX2 block) and subcontext ids 2 and 3 created. Conclude: the emulator's GPFIFO, fence and characteristics paths are healthy; **no render command buffers are produced by the guest**.
+
+- [ ] **Step 2: Apply the decision rule**
+
+If the log shows an unmet acquire, a parked method, an unreached fence or a TSG/characteristics error, set `ROUTE=GPU_PIPELINE`. Otherwise (the measured case) set `ROUTE=GUEST_GATE`: the guest-side render gate must be localised before GPU work can be justified.
+
+- [ ] **Step 3: Verify and commit**
+
+Run: `grep -n "ROUTE=\|draws=0\|subcontext" docs/nx2/CONTINUE_HERE.md`
+Expected: the route line and the evidence lines are present.
+
+```bash
+git add docs/nx2/CONTINUE_HERE.md
+git commit -m "docs: record Fast Fusion Phase 0 triage and route"
+```
+
+### Task 1: Localise the guest-side render gate (ROUTE=GUEST_GATE)
+
+**Files:**
+- Modify: `docs/nx2/CONTINUE_HERE.md` (evidence and finding)
+- Modify (only if Step 3 finds an emulator-side gate): the owning `src/Ryujinx.HLE/HOS/Services/Am/AppletAE/AllSystemAppletProxiesService/SystemAppletProxy/INx2*Session.cs`, plus a focused test under `src/Ryujinx.Tests/HLE/`.
+
+**Interfaces:**
+- Consumes: direct `dotnet … Ryujinx.dll` invocation (the run script unsets `NX2_THREAD_DUMP_AT_PRESENT`).
+- Produces: a named gate (service reply, shared-memory flag or event) with log evidence, or an explicit "not found" with the next diagnostic to add.
+
+- [ ] **Step 1: Capture stacks at two steady-state presents**
+
+Run two 90 s invocations with `NX2_PATCH=""`, `NX2_THREAD_DUMP_AT_PRESENT=100` and `=5000`, adding `NX2_PRESENT_TRACE=1 NX2_MISSING_LOG=1 NX2_SVC_COUNT=1`. Use the direct command form; write each log to its own `.nx2-logs/run-*` directory.
+
+- [ ] **Step 2: Compare the MainThread and TaskQueue stacks**
+
+Run: `grep -a "NX2 td pid=109\|NX2 main mutex" <log>`
+Expected: identify whether the main thread leaves `nn::wsi::ounce::native::NativeWindow::Present` between presents and whether any `TaskQueue_Core*` leaves `nn::os::WaitEvent`. Read the `NX2_SVC_THREAD` histograms to confirm whether submit-related syscalls ever resume.
+
+- [ ] **Step 3: Record the finding, fix emulator-side gates, and set the next action**
+
+Write the named gate, its evidence (log line + guest stack frame) and the smallest candidate fix into the doc. If the gate is an emulator-side reply or unsignalled event, implement that single fix in the owning `INx2*Session`/service file in this task with a focused unit test, then re-run the same capture to confirm the guest moves past it. If the gate is outside the emulator (e.g. missing controller input or an asset load that never completes), stop and report to the human partner before Task 2 — do not start GPU changes against an unconfirmed blocker.
+
+- [ ] **Step 4: Verify and commit**
+
+Run: `grep -n "GATE=\|evidence:" docs/nx2/CONTINUE_HERE.md`
+Expected: a single named gate with evidence.
+
+```bash
+git add docs/nx2/CONTINUE_HERE.md
+git commit -m "docs: localise Fast Fusion render gate"
+```
+
+### Task 2: Fire QMD release payloads and set `UsesMme64`
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs:134-267` (`SendSignalingPcasB`, `UsesMme64` at :43)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/QmdDescriptor.cs:6-59`
+- Create: `src/Ryujinx.Graphics.Gpu/Engine/Compute/Nx2QmdRelease.cs`
+- Test: `src/Ryujinx.Tests/Graphics/Nx2QmdReleaseTests.cs`
+- Guard test: `src/Ryujinx.Tests/HLE/Nv/Nx2CharacteristicsTailTests.cs` (new)
+
+**Interfaces:**
+- Consumes: `ComputeQmd` bitfield at `ComputeQmd.cs:126-249` (release addresses/payloads and enable bits at 202/203); `QmdScheduler` in `QmdDescriptor.cs`.
+- Produces: `internal static class Nx2QmdRelease { public static void Fire(ComputeQmd qmd, Action<ulong, uint> write32); }` called from `SendSignalingPcasB` immediately after `DispatchCompute`.
+
+- [ ] **Step 1: Write the failing release tests**
+
+Tests in `Nx2QmdReleaseTests.cs`: (a) with release 0 enabled at address `0x1234` payload `7`, `Fire` calls `write32` exactly once with `(0x1234, 7)`; (b) with bit 19 set and existing value `9`, it writes `max(9, 7) = 9`; (c) slots 24, 28 and 52 all fire when their enables are set; (d) a rejected QMD still fires its releases. Use a `ComputeQmd` fixture constructed from a 256-byte `byte[]` matching the field layout in `ComputeQmd.cs`.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2QmdReleaseTests" -v q`
+Expected: FAIL — `Nx2QmdRelease` does not exist.
+
+- [ ] **Step 3: Implement `Nx2QmdRelease.Fire` and wire it into `SendSignalingPcasB`**
+
+Read enabled releases from `ComputeQmd`, including the third slot at descriptor word 52; write 4 bytes per release; apply bit-19 as `max`. Set `UsesMme64` from the NX2 compute class/version at dispatch time, not globally. Extend `QmdScheduler` to track the per-process ring keyed by data-RAM word `0x27` (the RAM itself is already per channel in `GPFifoClass`).
+
+- [ ] **Step 4: Add the characteristics guard test**
+
+In `Nx2CharacteristicsTailTests.cs`, assert that the NX2 tail writer emits `0x40` at `0x70..0x80` (s16 each) and `64` at `0xb4` for the 0xD0 block. This pins the existing behaviour in `NvHostCtrlGpuDeviceFile.GetCharacteristicsVariableSize` against accidental removal.
+
+- [ ] **Step 5: Run tests, build and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2QmdReleaseTests|FullyQualifiedName~Nx2CharacteristicsTailTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all tests PASS, 0 build errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/Compute src/Ryujinx.Tests/Graphics/Nx2QmdReleaseTests.cs src/Ryujinx.Tests/HLE/Nv/Nx2CharacteristicsTailTests.cs
+git commit -m "nx2: fire QMD releases and enable MME64 on NX2 compute"
+```
+
+- [ ] **Step 6: Runtime check**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_METHOD_LOG=1 NX2_SYNCPT_TRACE=1`. Expected: no new 4 s fence stalls, `compute=[...]` histogram grows if the guest submits compute. If `draws` stays 0 and no compute appears, return to Task 1 — do not continue to Task 3 without new evidence.
+
+### Task 3: Park split methods by resume address
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/GPFifoProcessor.cs:233,362-415,455-588`
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/Nx2BulkCounters.cs:38-44`
+- Create: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/Nx2SplitMethodTable.cs`
+- Test: `src/Ryujinx.Tests/Graphics/Nx2SplitMethodTests.cs` (new)
+
+**Interfaces:**
+- Consumes: `DmaState` (private state in `GPFifoProcessor.cs`), GPFIFO entry address/size from `ProcessWithStallHandling`.
+- Produces: `internal sealed class Nx2SplitMethodTable { public void Park(ulong resumeVa, DmaState state); public bool TryTake(ulong address, out DmaState state); public void Clear(); public int Count { get; } }` with a 16-entry cap and oldest-first eviction.
+
+- [ ] **Step 1: Write the failing table tests**
+
+Assertions: (a) `Park(0x1000, s)` then `TryTake(0x1000, out t)` returns the same state; (b) a `TryTake` at a different address returns false; (c) parking a 17th entry evicts the oldest and `Count == 16`; (d) `Clear()` empties the table.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2SplitMethodTests" -v q`
+Expected: FAIL — type does not exist.
+
+- [ ] **Step 3: Implement the table and wire it into `GPFifoProcessor`**
+
+At the start of a new entry, `TryTake(header.addr, out state)`; when an entry ends with an unfinished method and the next entry is not at `split_method_end`, `Park(splitMethodEnd, state)`. Clear every parked entry at the end of a submission, and call `Nx2BulkCounters.PbEnd` there too. Add `stalled`/`resumed` counters to the `fifo=[...]` diagnostic that already prints `spwait`/`spincr`.
+
+- [ ] **Step 4: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2SplitMethodTests|FullyQualifiedName~Nx2FifoTraceTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/GPFifo src/Ryujinx.Tests/Graphics/Nx2SplitMethodTests.cs
+git commit -m "nx2: park split GPFIFO methods by resume address"
+```
+
+### Task 4: Generation-flagged shader decode and IR rewrites
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Shader/Decoders/Decoder.cs:48`
+- Modify: `src/Ryujinx.Graphics.Shader/Translation/Translator.cs:24-49`
+- Modify: `src/Ryujinx.Graphics.Gpu/Shader/ShaderCache.cs:691-718`
+- Create: `src/Ryujinx.Graphics.Shader/Decoders/AmpereOpcodes.cs`
+- Create: `src/Ryujinx.Graphics.Shader/Translation/AmpereLowering.cs`
+- Create: `src/Ryujinx.Graphics.Gpu/Shader/Nx2ShaderRejectCache.cs`
+- Test: `src/Ryujinx.Tests/Graphics/Nx2AmpereLoweringTests.cs` (new)
+
+**Interfaces:**
+- Consumes: `TranslationOptions` (`Translator.cs`), `DecodedProgram`/`Context` from `Decoder.cs`, `IsAmpere` from `GpuChannel.cs:67`/`ComputeClass.cs:202,248`.
+- Produces: `Decoder.Decode(definitions, gpuAccessor, startAddress, bool isAmpere)`; `AmpereLowering.Rewrite(DecodedProgram program)` returning the same type; `Nx2ShaderRejectCache.TryAdd(ulong address, string reason)` / `Contains(ulong address)`.
+
+- [ ] **Step 1: Write failing rewrite and regression tests**
+
+In `Nx2AmpereLoweringTests.cs`: (a) an SM86 power-of-two IMAD fixture rewrites to the IR SHL form; (b) an R2UR fixture preserves the predicate save/restore; (c) a Maxwell fixture passed with `isAmpere: false` is returned byte-for-byte unchanged; (d) `Nx2ShaderRejectCache.TryAdd` returns true once and false on a second call for the same address.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2AmpereLoweringTests" -v q`
+Expected: FAIL — new types/member missing.
+
+- [ ] **Step 3: Add the generation flag without forking the pipeline**
+
+Add `bool IsAmpere` to `TranslationOptions`, set from `ShaderCache.CreateTranslationOptions`, pass through `Translator.DecodeShader` to `Decoder.Decode`. Keep one decoder implementation; put the SM86 opcode table in `AmpereOpcodes.cs` and the IR→IR rules in `AmpereLowering.cs`. No second translator, SPIR-V backend or shader cache.
+
+- [ ] **Step 4: Add the negative cache, dump switch and bring-up fallback**
+
+`Nx2ShaderRejectCache` keys by shader address and logs a rejection once. `NX2_SHADER_DUMP=1` writes raw binaries to `.nx2-logs/`. The trivial constant/blit fallback must be gated by an explicit env var and logged whenever used — never a silent default.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2AmpereLoweringTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS (including 3 swizzle tests), 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Shader src/Ryujinx.Graphics.Gpu/Shader src/Ryujinx.Tests/Graphics/Nx2AmpereLoweringTests.cs
+git commit -m "nx2: lower SM86 shaders through the shared decoder pipeline"
+```
+
+### Task 5: Prove a non-black frame and hand off
+
+**Files:**
+- Modify: `docs/nx2/CONTINUE_HERE.md`
+- Scratch outputs only: `.nx2-logs/frame-*.rgba`, screenshots
+
+**Interfaces:**
+- Consumes: all previous tasks; `NX2_FRAME_DUMP=1`, `NX2_FRAME_DUMP_TEST=1`, `NX2_DRAW_DUMP=1`.
+- Produces: a documented, reproducible invocation plus screenshot evidence.
+
+- [ ] **Step 1: Run the final verification**
+
+Run Fast Fusion 150 s with `NX2_PATCH="" NX2_FRAME_DUMP=1 NX2_FRAME_DUMP_TEST=1 NX2_DRAW_DUMP=200 NX2_METHOD_LOG=1`. Expected: `NX2 progress` shows `draws > 0`; `NX2 composite stats` shows `nonzero > 0` with at least two different hashes; `NX2_FRAME_DUMP_TEST` prints `PASS=True`.
+
+- [ ] **Step 2: Convert and inspect a frame**
+
+Run: `convert -size 3840x2160 -depth 8 rgba:.nx2-logs/frame-early-1-c1-img1-3840x2160.rgba .nx2-logs/ff-final.png`
+Then: `xdotool search --name Ryujinx` → use the id exactly as printed (decimal, or hex **with `0x`**), and `import -window <id> .nx2-logs/ff-screen.png`. Expected: visibly non-black game content in at least one image.
+
+- [ ] **Step 3: Update the continuation guide and commit**
+
+Write the exact invocation, the PASS numbers (`submits`, `draws`, `nonzero`, hashes) and the screenshot path into `docs/nx2/CONTINUE_HERE.md`. If the frame is still black, record the failure and return to Task 1 with the new evidence — do not claim completion.
+
+```bash
+git add docs/nx2/CONTINUE_HERE.md
+git commit -m "docs: record Fast Fusion rendering verification"
+git push origin kenji-nx2-oot-bringup
+```
