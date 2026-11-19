@@ -38,6 +38,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// </summary>
         private readonly QmdScheduler _qmdScheduler = new();
 
+        /// <summary>
+        /// NX2-only QMD ring state, fed from MME data RAM word 0x27. Observe-only.
+        /// </summary>
+        private readonly Nx2QmdRing _nx2QmdRing = new();
+
         // Env-gated (NX2_QMD_TRACE=1) observe-only QMD dispatch trace, capped at 200 lines.
         private static int _qmdTraceLines;
 
@@ -179,9 +184,15 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
                 MinorVersion = 0,
                 CurrentVersion = _state.State.SetQmdVersionCurrent,
                 OldestVersion = _state.State.SetQmdVersionOldestSupported,
+                RingBase = (ulong)(uint)_fifoClass.MmeDataRam[0x27],
             };
 
             _qmdScheduler.Track(ref descriptor);
+
+            // NX2-only, observe-only: feed the process-global QMD ring from data RAM 0x27.
+            // Dispatch behaviour is unchanged — this only records ring scheduling state.
+            _nx2QmdRing.SetBase(descriptor.RingBase);
+            _nx2QmdRing.Schedule((ulong)qmdAddress << 8, argument & 15);
 
             ComputeQmd qmd = _channel.MemoryManager.Read<ComputeQmd>((ulong)qmdAddress << 8);
 

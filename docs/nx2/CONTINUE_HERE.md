@@ -420,6 +420,38 @@ packaging problem: the guest simply never reads the assets. The missing-base
 hypothesis is ruled out, so per the brief's gate the next step is NOT to obtain a
 different NUP — continue with the guest-side blocker (Phases 1a–1g).
 
+## Phase 1i — QMD ring scheduling from MME data-RAM word 0x27 (Task 1i)
+
+Added an observe-only process-global `Nx2QmdRing` (Eglantine `native_qmd.h:163-166`,
+one table for all channels), fed its base from MME data RAM word `0x27` at QMD
+dispatch, and wired an env-gated (`NX2_QMD_RING=1`) DWRITE observation in
+`MacroTuring.cs` case 31 that logs `NX2QMRING base=0x… dwrite=0x27` (capped 200).
+No dispatch correctness change; NX2-only. TDD: 3 new `Nx2QmdRingTests` RED then GREEN.
+
+Ran the 90 s Fast Fusion premise check
+(`NX2_PATCH="" NX2_QMD_RING=1 NX2_PCAS_TRACE=1 NX2_QMD_TRACE=1 NX2_MACRO_LOG=1`,
+Fast Fusion profile) under `xvfb-run` into
+`.nx2-logs/run-20261119-211143-1i-premise/ocarina.log` (rc=124 expected, 640 lines,
+`NX2 progress t=60s submits=4 presents=14772 … mme=73/4159/0+73 pcas=[calls=0
+mAE=0 mAF=0 mB0=0] … draws=0`). New binary confirmed live: the DWRITE line is tagged
+`LogRing:` (the new `Nx2QmdTrace.LogRing` member).
+
+- `NX2QMRING` lines: **1** — `NX2QMRING base=0x0 dwrite=0x27` at t=27.448 s (a single
+  guest DWRITE to word 0x27 with value **zero**).
+- `NX2 mme exec` lines: **73**, all `dram27=0x00000000`; `NX2QMD`=0, `NX2PCAS`=0.
+
+QMD_RING=INCONCLUSIVE
+
+Meaning: a DWRITE to word 0x27 **was** observed, so the strict `BASE_NEVER_WRITTEN`
+definition ("no DWRITE to 0x27 ever observed") is not met; but the only value written
+was `0x0`, not a usable ring base, so `BASE_WRITTEN` ("a nonzero word 0x27") is not
+met either. Prior captures' `dram27=0x0` on all 73 macros is confirmed, and no QMD/PCAS
+dispatch occurs — substantively the ring path is unused — yet the zero write keeps
+this from fitting either strict category. Per the brief's escalation rule this is
+recorded INCONCLUSIVE; stop for a human decision before any further ring work. The
+observe-only ring implementation + tests are committed, but the ring is not wired into
+dispatch correctness.
+
 ## TL;DR from a fresh clone
 
 ```bash

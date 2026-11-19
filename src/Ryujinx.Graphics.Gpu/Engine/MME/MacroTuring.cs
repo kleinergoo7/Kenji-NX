@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.Device;
+using Ryujinx.Graphics.Gpu.Engine.Compute;
 using Ryujinx.Graphics.Gpu.Memory;
 using System;
 using System.Collections.Generic;
@@ -573,6 +574,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
 
                             _dataRam[(int)x] = (int)y;
                             _dataRamWrites.Add((x, y));
+
+                            // NX2-only, observe-only: word 0x27 is the QMD ring base
+                            // (Eglantine NX2_NOTES.md row 84). The NX2QMRING base= line is
+                            // the premise-check signal for whether the guest writes a ring.
+                            if (x == 0x27)
+                            {
+                                Nx2QmdTrace.LogRing($"NX2QMRING base=0x{y:X} dwrite=0x27");
+                            }
                             break;
                         default:
                             Fail("invalid ALU operation");

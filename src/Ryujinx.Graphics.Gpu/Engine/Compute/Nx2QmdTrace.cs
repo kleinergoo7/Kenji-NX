@@ -14,11 +14,22 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
     {
         private static readonly bool _qmdEnabled = Environment.GetEnvironmentVariable("NX2_QMD_TRACE") == "1";
         private static readonly bool _semEnabled = Environment.GetEnvironmentVariable("NX2_SEM_WATCH") == "1";
+        private static readonly bool _ringEnabled = Environment.GetEnvironmentVariable("NX2_QMD_RING") == "1";
 
         private const int Cap = 200;
         private static int _semLines;
+        private static int _ringLines;
 
         public static bool QmdEnabled => _qmdEnabled;
+
+        /// <summary>Logs an NX2 QMD-ring line when NX2_QMD_RING=1, capped at 200 lines.</summary>
+        public static void LogRing(string message)
+        {
+            if (_ringEnabled && Interlocked.Increment(ref _ringLines) <= Cap)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, message);
+            }
+        }
 
         /// <summary>Builds a one-line summary of the QMD release slots and ring context.</summary>
         public static string Describe(ComputeQmd qmd, int dataRam27)

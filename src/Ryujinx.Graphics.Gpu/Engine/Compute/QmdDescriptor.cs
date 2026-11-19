@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Ryujinx.Graphics.Gpu.Engine.Compute
 {
     /// <summary>
@@ -36,6 +38,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         public int MinorVersion;
         public int CurrentVersion;
         public int OldestVersion;
+        public ulong RingBase;
+
+        /// <summary>One-line description including the QMD ring base.</summary>
+        public string Describe() => $"kind={Kind} action={Action} ring=0x{RingBase:X}";
     }
 
     /// <summary>
@@ -76,5 +82,76 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         public QmdDescriptor Last => _last;
 
         public long DispatchCount => _dispatchCount;
+    }
+
+    /// <summary>
+    /// NX2 QMD ring state. Observe-only: tracks QMD ring actions but never changes dispatch
+    /// behaviour. Eglantine native_qmd.h:163-166 keeps one table for every channel because a
+    /// QMD's dependency counter is state of the QMD itself — title 1 schedules a QMD on one
+    /// channel while another decrements it (NX2_NOTES.md row 84).
+    /// </summary>
+    class Nx2QmdRing
+    {
+        private sealed class Entry
+        {
+            public ulong Base;
+            public int Action;
+        }
+
+        private static readonly object _lock = new();
+        private static readonly Dictionary<ulong, Entry> _entries = new();
+
+        private ulong _base;
+
+        /// <summary>Sets the ring base fed from MME data RAM word 0x27.</summary>
+        public void SetBase(ulong baseVa) => _base = baseVa;
+
+        /// <summary>Number of distinct QMD VAs tracked in the process-global table.</summary>
+        public int DispatchCount
+        {
+            get { lock (_lock) { return _entries.Count; } }
+        }
+
+        /// <summary>
+        /// Tracks a QMD action: 3/2 load (schedule) a QMD, 7/12 adjust an existing entry,
+        /// 0/1 are no-ops (Eglantine native_qmd.h:80-113). Decrements/increments never add
+        /// a new entry — only load actions create one.
+        /// </summary>
+        public void Schedule(ulong qmdVa, int action)
+        {
+            lock (_lock)
+            {
+                switch (action)
+                {
+                    case 3:
+                    case 2:
+                        if (_entries.TryGetValue(qmdVa, out Entry existing))
+                        {
+                            existing.Base = _base;
+                            existing.Action = action;
+                        }
+                        else
+                        {
+                            _entries[qmdVa] = new Entry { Base = _base, Action = action };
+                        }
+                        break;
+                    case 7:
+                    case 12:
+                        if (_entries.TryGetValue(qmdVa, out Entry target))
+                        {
+                            target.Action = action;
+                        }
+                        break;
+                }
+            }
+
+            Nx2QmdTrace.LogRing($"NX2QMRING base=0x{_base:X} qmd=0x{qmdVa:X} action={action}");
+        }
+
+        /// <summary>Clears the process-global table (test isolation).</summary>
+        internal static void Reset()
+        {
+            lock (_lock) { _entries.Clear(); }
+        }
     }
 }
