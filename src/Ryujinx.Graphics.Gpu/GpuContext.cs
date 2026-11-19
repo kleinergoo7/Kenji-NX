@@ -100,6 +100,13 @@ namespace Ryujinx.Graphics.Gpu
         internal Capabilities Capabilities;
 
         /// <summary>
+        /// Whether any bound engine class ID is a T239 (Ampere) stepping.
+        /// v1.1 (Switch 2 enablement): latched when a channel binds engine class
+        /// 51095 (0xC797), 51136 (0xC7C0) or 51125 (0xC7B5).
+        /// </summary>
+        public bool IsAmpere { get; set; }
+
+        /// <summary>
         /// Event for signalling shader cache loading progress.
         /// </summary>
         public event Action<ShaderCacheState, int, int> ShaderCacheStateChanged;
@@ -167,7 +174,10 @@ namespace Ryujinx.Graphics.Gpu
                 throw new ArgumentException("The PID is invalid or the process was not registered", nameof(pid));
             }
 
-            return new MemoryManager(physicalMemory, cpuMemorySize);
+            return new MemoryManager(physicalMemory, cpuMemorySize)
+            {
+                Nx2IdentityMapping = IsAmpere,
+            };
         }
 
         /// <summary>

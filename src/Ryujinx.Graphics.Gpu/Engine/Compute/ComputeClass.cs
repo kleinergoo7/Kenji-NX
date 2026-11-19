@@ -1,4 +1,5 @@
 using Ryujinx.Graphics.Device;
+using Ryujinx.Graphics.Gpu.Engine.GPFifo;
 using Ryujinx.Graphics.Gpu.Engine.InlineToMemory;
 using Ryujinx.Graphics.Gpu.Engine.Threed;
 using Ryujinx.Graphics.Gpu.Engine.Types;
@@ -16,12 +17,30 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
     /// </summary>
     class ComputeClass : IDeviceState
     {
+        private const int KeepMmeCodeMethodOffset = 0x45 * 4;
+        private const int AddMmeCodeMethodOffset = 0x46 * 4;
+        private const int SetMmeBindPointerMethodOffset = 0x47 * 4;
+        private const int BindMmeStartMethodOffset = 0x48 * 4;
+
         private readonly GpuContext _context;
         private readonly GpuChannel _channel;
         private readonly ThreedClass _3dEngine;
+        private readonly GPFifoClass _fifoClass;
         private readonly DeviceState<ComputeClassState> _state;
 
         private readonly InlineToMemoryClass _i2mClass;
+
+        /// <summary>
+        /// MME64/QMD dispatch scheduler.
+        /// v1.1 (Switch 2 enablement): tracks versioned compute dispatches.
+        /// </summary>
+        private readonly QmdScheduler _qmdScheduler = new();
+
+        /// <summary>
+        /// Whether the MME64 microcode engine handles QMD dispatch.
+        /// v1.1 (Switch 2 enablement).
+        /// </summary>
+        public bool UsesMme64 { get; set; }
 
         /// <summary>
         /// Creates a new instance of the compute engine class.
@@ -29,11 +48,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// <param name="context">GPU context</param>
         /// <param name="channel">GPU channel</param>
         /// <param name="threedEngine">3D engine</param>
-        public ComputeClass(GpuContext context, GpuChannel channel, ThreedClass threedEngine)
+        /// <param name="fifoClass">GP FIFO class that owns the macro code banks</param>
+        public ComputeClass(GpuContext context, GpuChannel channel, ThreedClass threedEngine, GPFifoClass fifoClass)
         {
             _context = context;
             _channel = channel;
             _3dEngine = threedEngine;
+            _fifoClass = fifoClass;
             _state = new DeviceState<ComputeClassState>(new Dictionary<string, RwCallback>
             {
                 { nameof(ComputeClassState.LaunchDma), new RwCallback(LaunchDma, null) },
@@ -56,7 +77,28 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// </summary>
         /// <param name="offset">Register byte offset</param>
         /// <param name="data">Data to be written</param>
-        public void Write(int offset, int data) => _state.Write(offset, data);
+        public void Write(int offset, int data)
+        {
+            _state.Write(offset, data);
+
+            // Switch 2 compute streams upload their macro code through methods
+            // 0x45-0x48; delegate those to the FIFO class macro banks.
+            switch (offset)
+            {
+                case KeepMmeCodeMethodOffset:
+                    _fifoClass.KeepComputeMmeCode(data);
+                    break;
+                case AddMmeCodeMethodOffset:
+                    _fifoClass.AddComputeMmeCode(data);
+                    break;
+                case SetMmeBindPointerMethodOffset:
+                    _fifoClass.SetComputeMmeBindPointer(data);
+                    break;
+                case BindMmeStartMethodOffset:
+                    _fifoClass.BindComputeMmeStart(data);
+                    break;
+            }
+        }
 
         /// <summary>
         /// Launches the Inline-to-Memory DMA copy operation.
@@ -101,6 +143,22 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
 
             uint qmdAddress = _state.State.SendPcasA;
 
+            QmdDescriptor descriptor = new()
+            {
+                Kind = UsesMme64 ? QmdDispatchKind.Mme64 : QmdDispatchKind.Compute,
+                BoundClassId = (int)ClassId.Compute,
+                Action = qmdAddress == 0 ? QmdDispatchAction.Resume : QmdDispatchAction.Launch,
+                Select = 0,
+                QmdAddressIsZero = qmdAddress == 0,
+                QmdAddressMapped = qmdAddress != 0,
+                MajorVersion = 3,
+                MinorVersion = 0,
+                CurrentVersion = _state.State.SetQmdVersionCurrent,
+                OldestVersion = _state.State.SetQmdVersionOldestSupported,
+            };
+
+            _qmdScheduler.Track(ref descriptor);
+
             ComputeQmd qmd = _channel.MemoryManager.Read<ComputeQmd>((ulong)qmdAddress << 8);
 
             ulong shaderGpuVa = ((ulong)_state.State.SetProgramRegionAAddressUpper << 32) | _state.State.SetProgramRegionB;
@@ -140,7 +198,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
                 qmd.CtaThreadDimension2,
                 localMemorySize,
                 sharedMemorySize,
-                _channel.BufferManager.HasUnalignedStorageBuffers);
+                _channel.BufferManager.HasUnalignedStorageBuffers,
+                _channel.UsesAmpereShaders);
 
             CachedShaderProgram cs = memoryManager.Physical.ShaderCache.GetComputeShader(_channel, samplerPoolMaximumId, poolState, computeState, shaderGpuVa);
 
@@ -185,7 +244,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
                     qmd.CtaThreadDimension2,
                     localMemorySize,
                     sharedMemorySize,
-                    _channel.BufferManager.HasUnalignedStorageBuffers);
+                    _channel.BufferManager.HasUnalignedStorageBuffers,
+                    _channel.UsesAmpereShaders);
 
                 cs = memoryManager.Physical.ShaderCache.GetComputeShader(_channel, samplerPoolMaximumId, poolState, computeState, shaderGpuVa);
 
