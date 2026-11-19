@@ -26,11 +26,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static readonly System.Diagnostics.Stopwatch _procSw = System.Diagnostics.Stopwatch.StartNew();
         private static System.Threading.Timer _timer;
         private static volatile Ryujinx.HLE.HOS.Kernel.KernelContext _kernel;
+        internal static Ryujinx.HLE.HOS.Kernel.KernelContext CurrentKernel => _kernel;
         public static void CaptureKernel(Ryujinx.HLE.HOS.Kernel.KernelContext k) { if (k != null) _kernel = k; }
         private static int _timerStarted;
         private static readonly object _dumpLock = new();
         public static void EnsureTimer()
         {
+            Nx2PcWatch.EnsureTimer();
             if (!Enabled)
                 return;
             if (System.Threading.Interlocked.CompareExchange(ref _timerStarted, 1, 0) != 0)
@@ -335,7 +337,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
         private static string FormatRegisterMemory(KThread thread)
         {
-            if (!StallRegisterMemory)
+            return FormatRegisterMemory(i => thread.Context.GetX(i), address => thread.Owner.CpuMemory.Read<uint>(address));
+        }
+
+        // force=true bypasses NX2_STALL_MEM for the PC watch, which always needs the object dump.
+        internal static string FormatRegisterMemory(Func<int, ulong> getX, Func<ulong, uint> read32, bool force = false)
+        {
+            if (!StallRegisterMemory && !force)
                 return "";
 
             StringBuilder sb = new();
@@ -344,7 +352,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             for (int i = 0; i <= 31 && dumped < 16; i++)
             {
-                ulong address = thread.Context.GetX(i);
+                ulong address = getX(i);
 
                 if (address < 0x1000 || address > ulong.MaxValue - 0x40 || !seen.Add(address))
                 {
@@ -358,7 +366,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 {
                     try
                     {
-                        words.Append($" {thread.Owner.CpuMemory.Read<uint>(address + (ulong)k * 4):X8}");
+                        words.Append($" {read32(address + (ulong)k * 4):X8}");
                         any = true;
                     }
                     catch (Exception)
@@ -524,6 +532,131 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             {
                 lock (_dumpLock)
                 { if (_lastDumpSec < progressSec) { _lastDumpSec = progressSec; DumpAt(_kernel ?? horizon?.KernelContext ?? ResolveKernel(), $"t={progressSec}s"); Nx2IpcCounters.Dump($"t={progressSec}s"); Nx2SvcCounters.Dump($"t={progressSec}s"); Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Dump($"t={progressSec}s"); } }
+            }
+        }
+    }
+
+    /// <summary>NX2_PC_WATCH (env-gated, observe-only): a 10 ms sampler that logs registers and
+    /// the object memory at a virtual completion-poll PC; no guest execution or GPU dispatch change.</summary>
+    internal static class Nx2PcWatch
+    {
+        private const int MaxLines = 200;
+        // The blr at 0x860B878 returns here; w0 holds the bool the poll tests with tbz.
+        private const ulong PostCallPc = 0x860B87C;
+
+        private static ulong[] GetWatchPcs()
+        {
+            string value = Environment.GetEnvironmentVariable("NX2_PC_WATCH");
+            if (string.IsNullOrWhiteSpace(value))
+                return [];
+
+            List<ulong> pcs = [];
+            foreach (string part in value.Split(','))
+            {
+                string text = part.Trim();
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = text[2..];
+                }
+
+                if (ulong.TryParse(text, System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture, out ulong pc))
+                {
+                    pcs.Add(pc);
+                }
+            }
+
+            return pcs.ToArray();
+        }
+
+        public static bool Enabled => GetWatchPcs().Length > 0;
+
+        internal static bool Matches(ulong pc) => Array.IndexOf(GetWatchPcs(), pc) >= 0;
+
+        public static string Format(ulong pc, KThread thread)
+        {
+            return Format(pc, i => thread.Context.GetX(i), address => thread.Owner.CpuMemory.Read<uint>(address));
+        }
+
+        internal static string Format(ulong pc, Func<int, ulong> getX, Func<ulong, uint> read32)
+        {
+            StringBuilder sb = new("regs=[");
+            for (int i = 0; i <= 30; i++)
+            {
+                sb.Append(i == 0 ? $"x{i}=0x{getX(i):X}" : $" x{i}=0x{getX(i):X}");
+            }
+
+            sb.Append($" sp=0x{getX(31):X}]");
+            if (pc == PostCallPc)
+            {
+                sb.Append($" w0=0x{(uint)getX(0):X8}");
+            }
+
+            sb.Append(Nx2ThreadDump.FormatRegisterMemory(getX, read32, force: true));
+            return sb.ToString();
+        }
+
+        private static int _timerStarted;
+        private static System.Threading.Timer _timer;
+        private static int _lineCount;
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> LastLoggedMs = new();
+
+        internal static void EnsureTimer()
+        {
+            if (!Enabled || System.Threading.Interlocked.CompareExchange(ref _timerStarted, 1, 0) != 0)
+                return;
+
+            ulong[] pcs = GetWatchPcs();
+            Logger.Warning?.Print(LogClass.ServiceAm,
+                $"NX2PCW enabled pcs=[{string.Join(",", pcs.Select(p => $"0x{p:X}"))}] cap={MaxLines}");
+            _timer = new System.Threading.Timer(_ => { try { Tick(pcs); } catch { } }, null, 10, 10);
+        }
+
+        private static void Tick(ulong[] pcs)
+        {
+            if (System.Threading.Volatile.Read(ref _lineCount) >= MaxLines)
+                return;
+
+            Ryujinx.HLE.HOS.Kernel.KernelContext kernel = Nx2ThreadDump.CurrentKernel;
+
+            if (kernel == null)
+                return;
+
+            ulong appPid = kernel.Device.Processes?.ActiveApplication?.ProcessId ?? 0;
+
+            foreach (KeyValuePair<ulong, KProcess> proc in kernel.Processes)
+            {
+                if (appPid != 0 && proc.Key != appPid)
+                    continue;
+
+                foreach (KThread thread in proc.Value.DebugThreads)
+                {
+                    if (thread.SchedFlags != ThreadSchedState.Running)
+                        continue;
+
+                    ulong pc = thread.Context.Pc;
+
+                    if (Array.IndexOf(pcs, pc) < 0)
+                        continue;
+
+                    string key = $"{thread.ThreadUid}:0x{pc:X}";
+
+                    // One line per thread/PC per second: the 200-line cap then spans the capture,
+                    // leaving repeated hits whose object bytes can be compared over time.
+                    long now = Environment.TickCount64;
+
+                    if (LastLoggedMs.TryGetValue(key, out long last) && now - last < 1000)
+                        continue;
+
+                    LastLoggedMs[key] = now;
+
+                    if (System.Threading.Volatile.Read(ref _lineCount) >= MaxLines)
+                        continue;
+
+                    System.Threading.Interlocked.Increment(ref _lineCount);
+                    Logger.Warning?.Print(LogClass.ServiceAm,
+                        $"NX2PCW uid={thread.ThreadUid} pc=0x{pc:X} {Format(pc, thread)}");
+                }
             }
         }
     }

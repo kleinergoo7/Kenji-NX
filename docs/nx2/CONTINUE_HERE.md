@@ -203,6 +203,50 @@ Gate: stop for a human decision before acting on what it names — the ROM has n
 symbols, so the function naming and the "what completes" part of the condition are
 interpretations of the raw bytes/disassembly recorded above, not symbol-level proof.
 
+## Phase 1e — watch the guest completion flag (Task 1e)
+
+Added an observe-only 10 ms PC sampler (`NX2_PC_WATCH=<hex,hex,...>`) in
+`Nx2ThreadDump.cs`. It logs `NX2PCW uid=… pc=0x… regs=[…] mem=[…]` for running
+application threads at the configured PCs, reusing the 64-byte pointer-register
+memory dump, appends `w0=` at the post-call PC `0x860B87C`, and caps output at 200
+lines (one line per uid/PC per second so hits span the capture). No guest
+execution or GPU dispatch change.
+
+Capture runs (Fast Fusion, `--dram-size MemoryConfiguration12GiB
+--memory-manager-mode SoftwarePageTable --ignore-missing-services`, all with
+`NX2_PATCH="" NX2_PC_WATCH=0x860B87C,0x860B884 NX2_PC_SAMPLE=1 NX2_THREAD_DUMP=1`):
+
+- `run-20261119-183301-1e-brief` (60 s, brief flags only): 1 `NX2PCW` line — the
+  `enabled pcs=[…]` header, **0 hits**. `NX2_PC_SAMPLE` shows translation-block
+  PCs (`0xD790B9C`, `0x85CC3E0`), not exact instructions: `Context.Pc` is the
+  dispatch address unless `NX2_PRECISE_PC=1` (`NativeContext.GetPc`).
+- `run-20261119-183420-1e-precise` (60 s + `NX2_PRECISE_PC=1`): 0 hits; debugger
+  mode JIT still booting at t=57 s, never reached the poll.
+- `run-20261119-183613-1e-precise240` (240 s + `NX2_PRECISE_PC=1`): 0 hits at
+  both PCs. Game healthy: `NX2 progress t=130s submits=4 presents=50697 draws=0`.
+- `run-20261119-184200-1e-loop` (150 s, + `NX2_PRECISE_PC=1`, watch widened to
+  `0x860B724,0x860B754,0x860B75C,0x860B87C,0x860B884,0x860B888` — every `blr`
+  and the loop back-edge in the poll function): **0 hits at any of the six PCs**.
+- Control `run-20261119-184046-1e-control` (45 s, `NX2_PC_WATCH=0xD790BC4,0x85CC3B0`,
+  + `NX2_PRECISE_PC=1`): the watch does fire —
+  `NX2PCW uid=28 pc=0xD790BC4 regs=[x0=0x6000B … x22=0x49F0B08E14 …] mem x1@0x784E967200=[00000002 …]`
+  — so the timer, PC match, register and 64-byte memory dumps work. The control
+  hit is not the poll site and carries no flag information.
+
+FLAG_WATCH=INCONCLUSIVE_NO_HITS — object pointer in x0: `<none captured>`,
+vtable `mem[x0]`: `<none captured>`, 64-byte object dump: `<none captured>`,
+`w0` at post-call PC: `<none captured>`, bytes changing across hits:
+`<no hits to compare>`. No running application thread was observed executing
+`0x860B87C`, `0x860B884`, or any other instruction of the poll function in
+~6.5 minutes of precise-PC sampling, even though the game reached 50k presents.
+The `0x860B87C` frame seen in Task 1's stack is therefore a suspended call
+frame (the thread is blocked deeper in `NativeWindow::Present` on `appmsg`), not
+an active spin. None of `FLAG_NEVER_SET`, `FLAG_SET_LATE` or `FLAG_SET_BUT_IGNORED`
+is supported by this evidence — asserting one would be fabrication. Per the
+brief's gate, stop for a human decision; a follow-up would have to read the
+object through the poll frame's callee-saved slot (`ldr x0,[x22]` at 0x860B87C)
+from the blocked thread's saved context, which is outside this watch's scope.
+
 ## TL;DR from a fresh clone
 
 ```bash
