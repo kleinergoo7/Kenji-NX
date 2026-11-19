@@ -8,15 +8,20 @@ using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvMap;
 using Ryujinx.HLE.HOS.Services.Nv.Types;
 using Ryujinx.Memory;
 using System;
+using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 {
     class NvHostChannelDeviceFile : NvDeviceFile
     {
         private static readonly ConcurrentDictionary<ulong, Host1xContext> _host1xContextRegistry = new();
+        private static readonly bool TraceUserDataEnabled = Environment.GetEnvironmentVariable("NX2_USERD_LOG") == "1";
+        private static readonly ConcurrentDictionary<NvHostChannelDeviceFile, ulong> UserDataTraceAddresses = new();
 
         private const uint MaxModuleSyncpoint = 16;
 
@@ -31,6 +36,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
         private readonly IVirtualMemoryManager _memory;
         private readonly Host1xContext _host1xContext;
         private readonly long _contextId;
+        private int _userDataRegistrationLogs;
+        private uint _traceGpfifoEntryCount;
 
         public GpuChannel Channel { get; }
 
@@ -329,13 +336,40 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             return NvInternalResult.Success;
         }
 
+        internal delegate NvInternalResult GpfifoSubmitter(ref SubmitGpfifoArguments header, Span<ulong> entries);
+
         private NvInternalResult SubmitGpfifo(Span<byte> arguments)
         {
-            int headerSize = Unsafe.SizeOf<SubmitGpfifoArguments>();
-            SubmitGpfifoArguments gpfifoSubmissionHeader = MemoryMarshal.Cast<byte, SubmitGpfifoArguments>(arguments)[0];
-            Span<ulong> gpfifoEntries = MemoryMarshal.Cast<byte, ulong>(arguments[headerSize..])[..gpfifoSubmissionHeader.NumEntries];
+            return SubmitGpfifo(arguments, SubmitGpfifo);
+        }
 
-            return SubmitGpfifo(ref gpfifoSubmissionHeader, gpfifoEntries);
+        internal static NvInternalResult SubmitGpfifo(Span<byte> arguments, GpfifoSubmitter submit)
+        {
+            int headerSize = Unsafe.SizeOf<SubmitGpfifoArguments>();
+            if (arguments.Length < headerSize)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"SubmitGpfifo rejected: argument size 0x{arguments.Length:X} is smaller than header size 0x{headerSize:X}.");
+
+                return NvInternalResult.InvalidInput;
+            }
+
+            // The ioctl returns the updated fence and flags in this same header.
+            ref SubmitGpfifoArguments header = ref MemoryMarshal.AsRef<SubmitGpfifoArguments>(arguments);
+            Span<ulong> entries = MemoryMarshal.Cast<byte, ulong>(arguments[headerSize..]);
+
+            return SubmitGpfifoEntries(ref header, entries, submit);
+        }
+
+        internal static NvInternalResult SubmitGpfifoEntries(ref SubmitGpfifoArguments header, Span<ulong> entries, GpfifoSubmitter submit)
+        {
+            if (header.NumEntries < 0 || header.NumEntries > entries.Length)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"SubmitGpfifo rejected: entry count {header.NumEntries} is outside the buffer bounds (capacity {entries.Length}).");
+
+                return NvInternalResult.InvalidInput;
+            }
+
+            return submit(ref header, entries[..header.NumEntries]);
         }
 
         private NvInternalResult AllocObjCtx(ref AllocObjCtxArguments arguments)
@@ -424,6 +458,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         private NvInternalResult AllocGpfifoEx2(ref AllocGpfifoExArguments arguments)
         {
+            if (TraceUserDataEnabled)
+            {
+                System.Threading.Volatile.Write(ref _traceGpfifoEntryCount, arguments.NumEntries);
+            }
+
             _channelSyncpoint.UpdateValue(_device.System.HostSyncpoint);
 
             arguments.Fence = _channelSyncpoint;
@@ -456,6 +495,22 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         private NvInternalResult SetUserData(ref ulong userData)
         {
+            if (TraceUserDataEnabled && NvHostCtrlGpuDeviceFile.Nx2Driver)
+            {
+                if (userData == 0)
+                {
+                    UserDataTraceAddresses.TryRemove(this, out _);
+                }
+                else
+                {
+                    UserDataTraceAddresses[this] = userData;
+                    if (System.Threading.Interlocked.Increment(ref _userDataRegistrationLogs) <= 4)
+                    {
+                        LogUserData(userData, "register");
+                    }
+                }
+            }
+
             if (Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
             {
                 bool mapped = _memory != null && userData != 0 && _memory.IsMapped(userData);
@@ -464,6 +519,140 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             Logger.Stub?.PrintStub(LogClass.ServiceNv);
 
             return NvInternalResult.Success;
+        }
+
+        internal static void TracePresentUserData(Switch device, int present)
+        {
+            // Sample the transition into the frame loop and a bounded set of later presents.
+            if (!TraceUserDataEnabled || (present > 8 && (present > 3600 || present % 120 != 0)))
+            {
+                return;
+            }
+
+            foreach ((NvHostChannelDeviceFile channel, ulong address) in UserDataTraceAddresses)
+            {
+                if (channel._device == device)
+                {
+                    channel.LogUserData(address, $"present#{present}");
+                }
+            }
+        }
+
+        private void LogUserData(ulong address, string stage, ReadOnlySpan<ulong> submittedEntries = default)
+        {
+            const int sampleSize = 0x100;
+            Span<byte> bytes = stackalloc byte[sampleSize];
+
+            try
+            {
+                if (address <= ulong.MaxValue - (sampleSize - 1) &&
+                    _memory.IsMapped(address) && _memory.IsMapped(address + sampleSize - 1))
+                {
+                    _memory.Read(address, bytes);
+                    Logger.Warning?.Print(LogClass.ServiceNv,
+                        $"NX2 USERD {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} bytes={Convert.ToHexString(bytes)}");
+                    LogCandidateGpfifo(bytes, stage, submittedEntries);
+                    return;
+                }
+            }
+            catch (InvalidMemoryRegionException)
+            {
+                // The guest can unmap this range between checking it and reading it.
+            }
+
+            Logger.Warning?.Print(LogClass.ServiceNv,
+                $"NX2 USERD {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} unavailable");
+        }
+
+        private void LogCandidateGpfifo(ReadOnlySpan<byte> userData, string stage, ReadOnlySpan<ulong> submittedEntries)
+        {
+            const int candidateAddressOffset = 0xD0;
+            const int candidateCountOffset = 0xD8;
+            const uint maxTraceEntries = 1 << 17;
+            ulong address = BinaryPrimitives.ReadUInt64LittleEndian(userData[candidateAddressOffset..]);
+            uint count = BinaryPrimitives.ReadUInt32LittleEndian(userData[candidateCountOffset..]);
+            uint allocatedCount = System.Threading.Volatile.Read(ref _traceGpfifoEntryCount);
+            string label = $"NX2 RING {stage} owner={Owner} chan={Channel.GetHashCode():X8} addr=0x{address:X} entries={count}";
+
+            // These offsets are candidates from the observed channel objects. Require the
+            // count to agree with the ioctl before reading any guest memory at the pointer.
+            if (count == 0 || count != allocatedCount || count > maxTraceEntries || address == 0 || (address & 7) != 0)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"{label} rejected allocated={allocatedCount}");
+                return;
+            }
+
+            int size = (int)count * sizeof(ulong);
+            ulong lastOffset = (ulong)size - 1;
+            if (address > ulong.MaxValue - lastOffset || !_memory.IsMapped(address) ||
+                !_memory.IsMapped(address + lastOffset) || !_memory.IsRangeMapped(address, (ulong)size))
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"{label} unmapped");
+                return;
+            }
+
+            byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+            try
+            {
+                Span<byte> ring = rented.AsSpan(0, size);
+                _memory.Read(address, ring);
+
+                int match = FindGpfifoSubmission(ring, submittedEntries);
+                int nonzero = 0;
+                int first = -1;
+                int last = -1;
+                for (int i = 0; i < (int)count; i++)
+                {
+                    if (BinaryPrimitives.ReadUInt64LittleEndian(ring[(i * sizeof(ulong))..]) != 0)
+                    {
+                        if (first < 0)
+                        {
+                            first = i;
+                        }
+
+                        last = i;
+                        nonzero++;
+                    }
+                }
+
+                Logger.Warning?.Print(LogClass.ServiceNv,
+                    $"{label} submitted={submittedEntries.Length} matchIndex={match} nonzero={nonzero} first={first} last={last} sha256={Convert.ToHexString(SHA256.HashData(ring))}");
+            }
+            catch (InvalidMemoryRegionException)
+            {
+                Logger.Warning?.Print(LogClass.ServiceNv, $"{label} became unmapped");
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+
+        internal static int FindGpfifoSubmission(ReadOnlySpan<byte> ring, ReadOnlySpan<ulong> submittedEntries)
+        {
+            int count = ring.Length / sizeof(ulong);
+            const int maxComparedEntries = 32;
+            if (submittedEntries.IsEmpty || submittedEntries.Length > Math.Min(count, maxComparedEntries))
+            {
+                return -1;
+            }
+
+            for (int start = 0; start < count; start++)
+            {
+                int matched = 0;
+                while (matched < submittedEntries.Length &&
+                    BinaryPrimitives.ReadUInt64LittleEndian(ring[(((start + matched) % count) * sizeof(ulong))..]) == submittedEntries[matched])
+                {
+                    matched++;
+                }
+
+                if (matched == submittedEntries.Length)
+                {
+                    return start;
+                }
+            }
+
+            return -1;
         }
 
         private static int _nx2SubmitLogs;
@@ -488,6 +677,11 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             if (nx2)
             {
                 nx2SubmitN = System.Threading.Interlocked.Increment(ref Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Counters.Submits);
+
+                if (TraceUserDataEnabled && nx2SubmitN <= 32 && UserDataTraceAddresses.TryGetValue(this, out ulong userData))
+                {
+                    LogUserData(userData, $"submit#{nx2SubmitN}", entries);
+                }
             }
 
             Ryujinx.HLE.HOS.Kernel.Threading.KThread ioctlClient = INvDrvServices.IoctlClientThread;
@@ -500,7 +694,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1")
             {
                 Logger.Warning?.Print(LogClass.ServiceNv,
-                    $"NX2 submit ctx client={(ioctlClient!=null ? $"{ioctlClient.ThreadUid}/{ioctlClient.GetThreadName()}/pid{ioctlClient.Owner?.Pid}" : "null")} cur={(curThread!=null ? $"{curThread.ThreadUid}/{curThread.GetThreadName()}/pid{curThread.Owner?.Pid}" : "null")} same={sameThread} usedClient={usedClient} nx2={nx2} x30=0x{callerPc:X} x29=0x{callerFp:X} pcField=0x{(caller?.Context.Pc ?? 0):X}");
+                    $"NX2 submit ctx client={(ioctlClient != null ? $"{ioctlClient.ThreadUid}/{ioctlClient.GetThreadName()}/pid{ioctlClient.Owner?.Pid}" : "null")} cur={(curThread != null ? $"{curThread.ThreadUid}/{curThread.GetThreadName()}/pid{curThread.Owner?.Pid}" : "null")} same={sameThread} usedClient={usedClient} nx2={nx2} x30=0x{callerPc:X} x29=0x{callerFp:X} pcField=0x{(caller?.Context.Pc ?? 0):X}");
             }
 
             if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
@@ -778,6 +972,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         public override void Close()
         {
+            UserDataTraceAddresses.TryRemove(this, out _);
             _host1xContext.Host1x.DestroyContext(_contextId);
             Channel.Dispose();
 
@@ -801,6 +996,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         public static void Destroy()
         {
+            UserDataTraceAddresses.Clear();
             foreach (Host1xContext host1xContext in _host1xContextRegistry.Values)
             {
                 host1xContext.Dispose();

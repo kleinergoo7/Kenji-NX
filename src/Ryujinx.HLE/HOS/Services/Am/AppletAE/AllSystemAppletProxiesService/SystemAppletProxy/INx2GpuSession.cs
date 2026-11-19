@@ -4,6 +4,7 @@ using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.Gpu.Memory;
 using Ryujinx.HLE.HOS.Ipc;
 using Ryujinx.HLE.HOS.Kernel.Threading;
+using Ryujinx.Memory;
 using System.Collections.Generic;
 
 namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy
@@ -295,8 +296,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             {
                 Logger.Warning?.Print(LogClass.KernelIpc,
                     $"nx2:gpu 211 map [0x{first:X}, 0x{last:X}] handle={handle} offset=0x{offset:X} failed");
+                return ResultCode.InvalidParameters;
             }
-            else if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
+
+            if (System.Environment.GetEnvironmentVariable("NX2_SUBMIT_LOG") == "1" &&
                 System.Threading.Interlocked.Increment(ref _mapLogs) <= 40)
             {
                 // Capped probe (AGENTS.md section 9): map arguments distinguish genuine
@@ -423,21 +426,28 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 slot = context.RequestData.ReadUInt32();
             }
 
-            int count = 0;
+            const ulong entrySize = 40;
+            ulong completed = 0;
             long mapStart = System.Diagnostics.Stopwatch.GetTimestamp();
 
-            try
+            if (context.Request.SendBuff.Count > 0)
             {
-                if (context.Request.SendBuff.Count > 0)
+                ulong ptr = context.Request.SendBuff[0].Position;
+                ulong length = context.Request.SendBuff[0].Size;
+
+                if (length % entrySize != 0 || (length != 0 &&
+                    (ptr > ulong.MaxValue - (length - 1) || !context.Memory.IsMapped(ptr) ||
+                    !context.Memory.IsMapped(ptr + (length - 1)) || !context.Memory.IsRangeMapped(ptr, length))))
                 {
-                    ulong ptr = context.Request.SendBuff[0].Position;
-                    ulong length = context.Request.SendBuff[0].Size;
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"nx2:gpu 216 invalid request buffer address=0x{ptr:X} size=0x{length:X}");
+                    return ResultCode.InvalidParameters;
+                }
 
-                    count = (int)(length / 40);
-
-                    for (int i = 0; i < count; i++)
+                try
+                {
+                    for (; completed < length / entrySize; completed++)
                     {
-                        ulong baseAddr = ptr + (ulong)i * 40;
+                        ulong baseAddr = ptr + completed * entrySize;
 
                         ulong gpuAddress = context.Memory.Read<ulong>(baseAddr);
                         ulong size = context.Memory.Read<ulong>(baseAddr + 8);
@@ -449,22 +459,29 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             continue;
                         }
 
-                        // A zero handle unmaps the range; anything else maps it at the request's
-                        // GPU address. Kinds do not matter to the emulated GPU.
+                        if (gpuAddress > ulong.MaxValue - size ||
+                            (handle != 0 && !Nx2GpuMemory.Map(gpuAddress, size, handle, offset)))
+                        {
+                            Logger.Warning?.Print(LogClass.KernelIpc,
+                                $"nx2:gpu 216 rejected entry {completed} address=0x{gpuAddress:X} size=0x{size:X} handle={handle} offset=0x{offset:X}");
+                            break;
+                        }
+
                         if (handle == 0)
                         {
                             Nx2GpuMemory.Unmap(gpuAddress, size);
                         }
-                        else
-                        {
-                            Nx2GpuMemory.Map(gpuAddress, size, handle, offset);
-                        }
                     }
                 }
-            }
-            catch (System.Exception ex)
-            {
-                Logger.Warning?.Print(LogClass.KernelIpc, $"nx2:gpu 216 sparse map failed: {ex.GetType().Name}: {ex.Message}");
+                catch (InvalidMemoryRegionException ex)
+                {
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"nx2:gpu 216 could not read entry {completed}: {ex.Message}");
+                }
+
+                if (length != 0 && completed == 0)
+                {
+                    return ResultCode.InvalidParameters;
+                }
             }
 
             AddMapTime(System.Diagnostics.Stopwatch.GetTimestamp() - mapStart);
@@ -474,8 +491,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             // Count as u64 (two words, Eglantine SubSparseMap); a single word leaves the
             // high half stale and the guest reads a garbage request count.
             context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
-            context.ResponseData.Write((uint)count);
-            context.ResponseData.Write((uint)((ulong)count >> 32));
+            context.ResponseData.Write(completed);
 
             return ResultCode.Success;
         }

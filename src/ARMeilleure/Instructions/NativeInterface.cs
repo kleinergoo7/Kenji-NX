@@ -9,6 +9,22 @@ namespace ARMeilleure.Instructions
 {
     static class NativeInterface
     {
+        // Outside the immediate range of a guest BRK instruction.
+        internal const int LockReturnProbeMarker = int.MinValue;
+        internal static readonly ulong LockReturnProbePc =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_LOCK_RETURN_PC"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong probePc) ? probePc : 0;
+        private static readonly ulong LockReturnProbeMutex =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_LOCK_RETURN_MUTEX"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong probeMutex) ? probeMutex : 0;
+        private static readonly int LockReturnProbeLimit =
+            int.TryParse(Environment.GetEnvironmentVariable("NX2_LOCK_RETURN_LIMIT"), out int probeLimit) ? probeLimit : 8;
+        private static readonly int LockReturnProbeStride =
+            int.TryParse(Environment.GetEnvironmentVariable("NX2_LOCK_RETURN_STRIDE"), out int probeStride) ? probeStride : 0;
+        private static int _lockReturnProbeCount;
+        private static int _lockReturnProbeMatchCount;
+        private static int _lockReturnProbeMismatchCount;
+
         private class ThreadContext
         {
             public ExecutionContext Context { get; }
@@ -39,6 +55,48 @@ namespace ARMeilleure.Instructions
         [UnmanagedCallersOnly]
         public static void Break(ulong address, int imm)
         {
+            if (imm == LockReturnProbeMarker)
+            {
+                ExecutionContext cpu = GetContext();
+                int n = System.Threading.Interlocked.Increment(ref _lockReturnProbeCount);
+
+                ulong x8 = cpu.GetX(8);
+                ulong x11 = cpu.GetX(11);
+                bool mismatch = (ushort)x8 != (ushort)x11;
+
+                int kindCount = mismatch
+                    ? System.Threading.Interlocked.Increment(ref _lockReturnProbeMismatchCount)
+                    : System.Threading.Interlocked.Increment(ref _lockReturnProbeMatchCount);
+
+                bool log = mismatch
+                    ? kindCount <= 12 || kindCount % 1_000_000 == 0
+                    : n <= LockReturnProbeLimit ||
+                        (LockReturnProbeStride > 0 && n % LockReturnProbeStride == 0);
+
+                if ((LockReturnProbeMutex == 0 || cpu.GetX(19) == LockReturnProbeMutex) && log)
+                {
+                    ulong x21 = cpu.GetX(21);
+                    string word = "?";
+
+                    try
+                    {
+                        word = $"0x{Context.Memory.Read<ushort>(x21 + 0x38):X4}";
+                    }
+                    catch (Exception)
+                    {
+                        // The pointer may not be valid at this point; the registers still help.
+                    }
+
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Cpu,
+                        $"NX2 lock probe #{n} kind={(mismatch ? "MISMATCH" : "match")} hits={(mismatch ? _lockReturnProbeMismatchCount : _lockReturnProbeMatchCount)} " +
+                        $"pc=0x{address:X} tid={cpu.ThreadUid} " +
+                        $"x8=0x{x8:X} x9=0x{cpu.GetX(9):X} x11=0x{cpu.GetX(11):X} " +
+                        $"x19=0x{cpu.GetX(19):X} x20=0x{cpu.GetX(20):X} " +
+                        $"x21=0x{x21:X} x23=0x{cpu.GetX(23):X} w[21+38]={word}");
+                }
+                return;
+            }
+
             Statistics.PauseTimer();
 
             GetContext().OnBreak(address, imm);

@@ -36,7 +36,11 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             "/usr/share/fonts/truetype/LiberationSans-Regular.ttf",
             "/usr/share/fonts/truetype/Roboto-Regular.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         ];
+
+        private sealed class MissingSystemFontException(string message) : InvalidSystemResourceException(message);
 
         private readonly Switch _device;
         private readonly SharedMemoryStorage _storage;
@@ -72,6 +76,21 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
         }
 
         public void EnsureInitialized(ContentManager contentManager)
+        {
+            try
+            {
+                EnsureSystemFonts(contentManager);
+            }
+            catch (MissingSystemFontException ex) when (
+                _device.CompatibilityProfile.Generation == ConsoleGeneration.Switch2 &&
+                _device.Configuration.MemoryConfiguration == MemoryConfiguration.MemoryConfiguration12GiB)
+            {
+                Logger.Warning?.Print(LogClass.ServiceFs, ex.Message);
+                LoadFallbackFonts();
+            }
+        }
+
+        private void EnsureSystemFonts(ContentManager contentManager)
         {
             if (_fontData == null)
             {
@@ -124,7 +143,7 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                                 titleName = "Unknown";
                             }
 
-                            throw new InvalidSystemResourceException($"{titleName} ({fontTitle:x8}) system title not found! This font will not work, provide the system archive to fix this error.");
+                            throw new MissingSystemFontException($"{titleName} ({fontTitle:x8}) system title not found! This font will not work, provide the system archive to fix this error.");
                         }
                     }
                     else
@@ -170,11 +189,11 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
             try
             {
-                EnsureInitialized(contentManager);
+                EnsureSystemFonts(contentManager);
             }
             catch (Exception ex) when (ex is InvalidSystemResourceException || ex is ArgumentException)
             {
-                LoadHostFallbackFonts();
+                LoadFallbackFonts();
             }
 
             AppendPlainTtfCopies();
@@ -234,7 +253,7 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             }
         }
 
-        private void LoadHostFallbackFonts()
+        private void LoadFallbackFonts()
         {
             _storage.ZeroFill();
 
@@ -250,20 +269,16 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                         continue;
                     }
 
-                    byte[] candidate = File.ReadAllBytes(path);
-
-                    if (candidate.Length > 4)
+                    using FileStream stream = File.OpenRead(path);
+                    byte[] candidate = ReadFallbackFont(stream);
+                    if (candidate != null)
                     {
-                        uint magic = BinaryPrimitives.ReadUInt32BigEndian(candidate.AsSpan(0, 4));
-
-                        if (magic == TtfSfntTrueType || magic == TtfSfntCff || magic == TtfSfntTrue || magic == TtfSfntTyp1)
-                        {
-                            ttf = candidate;
-                            usedPath = path;
-
-                            break;
-                        }
+                        ttf = candidate;
+                        usedPath = path;
+                        break;
                     }
+
+                    Logger.Warning?.Print(LogClass.ServiceFs, $"Host fallback font '{path}' has invalid size or format.");
                 }
                 catch (IOException)
                 {
@@ -273,10 +288,13 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
             if (ttf == null)
             {
-                throw new InvalidSystemResourceException("No system fonts and no host fallback font found. Provide the system archive or install a host TTF font.");
+                ttf = ReadBundledFallbackFont();
+                Logger.Info?.Print(LogClass.ServiceFs, "Using bundled fallback font 'DejaVu Sans' for shared fonts.");
             }
-
-            Logger.Info?.Print(LogClass.ServiceFs, $"Using host fallback font '{usedPath}' for shared fonts.");
+            else
+            {
+                Logger.Info?.Print(LogClass.ServiceFs, $"Using host fallback font '{usedPath}' for shared fonts.");
+            }
 
             _fontData = new Dictionary<SharedFontType, FontInfo>();
             ulong fontOffset = 0;
@@ -310,6 +328,33 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             }
 
             _builtInFontData = null;
+        }
+
+        internal static byte[] ReadBundledFallbackFont()
+        {
+            const string resourceName = "Resources.DejaVuSans.ttf";
+            using Stream stream = typeof(SharedFontManager).Assembly.GetManifestResourceStream(typeof(SharedFontManager), resourceName);
+
+            return (stream == null ? null : ReadFallbackFont(stream)) ??
+                throw new InvalidSystemResourceException($"Bundled shared font '{resourceName}' is missing or invalid.");
+        }
+
+        private static byte[] ReadFallbackFont(Stream stream)
+        {
+            // Shared memory reserves a header and one copy for each font type.
+            const int maxFontBytes = Horizon.FontSize / (int)SharedFontType.Count - 8;
+            if (stream.Length <= sizeof(uint) || stream.Length > maxFontBytes)
+            {
+                return null;
+            }
+
+            // The shared-memory limit fits in int and bounds the allocation.
+            byte[] data = new byte[(int)stream.Length];
+            stream.ReadExactly(data);
+
+            uint magic = BinaryPrimitives.ReadUInt32BigEndian(data);
+
+            return magic is TtfSfntTrueType or TtfSfntCff or TtfSfntTrue or TtfSfntTyp1 ? data : null;
         }
 
         public int GetFontSize(SharedFontType fontType)

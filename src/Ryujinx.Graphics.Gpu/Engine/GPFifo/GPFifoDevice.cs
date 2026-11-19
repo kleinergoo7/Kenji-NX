@@ -218,7 +218,13 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// <returns>True if commands were received, false if wait timed out</returns>
         public bool WaitForCommands()
         {
-            return !_commandBufferQueue.IsEmpty || (_event.WaitOne(8) && !_commandBufferQueue.IsEmpty);
+            if (!_commandBufferQueue.IsEmpty)
+            {
+                return true;
+            }
+
+            _event.WaitOne(8);
+            return !_commandBufferQueue.IsEmpty || GPFifoProcessor.HasStalledChannels(_context);
         }
 
         /// <summary>
@@ -230,14 +236,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             _context.RunDeferredActions();
 
             // A semaphore release may have landed since the last dispatch: resume those first.
-            GPFifoProcessor.TryResumeAll();
+            GPFifoProcessor.TryResumeAll(_context);
 
             // Process command buffers.
             while (_ibEnable && !_interrupt && _commandBufferQueue.TryDequeue(out CommandBuffer entry))
             {
                 if (entry.Type == CommandBufferType.Callback)
                 {
-                    entry.Callback?.Invoke();
+                    GPFifoProcessor.RunAfterPendingCommands(_context, entry.Callback);
 
                     continue;
                 }
@@ -250,8 +256,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     flushCommandBuffer = false;
                 }
 
-                ReadOnlySpan<int> words = entry.Fetch(entry.Processor.MemoryManager, flushCommandBuffer);
-
                 // If we are changing the current channel,
                 // we need to force all the host state to be updated.
                 if (_prevChannelProcessor != entry.Processor)
@@ -260,10 +264,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                     entry.Processor.ForceAllDirty();
                 }
 
-                entry.Processor.Process(entry.EntryAddress, words);
+                if (entry.Words != null)
+                {
+                    entry.Processor.Process(entry.EntryAddress, entry.Words);
+                }
+                else
+                {
+                    // Capture this entry, not the loop's next dequeue. The processor may
+                    // postpone the memory read until a semaphore acquire has completed.
+                    CommandBuffer buffer = entry;
+                    entry.Processor.Process(entry.EntryAddress,
+                        () => buffer.Fetch(buffer.Processor.MemoryManager, flushCommandBuffer));
+                }
             }
 
-            GPFifoProcessor.TryResumeAll();
+            GPFifoProcessor.TryResumeAll(_context);
 
             _interrupt = false;
         }

@@ -1736,7 +1736,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 {
                     new(LocaleManager.Instance[LocaleKeys.Common_FilePicker_AllSupportedFormats])
                     {
-                        Patterns = ["*.nsp", "*.xci", "*.nca", "*.nro", "*.nso"],
+                        Patterns = ["*.nsp", "*.xci", "*.nca", "*.nro", "*.nso", "*.nup"],
                         AppleUniformTypeIdentifiers =
                         [
                             "com.ryujinx.nsp",
@@ -1753,6 +1753,10 @@ namespace Ryujinx.Ava.UI.ViewModels
                             "application/x-nx-nro",
                             "application/x-nx-nso"
                         ],
+                    },
+                    new("NUP")
+                    {
+                        Patterns = ["*.nup"],
                     },
                     new("NSP")
                     {

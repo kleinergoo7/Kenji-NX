@@ -969,8 +969,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
     {
         /// <summary>
         /// Virtual size that sparse regions may reserve. Pages are committed by the host only
-        /// when touched, so most of a large region costs address space, not RAM. Past the limit a
-        /// region stays unbacked (reads zero, writes dropped) instead of failing the emulator.
+        /// when touched, so most of a large region costs address space, not RAM.
         /// </summary>
         public const ulong SparseBudget = 64UL << 30;
 
@@ -993,6 +992,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
         private sealed class MappingEntry
         {
+            public uint Handle;
             public ulong GpuStart;
             public ulong GpuSize;
             public ulong CpuStart;
@@ -1089,7 +1089,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
                 // Registering implies the mapping at its own address (identity), like the graphic
                 // server does on the console.
-                MapLocked(start, start, size);
+                MapLocked(handle, start, start, size);
 
                 return handle;
             }
@@ -1110,7 +1110,8 @@ namespace Ryujinx.Graphics.Gpu.Memory
                     return false;
                 }
 
-                UnmapLocked(memory.Start, memory.Size);
+                _mappings.RemoveAll(mapping => mapping.Handle == handle);
+                RebuildMappingsLocked();
 
                 if (memory.Size == SemaphoreRegionSize)
                 {
@@ -1147,10 +1148,10 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
                 if (gpuSize > available)
                 {
-                    gpuSize = available;
+                    return false;
                 }
 
-                MapLocked(gpuStart, memory.Start + offset, gpuSize);
+                MapLocked(handle, gpuStart, memory.Start + offset, gpuSize);
 
                 return true;
             }
@@ -1201,29 +1202,30 @@ namespace Ryujinx.Graphics.Gpu.Memory
 
             lock (_lock)
             {
-                if (_sparse.TryGetValue(start, out SparseEntry existing))
-                {
-                    DestroySparseLocked(existing);
-                }
+                _sparse.TryGetValue(start, out SparseEntry existing);
 
                 foreach (SparseEntry region in _sparse.Values)
                 {
-                    if (start < region.Start + region.Size && region.Start < start + size)
+                    if (region != existing && start < region.Start + region.Size && region.Start < start + size)
                     {
                         return false;
                     }
                 }
 
-                if (size <= SparseBudget - _sparseBytes)
-                {
-                    _sparseBytes += size;
-                }
-                else
+                ulong reservedWithoutExisting = _sparseBytes - (existing?.Size ?? 0);
+                if (size > SparseBudget - reservedWithoutExisting)
                 {
                     Logger.Warning?.Print(LogClass.Gpu,
-                        $"NX2 sparse region 0x{start:X} (0x{size:X} bytes) exceeds the virtual budget, writes dropped");
+                        $"NX2 sparse region 0x{start:X} (0x{size:X} bytes) exceeds the virtual budget");
+                    return false;
                 }
 
+                if (existing != null)
+                {
+                    DestroySparseLocked(existing);
+                }
+
+                _sparseBytes += size;
                 SparseEntry entry = new() { Start = start, Size = size };
 
                 if (eager)
@@ -1404,11 +1406,11 @@ namespace Ryujinx.Graphics.Gpu.Memory
             }
         }
 
-        private static void MapLocked(ulong gpuStart, ulong cpuStart, ulong size)
+        private static void MapLocked(uint handle, ulong gpuStart, ulong cpuStart, ulong size)
         {
             TrimMappingsLocked(gpuStart, size);
 
-            _mappings.Add(new MappingEntry { GpuStart = gpuStart, CpuStart = cpuStart, GpuSize = size });
+            _mappings.Add(new MappingEntry { Handle = handle, GpuStart = gpuStart, CpuStart = cpuStart, GpuSize = size });
             RebuildMappingsLocked();
         }
 
@@ -1438,6 +1440,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 {
                     kept.Add(new MappingEntry
                     {
+                        Handle = mapping.Handle,
                         GpuStart = mapping.GpuStart,
                         CpuStart = mapping.CpuStart,
                         GpuSize = gpuStart - mapping.GpuStart,
@@ -1448,6 +1451,7 @@ namespace Ryujinx.Graphics.Gpu.Memory
                 {
                     kept.Add(new MappingEntry
                     {
+                        Handle = mapping.Handle,
                         GpuStart = end,
                         CpuStart = mapping.CpuStart + (end - mapping.GpuStart),
                         GpuSize = mappingEnd - end,

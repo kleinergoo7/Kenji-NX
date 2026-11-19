@@ -9,6 +9,7 @@ namespace Ryujinx.Graphics.Nvdec
         Vp8 = 5,
         Hevc = 7,
         Vp9 = 9,
+        Av1 = 14,
         HevcParser = 12,
     }
 }

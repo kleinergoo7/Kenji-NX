@@ -183,6 +183,66 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
             ValidateInternalState();
         }
 
+        public Result SetGpuMemoryAttribute(ulong address, ulong size, uint mask, uint value)
+        {
+            if (address % PageSize != 0)
+            {
+                return KernelResult.InvalidAddress;
+            }
+
+            if (size == 0 || size % PageSize != 0)
+            {
+                return KernelResult.InvalidSize;
+            }
+
+            if ((mask & ~(uint)MemoryAttribute.GpuAccessible) != 0 || (value & ~mask) != 0)
+            {
+                return KernelResult.InvalidCombination;
+            }
+
+            ulong end = address + size;
+            if (end <= address || address < _addrSpaceStart || end > _addrSpaceEnd)
+            {
+                return KernelResult.InvalidMemState;
+            }
+
+            MemoryState requiredState = mask == 0 ? 0 : MemoryState.AttributeChangeAllowed;
+            int splits = 0;
+            bool needsUpdate = false;
+
+            // Validate the entire range before modifying any block.
+            for (KMemoryBlock block = FindBlock(address); block != null && block.BaseAddress < end; block = block.Successor)
+            {
+                if ((block.State & requiredState) != requiredState ||
+                    (block.Attribute & MemoryAttribute.BorrowedAndIpcMapped) != 0)
+                {
+                    return KernelResult.InvalidMemState;
+                }
+
+                needsUpdate |= ((uint)block.Attribute & mask) != value;
+                splits += block.BaseAddress < address ? 1 : 0;
+                splits += block.BaseAddress + block.PagesCount * PageSize > end ? 1 : 0;
+            }
+
+            if (!needsUpdate)
+            {
+                return Result.Success;
+            }
+
+            if (!_slabManager.CanAllocate(splits))
+            {
+                return KernelResult.OutOfResource;
+            }
+
+            InsertBlock(address, size / PageSize, (block, _) =>
+            {
+                MemoryAttribute attribute = (block.Attribute & ~(MemoryAttribute)mask) | (MemoryAttribute)value;
+                block.SetState(block.Permission, block.State, attribute);
+            });
+
+            return Result.Success;
+        }
+
         public delegate void BlockMutator(KMemoryBlock block, KMemoryPermission newPerm);
 
         public void InsertBlock(

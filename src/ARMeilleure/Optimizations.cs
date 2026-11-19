@@ -12,7 +12,7 @@ namespace ARMeilleure
 
         public static bool AllowLcqInFunctionTable { get; set; } = true;
         public static bool UseUnmanagedDispatchLoop { get; set; } = true;
-        public static bool EnableDebugging { get; set; } = false;
+        public static bool EnableDebugging { get; set; } = System.Environment.GetEnvironmentVariable("NX2_PRECISE_PC") == "1";
         public static bool EnableDeepCallRecursionProtection { get; set; } = true;
 
         public static bool UseAdvSimdIfAvailable { get; set; } = true;

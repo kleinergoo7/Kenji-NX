@@ -87,7 +87,16 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
         private readonly LinkedList<KThread> _threads;
 
-        public System.Collections.Generic.IEnumerable<KThread> DebugThreads => _threads;
+        public KThread[] DebugThreads
+        {
+            get
+            {
+                lock (_threadingLock)
+                {
+                    return _threads.ToArray();
+                }
+            }
+        }
 
         public bool IsPaused { get; private set; }
 
@@ -681,7 +690,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                     return result;
                 }
 
-                result = HandleTable.GenerateHandle(mainThread, out int mainThreadHandle);
+                result = GenerateThreadHandle(mainThread, out int mainThreadHandle);
 
                 if (result != Result.Success)
                 {
@@ -735,6 +744,18 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
                 Signal();
             }
+        }
+
+        internal Result GenerateThreadHandle(KThread thread, out int handle)
+        {
+            Result result = HandleTable.GenerateHandle(thread, out handle);
+
+            if (result == Result.Success)
+            {
+                KTlsPageInfo.InitializeThreadHandle(CpuMemory, thread.TlsAddress, CompatibilityProfile.Generation, handle);
+            }
+
+            return result;
         }
 
         public Result InitializeThread(

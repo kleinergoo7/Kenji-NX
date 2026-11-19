@@ -29,7 +29,7 @@ namespace Ryujinx.HLE.HOS.Services
 
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> UnimplementedLogged = [];
 
-        private static int _missingLogCount;
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _missingLogCounts = new();
 
         public IReadOnlyDictionary<int, MethodInfo> CmifCommands { get; }
         public IReadOnlyDictionary<int, MethodInfo> TipcCommands { get; }
@@ -275,7 +275,9 @@ namespace Ryujinx.HLE.HOS.Services
             string tipcType = GetType().Name;
 
             if (TipcDumpEnabled &&
-                (tipcType == "INx2Vi2Session" || tipcType == "INx2GraphicsSystemSession") &&
+                (tipcType == "INx2Vi2Session" ||
+                 tipcType == "INx2GraphicsSystemSession" ||
+                 tipcType == "DummyService") &&
                 System.Threading.Interlocked.Increment(ref _tipcDumpCount) <= 6000)
             {
                 tipcDump = true;
@@ -365,7 +367,7 @@ namespace Ryujinx.HLE.HOS.Services
                     // auto-stubbed commands so real handlers can be written. Env-gated,
                     // capped; log confinement via Nx2ProbeLog/Nx2LogConfinement.
                     if (System.Environment.GetEnvironmentVariable("NX2_MISSING_LOG") == "1" &&
-                        System.Threading.Interlocked.Increment(ref _missingLogCount) <= 16)
+                        _missingLogCounts.AddOrUpdate($"{GetType().Name}:{commandId}", 1, (_, v) => v + 1) <= 2)
                     {
                         try
                         {

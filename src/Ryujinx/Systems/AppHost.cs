@@ -886,6 +886,17 @@ namespace Ryujinx.Ava.Systems
 
                             break;
                         }
+                    case ".nup":
+                        {
+                            if (!Device.LoadNup(ApplicationPath))
+                            {
+                                Device.Dispose();
+                                cts.Cancel();
+                                throw new OperationCanceledException(cts.Token);
+                            }
+
+                            break;
+                        }
                     case ".nsp":
                     case ".pfs0":
                         {

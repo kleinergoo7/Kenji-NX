@@ -9,6 +9,7 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
 {
     class IFileSystem : DisposableIpcService
     {
+        private static bool _slotDumped;
         private SharedRef<LibHac.FsSrv.Sf.IFileSystem> _fileSystem;
 
         public IFileSystem(ref SharedRef<LibHac.FsSrv.Sf.IFileSystem> provider)
@@ -113,7 +114,31 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             ref readonly Path name = ref FileSystemProxyHelper.GetSfPath(context);
             using SharedRef<LibHac.FsSrv.Sf.IFile> file = new();
 
-            FsLoaderProgress.OnOpen(name.ToString());
+            string fsPath = name.ToString();
+
+            // One-time dump of the movie module's PLT slot 0xd481a58 (resolves the
+            // imported function that returns the 0x2 result) so we can identify it.
+            if (!_slotDumped)
+            {
+                _slotDumped = true;
+
+                try
+                {
+                    ulong slotVal = context.Process.CpuMemory.Read<ulong>(0xD481A58);
+                    Logger.Warning?.Print(LogClass.ServiceFs, $"NX2 slot0xd481a58={slotVal:X} (movie PLT target)");
+                }
+                catch (System.Exception ex)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceFs, $"NX2 slot dump failed: {ex.GetType().Name}");
+                }
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_FS_LOG") == "1")
+            {
+                Logger.Warning?.Print(LogClass.ServiceFs, $"NX2 fsopen path=\"{fsPath}\" mode={mode}");
+            }
+
+            FsLoaderProgress.OnOpen(fsPath);
 
             Result result = _fileSystem.Get.OpenFile(ref file.Ref, in name, mode);
 

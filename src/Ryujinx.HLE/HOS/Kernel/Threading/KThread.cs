@@ -159,6 +159,13 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
         public bool WaitingInArbitration { get; set; }
 
+        // Address-arbiter wait description, kept for startup stall dumps. The guest word
+        // is compared with the expected value at dump time: a changed word with the thread
+        // still queued means a wakeup was lost, an unchanged word means nothing signalled.
+        public ArbitrationType ArbitrationWaitType { get; set; }
+        public ulong ArbitrationWaitValue { get; set; }
+        public long ArbitrationWaitStartTimestamp { get; set; }
+
         private static int _threadLogCount;
 
         private readonly Lock _activityOperationLock = new();

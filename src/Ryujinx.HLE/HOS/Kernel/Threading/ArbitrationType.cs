@@ -5,5 +5,6 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         WaitIfLessThan = 0,
         DecrementAndWaitIfLessThan = 1,
         WaitIfEqual = 2,
+        WaitIfEqual64 = 3,
     }
 }

@@ -10,6 +10,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
     class KAddressArbiter
     {
         private const int HasListenersMask = 0x40000000;
+        private static readonly ulong TracedMutexAddress =
+            ulong.TryParse(Environment.GetEnvironmentVariable("NX2_MUTEX_TRACE_ADDR"),
+                System.Globalization.NumberStyles.HexNumber, null, out ulong traceAddress) ? traceAddress : 0;
+        private static int _mutexTraceCount;
 
         private readonly KernelContext _context;
 
@@ -71,6 +75,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             currentThread.ThreadHandleForUserMutex = requesterHandle;
 
             mutexOwner.AddMutexWaiter(currentThread);
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"wait ownerTid={mutexOwner.ThreadUid} ownerHandle=0x{ownerHandle:X} requester=0x{requesterHandle:X}");
+            }
 
             currentThread.Reschedule(ThreadSchedState.Paused);
 
@@ -78,6 +86,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             _context.CriticalSection.Enter();
 
             currentThread.MutexOwner?.RemoveMutexWaiter(currentThread);
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"resume result=0x{currentThread.ObjSyncResult.ErrorCode:X}");
+            }
 
             _context.CriticalSection.Leave();
 
@@ -105,10 +117,21 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 newOwnerThread.ObjSyncResult = result;
             }
 
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"unlock nextTid={newOwnerThread?.ThreadUid} word=0x{mutexValue:X8} result=0x{result.ErrorCode:X}");
+            }
             _context.CriticalSection.Leave();
 
             return result;
         }
+
+        private static bool ShouldTraceMutex(ulong address) =>
+            TracedMutexAddress != 0 && address == TracedMutexAddress && Interlocked.Increment(ref _mutexTraceCount) <= 64;
+
+        private static void TraceMutex(ulong address, string detail) =>
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelSvc,
+                $"NX2 mutex handoff addr=0x{address:X} tid={KernelStatic.GetCurrentThread().ThreadUid} {detail}");
 
         public Result WaitProcessWideKeyAtomic(ulong mutexAddress, ulong condVarAddress, int threadHandle, long timeout)
         {
@@ -126,7 +149,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 return KernelResult.ThreadTerminating;
             }
 
-            (int mutexValue, _) = MutexUnlock(currentThread, mutexAddress);
+            (int mutexValue, KThread newOwnerThread) = MutexUnlock(currentThread, mutexAddress);
 
             KernelTransfer.KernelToUser(condVarAddress, 1);
 
@@ -135,6 +158,11 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 _context.CriticalSection.Leave();
 
                 return KernelResult.InvalidMemState;
+            }
+
+            if (ShouldTraceMutex(mutexAddress))
+            {
+                TraceMutex(mutexAddress, $"condvar-release nextTid={newOwnerThread?.ThreadUid} word=0x{mutexValue:X8}");
             }
 
             currentThread.MutexAddress = mutexAddress;
@@ -214,15 +242,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         {
             _context.CriticalSection.Enter();
 
-            int validThreads = 0;
             _condVarThreads.TryGetValue(address, out List<KThread> threads);
 
-            if (threads is not null && threads.Count > 0)
-            {
-                validThreads = WakeThreads(threads, count, TryAcquireMutex);
-            }
-
-            if (validThreads == 0)
+            // The guest flag tracks waiters remaining after signaling, not how many woke.
+            if (threads == null || WakeThreads(threads, count, TryAcquireMutex))
             {
                 KernelTransfer.KernelToUser(address, 0);
             }
@@ -241,6 +264,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
                 // Invalid address.
                 requester.SignaledObj = null;
                 requester.ObjSyncResult = KernelResult.InvalidMemState;
+                requester.ReleaseAndResume();
 
                 return;
             }
@@ -296,7 +320,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             }
         }
 
-        public Result WaitForAddressIfEqual(ulong address, int value, long timeout)
+        public Result WaitForAddressIfEqual<T>(ulong address, T value, long timeout) where T : unmanaged, IEquatable<T>
         {
             KThread currentThread = KernelStatic.GetCurrentThread();
 
@@ -312,14 +336,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             currentThread.SignaledObj = null;
             currentThread.ObjSyncResult = KernelResult.TimedOut;
 
-            if (!KernelTransfer.UserToKernel(out int currentValue, address))
+            if (!KernelTransfer.UserToKernel(out T currentValue, address))
             {
                 _context.CriticalSection.Leave();
 
                 return KernelResult.InvalidMemState;
             }
 
-            if (currentValue == value)
+            if (currentValue.Equals(value))
             {
                 if (timeout == 0)
                 {
@@ -330,6 +354,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
                 currentThread.MutexAddress = address;
                 currentThread.WaitingInArbitration = true;
+                currentThread.ArbitrationWaitType = typeof(T) == typeof(ulong) ? ArbitrationType.WaitIfEqual64 : ArbitrationType.WaitIfEqual;
+                currentThread.ArbitrationWaitValue = Convert.ToUInt64(value);
+                currentThread.ArbitrationWaitStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
 
                 if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
                 {
@@ -382,6 +409,24 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             return KernelResult.InvalidState;
         }
 
+        internal static int ReadAndDecrementIfLessThan(ref int addressValue, int threshold)
+        {
+            int current = Volatile.Read(ref addressValue);
+
+            while (current < threshold)
+            {
+                int observed = Interlocked.CompareExchange(ref addressValue, unchecked(current - 1), current);
+                if (observed == current)
+                {
+                    break;
+                }
+
+                current = observed;
+            }
+
+            return current;
+        }
+
         public Result WaitForAddressIfLessThan(ulong address, int value, bool shouldDecrement, long timeout)
         {
             KThread currentThread = KernelStatic.GetCurrentThread();
@@ -409,7 +454,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
             if (shouldDecrement)
             {
-                currentValue = Interlocked.Decrement(ref currentProcess.CpuMemory.GetRef<int>(address)) + 1;
+                currentValue = ReadAndDecrementIfLessThan(ref currentProcess.CpuMemory.GetRef<int>(address), value);
             }
 
             if (currentValue < value)
@@ -423,6 +468,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
                 currentThread.MutexAddress = address;
                 currentThread.WaitingInArbitration = true;
+                currentThread.ArbitrationWaitType = shouldDecrement ? ArbitrationType.DecrementAndWaitIfLessThan : ArbitrationType.WaitIfLessThan;
+                currentThread.ArbitrationWaitValue = unchecked((uint)value);
+                currentThread.ArbitrationWaitStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
 
                 if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
                 {
@@ -523,42 +571,24 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             return Result.Success;
         }
 
+        internal static int GetSignalAndModifyAddend(int waitingCount, int count)
+        {
+            if (waitingCount == 0)
+            {
+                return 1;
+            }
+
+            // A nonpositive count wakes everyone. For a positive count, equality
+            // also empties the queue and must clear the guest's waiter indication.
+            return count <= 0 || waitingCount <= count ? -1 : 0;
+        }
+
         public Result SignalAndModifyIfEqual(ulong address, int value, int count)
         {
             _context.CriticalSection.Enter();
 
-            int addend;
-
-            // The value is decremented if the number of threads waiting is less
-            // or equal to the Count of threads to be signaled, or Count is zero
-            // or negative. It is incremented if there are no threads waiting.
-            int waitingCount = 0;
-
-            if (_arbiterThreads.TryGetValue(address, out List<KThread> threads))
-            {
-                waitingCount = threads.Count;
-            }
-
-
-            if (waitingCount > 0)
-            {
-                if (count <= 0)
-                {
-                    addend = -2;
-                }
-                else if (waitingCount < count)
-                {
-                    addend = -1;
-                }
-                else
-                {
-                    addend = 0;
-                }
-            }
-            else
-            {
-                addend = 1;
-            }
+            _arbiterThreads.TryGetValue(address, out List<KThread> threads);
+            int addend = GetSignalAndModifyAddend(threads?.Count ?? 0, count);
 
             KProcess currentProcess = KernelStatic.GetCurrentProcess();
 
@@ -613,7 +643,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
             }
         }
 
-        private static int WakeThreads(
+        internal static bool WakeThreads(
             List<KThread> threads,
             int count,
             Action<KThread> removeCallback)
@@ -628,7 +658,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
             threads.RemoveRange(0, validCount);
 
-            return validCount;
+            return threads.Count == 0;
         }
 
         private class ByDynamicPriority : IComparer<KThread>

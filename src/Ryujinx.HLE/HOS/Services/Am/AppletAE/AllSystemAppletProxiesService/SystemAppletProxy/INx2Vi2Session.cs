@@ -5,6 +5,7 @@ using Ryujinx.Graphics.GAL;
 using Ryujinx.HLE.HOS.Ipc;
 using Ryujinx.HLE.HOS.Kernel.Common;
 using Ryujinx.HLE.HOS.Kernel.Threading;
+using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel;
 using System;
 using System.Collections.Generic;
 
@@ -13,6 +14,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     // Minimal nx2:vi2 session. Presentation is acknowledged but not displayed yet.
     class INx2Vi2Session : IpcService
     {
+        private const ulong OcarinaOfTimeProgramId = 0x0400486024DEC000;
+        private long _nextVblank;
+
         // Native vsync slots (Eglantine INx2Vi2Session: 8 indexed slots shared by
         // 31/32 acquire and 261-272 bind/unbind; a slot fires on vblank while bound).
         // Unbound slots fire too (the game waits on a fresh slot before binding it),
@@ -29,7 +33,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             lock (_vblankEvents)
             {
                 // Oracle drives the frame loop off a 60 Hz vblank; the tick also
-                // resumes stalled GPU channels and signalled id events.
+                // signals GPU ID events.
                 _tickTimer ??= new System.Threading.Timer(_ =>
                 {
                     lock (_vblankEvents)
@@ -40,7 +44,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         }
                     }
 
-                    Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.TryResumeAll();
                     Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel.NvHostGpuDeviceFile.SignalAllNx2Events();
                     INx2GpuSession.SignalAllNx2GpuEvents();
                     Nx2Diagnostics.WatchQueues(System.Threading.Volatile.Read(ref _device));
@@ -156,7 +159,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 $"NX2 progress t={_progressTicks / 60}s submits={Nx2Counters.Submits} presents={Nx2Counters.Presents} sparseCommit={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseCommitted >> 20}MiB dropped={Ryujinx.Graphics.Gpu.Memory.Nx2GpuMemory.SparseDropped >> 20}MiB draws={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Draws} unbound={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.UnboundDrops} mme={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacrosRun}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.EmittedMethods}/{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoHits}+{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.MacroMemoMisses} 3d={Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.Describe3DMethods()} emitted=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2GpuStall.DescribeEmitted()}] sp=[{SpValues()}] hot=[{HotPcs()}] gpuid=[{INx2GpuSession.DescribeSignals()}] fs=[{Ryujinx.HLE.HOS.Services.Fs.FsLoaderProgress.Describe()}] gsvmap=[{INx2GpuSession.DescribeMapTiming()}] bulk=[{Ryujinx.Graphics.Gpu.Engine.GPFifo.Nx2BulkCounters.Describe()}]");
             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                 $"NX2 calls {calls} ioctls=[{ioctls}] gpu=[{gpu}] sites=[{sites}] missing=[{missing}]");
-            try { Nx2ThreadDump.MaybeLogBuildIdentity(); Nx2ThreadDump.Tick(System.Threading.Volatile.Read(ref _device)?.System, _progressTicks / 60); } catch { }
+            try
+            { Nx2ThreadDump.MaybeLogBuildIdentity(); Nx2ThreadDump.Tick(System.Threading.Volatile.Read(ref _device)?.System, _progressTicks / 60); }
+            catch { }
         }
 
         [CommandTipc(0)]
@@ -411,6 +416,60 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(229)]
         public ResultCode Present(ServiceCtx context) => PresentInternal(context, 229);
 
+        internal static bool ShouldDumpThreadsAtPresent(string presentSetting, string periodicSetting, int present)
+        {
+            // Legacy values above one still select a present. One enables periodic dumps.
+            string setting = presentSetting ?? (periodicSetting == "1" ? null : periodicSetting);
+            return int.TryParse(setting, out int target) && target > 0 && target == present;
+        }
+
+        internal static (uint Id, uint Value) GetPresentWaitFence(
+            ulong programId, (uint Id, uint Value) current, (uint Id, uint Value) previous)
+        {
+            // Eglantine's VI2 path waits on the current fence for Ocarina because
+            // its next frame can overwrite GPU data still used by the current frame.
+            return programId == OcarinaOfTimeProgramId ? current : previous;
+        }
+
+        internal static long GetPresentIntervalNanoseconds(uint timing)
+        {
+            uint interval = Math.Clamp(timing >> 16, 1u, 4u);
+            uint refreshRate = timing & 0xFFFF;
+            if (refreshRate is < 30 or > 240)
+            {
+                refreshRate = 60;
+            }
+
+            return 1_000_000_000L * interval / refreshRate;
+        }
+
+        private void PaceOcarinaPresent(ServiceCtx context, uint timing)
+        {
+            if (context.Device.Processes.ActiveApplication?.ProgramId != OcarinaOfTimeProgramId ||
+                context.Device.VSyncMode == Ryujinx.Common.Configuration.VSyncMode.Unbounded)
+            {
+                _nextVblank = 0;
+                return;
+            }
+
+            long intervalNs = GetPresentIntervalNanoseconds(timing);
+            long frequency = System.Diagnostics.Stopwatch.Frequency;
+            long intervalTicks = (long)(intervalNs * (frequency / 1_000_000_000.0));
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+
+            if (now - _nextVblank >= intervalTicks)
+            {
+                _nextVblank = now;
+            }
+            else if (_nextVblank > now)
+            {
+                long waitNs = (long)((_nextVblank - now) * (1_000_000_000.0 / frequency));
+                context.Thread.Sleep(Math.Max(1, waitNs));
+            }
+
+            _nextVblank += intervalTicks;
+        }
+
         public ResultCode PresentInternal(ServiceCtx context, uint cmdId)
         {
             // Probe: the NX2 present request carries a GPU fence; the reference
@@ -461,6 +520,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             System.Threading.Volatile.Write(ref _device, context.Device);
             int presentN = System.Threading.Interlocked.Increment(ref Nx2Counters.Presents);
+            NvHostChannelDeviceFile.TracePresentUserData(context.Device, presentN);
 
             if (System.Environment.GetEnvironmentVariable("NX2_PRESENT_TRACE") == "1")
             {
@@ -507,10 +567,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             // Guest stacks of every application thread, once, at a choosable present count:
-            // NX2_THREAD_DUMP=<present number>. Prints the call path each parked thread is in.
-            if (System.Environment.GetEnvironmentVariable("NX2_THREAD_DUMP") is string dumpAt &&
-                int.TryParse(dumpAt, out int dumpPresent) &&
-                Nx2Counters.Presents == dumpPresent)
+            // NX2_THREAD_DUMP_AT_PRESENT=<present number>. Prints the call path each parked thread is in.
+            if (ShouldDumpThreadsAtPresent(
+                Environment.GetEnvironmentVariable("NX2_THREAD_DUMP_AT_PRESENT"),
+                Environment.GetEnvironmentVariable("NX2_THREAD_DUMP"),
+                Nx2Counters.Presents))
             {
                 // Dump every process, not just the title: Switch 2 renders through the
                 // "Common" system process, and the GPU submit thread lives there.
@@ -533,9 +594,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             }
                         }
 
-                        if (thread.SignaledObj != null)
+                        if (thread.SignaledObj is { } signaled)
                         {
-                            waitInfo.Append($" signaled={thread.SignaledObj.GetType().Name}");
+                            waitInfo.Append($" signaled={signaled.GetType().Name}");
                         }
 
                         Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
@@ -544,6 +605,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                         try
                         {
                             thread.PrintGuestStackTrace();
+                            if (thread.GetThreadName() == "MainThread" && thread.Context is { IsAarch32: false } cpu)
+                            {
+                                KThread owner = thread.MutexOwner;
+                                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                                    $"NX2 main mutex addr=0x{thread.MutexAddress:X} ownerTid={owner?.ThreadUid} ownerName={owner?.GetThreadName()} requester=0x{thread.ThreadHandleForUserMutex:X} x0=0x{cpu.GetX(0):X} x1=0x{cpu.GetX(1):X} x2=0x{cpu.GetX(2):X}");
+                                owner?.PrintGuestStackTrace();
+                            }
                         }
                         catch (System.Exception ex)
                         {
@@ -584,6 +652,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             // The presented image's GPU fence travels in words 22/24 (the id is stored as its
             // bitwise NOT). Pace the guest on it, bounded, like the oracle does.
+            uint? presentTiming = null;
             try
             {
                 System.IO.Stream stream = context.RequestData.BaseStream;
@@ -604,37 +673,36 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             $"NX2 present words w6=0x{word6:X} shown=0x{shownSize:X} (image #{Nx2Counters.Presents})");
                     }
 
-                    stream.Seek(14 * sizeof(uint), System.IO.SeekOrigin.Current);
+                    // The swap interval and refresh rate are in payload word 10.
+                    stream.Seek(2 * sizeof(uint), System.IO.SeekOrigin.Current);
+                    presentTiming = context.RequestData.ReadUInt32();
+                    stream.Seek(11 * sizeof(uint), System.IO.SeekOrigin.Current);
 
                     uint fenceRawId = context.RequestData.ReadUInt32();
                     context.RequestData.ReadUInt32();
                     uint fenceValue = context.RequestData.ReadUInt32();
                     uint fenceId = ~fenceRawId;
 
-                    // Wait for the previous frame's fence, like the console: the guest prepares
-                    // frame N+1 while the GPU still runs frame N.
-                    uint waitId = _previousFenceId;
-                    uint waitValue = _previousFenceValue;
-
-                    _previousFenceId = fenceId;
-                    _previousFenceValue = fenceValue;
+                    ulong programId = context.Device.Processes.ActiveApplication?.ProgramId ?? 0;
+                    (uint waitId, uint waitValue) = GetPresentWaitFence(programId, (fenceId, fenceValue), _previousFence);
+                    _previousFence = (fenceId, fenceValue);
 
                     if (System.Threading.Interlocked.Increment(ref _fenceLogs) <= 12)
                     {
                         uint now = waitId < MaxSyncpoints ? context.Device.Gpu.Synchronization.GetSyncpointValue(waitId) : 0;
 
                         Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                            $"NX2 present fence id={fenceId} value={fenceValue} (previous {waitId},{waitValue}) now={now}");
+                            $"NX2 present fence id={fenceId} value={fenceValue} (wait {waitId},{waitValue}) now={now}");
                     }
 
                     if (waitId < MaxSyncpoints && waitValue != 0)
                     {
                         // Up to 4 s, like the console path: the CPU runs frames ahead while the
                         // GPU is still compiling shaders, and a 1 s cap made presents fail.
-                        bool reached = context.Device.Gpu.Synchronization.WaitOnSyncpoint(
+                        bool timedOut = context.Device.Gpu.Synchronization.WaitOnSyncpoint(
                             waitId, waitValue, TimeSpan.FromSeconds(4));
 
-                        if (!reached && System.Threading.Interlocked.Increment(ref _fenceTimeouts) <= 8)
+                        if (timedOut && System.Threading.Interlocked.Increment(ref _fenceTimeouts) <= 8)
                         {
                             Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                                 $"NX2 present fence {waitId},{waitValue} not reached in 4 s");
@@ -650,6 +718,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             }
 
             Composite(context, imageId);
+
+            if (presentTiming is uint timing)
+            {
+                PaceOcarinaPresent(context, timing);
+            }
 
             // The display consumed the frame: advance the display syncpoint the guest waits on
             // after Present. INx2SyncptSession.GetSlot hands out slot 0, and the guest polls
@@ -763,27 +836,47 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 return;
             }
 
-            // Throttle: the CPU unswizzle copies up to ~16 MB per frame.
-            if (System.Threading.Interlocked.Increment(ref _presentCount) % 8 != 0)
+            IRenderer renderer = context.Device.Gpu.Renderer;
+            context.Device.Gpu.Window.TryCaptureHostFrame(() =>
             {
-                return;
-            }
+                // The guest can reuse the image after the IPC reply. Snapshot it before returning.
+                byte[] source = new byte[(int)size];
 
-            byte[] source = RentBuffer(ref _sourceBuffer, (int)size);
-            byte[] linear = RentBuffer(ref _linearBuffer, (int)pixelBytes);
+                try
+                {
+                    process.CpuMemory.Read(address, source.AsSpan());
+                }
+                catch (Exception ex)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
+                        $"NX2 composite image={imageId} read of 0x{size:X} bytes at 0x{address:X} failed: {ex.GetType().Name}: {ex.Message}");
 
-            try
-            {
-                process.CpuMemory.Read(address, source.AsSpan(0, (int)size));
-            }
-            catch (Exception ex)
-            {
-                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
-                    $"NX2 composite image={imageId} read of 0x{size:X} bytes at 0x{address:X} failed: {ex.GetType().Name}: {ex.Message}");
+                    return null;
+                }
 
-                return;
-            }
+                return swapBuffers =>
+                {
+                    try
+                    {
+                        PresentSnapshot(renderer, swapBuffers, source, (int)pixelBytes, width, height,
+                            pitch, blockHeightLog2, imageId, address, pid);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
+                        {
+                            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
+                        }
+                    }
+                };
+            });
+        }
 
+        private static void PresentSnapshot(IRenderer renderer, Action swapBuffers, byte[] source,
+            int pixelBytes, uint width, uint height, ulong pitch, uint blockHeightLog2, uint imageId, ulong address, ulong pid)
+        {
+            PresentTextureRing textures = PresentTextures.GetValue(renderer, static _ => new());
+            byte[] linear = textures.GetLinearBuffer(pixelBytes);
             Nx2NativeObjects.Unswizzle(source, linear, (int)width, (int)height, pitch, (int)blockHeightLog2);
 
             RunFrameDumpControlOnce();
@@ -794,7 +887,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             // Per-composite stats + dumps (env-gated, observe-only). NX2_FRAME_DUMP enables dumps+stats.
             if (Ryujinx.Common.Nx2ProbeLog.Enabled("NX2_FRAME_DUMP"))
             {
-                (ulong hash, double nonzeroFrac) = ComputeFrameStats(linear, (int)pixelBytes);
+                (ulong hash, double nonzeroFrac) = ComputeFrameStats(linear, pixelBytes);
                 bool logStats = compositeN <= 30 || compositeN % 100 == 0;
                 if (logStats)
                 {
@@ -829,7 +922,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 if (tag != null && System.Threading.Volatile.Read(ref _frameDumps) <= 6)
                 {
                     string path = Ryujinx.Common.Nx2LogConfinement.ResolveLogPath($"frame-{tag}-c{compositeN}-img{imageId}-{(int)width}x{(int)height}.rgba");
-                    System.IO.File.WriteAllBytes(path, linear.AsSpan(0, (int)pixelBytes).ToArray());
+                    System.IO.File.WriteAllBytes(path, linear.AsSpan(0, pixelBytes).ToArray());
                     Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi,
                         $"NX2 frame dump {tag} c#{compositeN} -> {path} ({(int)width}x{(int)height} nonzero={nonzeroFrac:F6} hash=0x{hash:X16})");
                 }
@@ -859,39 +952,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 SwizzleComponent.Blue,
                 SwizzleComponent.Alpha);
 
-            try
-            {
-                lock (PresentLock)
-                {
-                    // Reuse a small ring of host textures: the GPU may still be reading
-                    // an earlier frame when the next one is submitted. Creating one per
-                    // present leaked GPU memory until presents failed.
-                    ITexture texture = RentPresentTexture(context, info, (int)width, (int)height);
-
-                    texture.SetData(MemoryOwner<byte>.RentCopy(linear));
-
-                    context.Device.Gpu.Renderer.Window.Present(texture, crop, static () => { });
-
-                }
-            }
-            catch (Exception ex)
-            {
-                if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
-                {
-                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 present failed: {ex.Message}");
-                }
-
-                return;
-            }
+            ITexture texture = textures.Rent(renderer, info);
+            texture.SetData(MemoryOwner<byte>.RentCopy(linear.AsSpan(0, pixelBytes)));
+            renderer.Window.Present(texture, crop, swapBuffers);
 
             if (System.Threading.Interlocked.Increment(ref _compositeLogs) <= 4)
             {
                 Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceVi, $"NX2 composite image={imageId} addr=0x{address:X} {width}x{height} blockLog2={blockHeightLog2} pid={pid}");
             }
-
-            // Let the render loop swap the UI over to the renderer host on the first frame.
-            context.Device.Gpu.Window.SignalFrameReady();
-            context.Device.Gpu.GPFifo.Interrupt();
         }
 
         private static int _frameDumps;
@@ -902,42 +970,39 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private static int _dump600;
         private static int _frameDumpControlDone;
 
-        private static readonly object PresentLock = new();
-        private static readonly ITexture[] _presentTextures = new ITexture[3];
-        private static int _presentTextureIndex;
-        private static int _presentTextureWidth;
-        private static int _presentTextureHeight;
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IRenderer, PresentTextureRing> PresentTextures = new();
 
-        // A ring of reusable host textures, sized for the current frame. Must be
-        // called with PresentLock held.
-        private static ITexture RentPresentTexture(ServiceCtx context, TextureCreateInfo info, int width, int height)
+        // A ring of reusable host textures, accessed on the GPU thread.
+        internal sealed class PresentTextureRing
         {
-            if (_presentTextures[_presentTextureIndex] == null || width != _presentTextureWidth || height != _presentTextureHeight)
+            private readonly ITexture[] _textures = new ITexture[3];
+            private TextureCreateInfo _info;
+            private int _index;
+            private byte[] _linearBuffer;
+
+            public byte[] GetLinearBuffer(int size) => RentBuffer(ref _linearBuffer, size);
+
+            public ITexture Rent(IRenderer renderer, TextureCreateInfo info)
             {
-                foreach (ITexture old in _presentTextures)
+                if (!_info.Equals(info))
                 {
-                    (old as System.IDisposable)?.Dispose();
+                    foreach (ITexture old in _textures)
+                    {
+                        old?.Release();
+                    }
+
+                    Array.Clear(_textures);
+                    _index = 0;
+                    _info = info;
                 }
 
-                Array.Clear(_presentTextures, 0, _presentTextures.Length);
-                _presentTextureIndex = 0;
-                _presentTextureWidth = width;
-                _presentTextureHeight = height;
+                ITexture texture = _textures[_index] ??= renderer.CreateTexture(info);
+                _index = (_index + 1) % _textures.Length;
+                return texture;
             }
-
-            ref ITexture slot = ref _presentTextures[_presentTextureIndex];
-            _presentTextureIndex = (_presentTextureIndex + 1) % _presentTextures.Length;
-
-            slot ??= context.Device.Gpu.Renderer.CreateTexture(info);
-
-            return slot;
         }
-        private static uint _previousFenceId = uint.MaxValue;
+        private (uint Id, uint Value) _previousFence = (uint.MaxValue, 0);
         private static int _event11Logs;
-        private static uint _previousFenceValue;
-        private static byte[] _sourceBuffer;
-        private static byte[] _linearBuffer;
-        private static int _presentCount;
 
         private static int _pcSamples;
 

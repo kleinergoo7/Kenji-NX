@@ -181,7 +181,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
 
         private NvInternalResult SubmitGpfifoEx(ref SubmitGpfifoArguments arguments, Span<ulong> inlineData)
         {
-            return SubmitGpfifo(ref arguments, inlineData);
+            return SubmitGpfifoEntries(ref arguments, inlineData, SubmitGpfifo);
         }
 
         protected override void OnSubmission()

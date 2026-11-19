@@ -1,5 +1,23 @@
 # NX2 (Nintendo Switch 2) Implementation Status — Kenji-NX/Ryubing integration
 
+## Current branch update · 2026-11-10
+
+The working branch is `codex/nx2-submission-progress` on `kleinergoo7/Kenji-NX`. The Starforgejo reference HEAD is `bd99084`. The snapshot and historical findings below predate the current branch.
+
+| Area | Status | Latest evidence |
+|---|---|---|
+| GPU memory aliases | VERIFIED BY TEST | `MemoryManager.cs` tracks the source handle on each mapping and preserves it when a range splits. Destroying a handle removes its aliases and preserves mappings owned by other handles. `Nx2GpuMemoryTests.cs` covers both cases. |
+| GPU map IPC | PARTIAL | `INx2GpuSession.MapMemory` reports a rejected map without signaling successful completion. Sparse mapping and the device-wide memory lifetime still need verification. |
+| Ampere lowering | PARTIAL | The offline Ampere lowering self-test passes on this build. Guest shader coverage remains unverified. |
+| Mario Kart World | BLOCKED | The paired guest run on `37c78aa` recorded eight GPFIFO submissions, zero tracked draws and 3,096 VI2 presents. |
+| Ocarina of Time | BLOCKED | The same paired build mounted the standalone NUP update and reached the SDK heap mutex fallback abort before its first present. |
+
+GPU mapping now rejects a request that extends beyond its backing allocation. Sparse map IPC command 216 validates its request buffer and reports the completed prefix if an entry fails. The registry regression test verifies that a rejected oversized map preserves the prior alias.
+
+Sparse-region reservations now validate overlap and virtual budget before replacing a live region. Tests cover a rejected overlap, a rejected over-budget reservation, and reuse of an existing reservation's budget. The solution built and all 64 HLE tests passed.
+
+In the paired run on `b2193d0`, Kart reached present 120 after eight submissions and Ocarina reproduced the same startup abort. Sparse-region reservation changes still need guest validation. A Switch 1 title was not run during this stage.
+
 **Date:** 2026-05-08 (workspace snapshot)  
 **Workspace:** `/home/reng/projects/ryujinx-nx2` · `Ryubing` branch `nx2-probes-wip` @ `282029a88` (snapshot) / base probe commit `ad8d88186`  
 **Auth (verified before push):** `gh auth status` → `github.com` logged in as **`kleinergoo7`** (active, https, token scopes incl. `repo`). Git author/committer set locally to `348551191+kleinergoo7@users.noreply.github.com` (verified `gh api user` id=348551191, login=kleinergoo7).  
@@ -23,7 +41,7 @@ Labels: NOT IMPLEMENTED · STUB · PARTIAL · IMPLEMENTED—UNVERIFIED · VERIFI
 | Subsystem | Status | Key files (Ryubing/src) | Changes/tests this line | Remaining blockers |
 |---|---|---|---|---|
 | NX2 loader (ACID 0x300 rewrite) | IMPLEMENTED—UNVERIFIED | `HLE/Loaders/Processes/Extensions/MetaLoaderExtensions.cs` (0x300→0x200 rewrite) | audit | FAC/FAH/NPDM/layout semantics unverified |
-| Kernel NX2 GetInfo/SVC 0x80/39-bit paths | PARTIAL | `HLE/HOS/Kernel/SupervisorCall/Syscall.cs` (InfoType Nx2 29/30/33, `[Svc(0x80)] SetGpuMemoryAttribute`→`MapIoMemory`, NX2_PROFILE-gated), `InfoType.cs`, `KPageTableBase.cs:144` 39-bit path | KTimeManagerTests 5/5 passed (pre-existing timing tests) | SVC 0x80 fidelity, T239 memory layout/accounting, 6-core/affinity NX2 path UNVERIFIED |
+| Kernel NX2 GetInfo/SVC 0x80/39-bit paths | PARTIAL | `HLE/HOS/Kernel/SupervisorCall/Syscall.cs` (InfoType Nx2 29/30/33, `[Svc(0x80)] SetGpuMemoryAttribute` updates the `GpuAccessible` page attribute, Switch 2 profile only), `InfoType.cs`, `KPageTableBase.cs:144` 39-bit path | `Nx2GpuMemoryAttributeTests` covers set/clear, attribute preservation, and invalid ranges | SVC 0x80 behavior in games, T239 memory layout/accounting, 6-core/affinity NX2 path UNVERIFIED |
 | nx2 IPC/services (gsv/gpu/syncpt/vi2) | PARTIAL | `.../SystemAppletProxy/INx2GraphicsSystemSession.cs`, `INx2GpuSession.cs` (101/102/211-216 mapping/sparse/GPU-only), `INx2SyncptSession.cs`, `INx2Vi2Session.cs` (228/229) | env-gated probes/logging; no required-stub removal claimed complete | 228/229 conflated vs droplet behavior (228 Cancel vs 229 Present) — 228=0 observed; auto-stubs remain; TIPC alignment UNVERIFIED |
 | TSG `/dev/nvhost-tsg-gpu` | **STUB** | `HLE/HOS/Services/Nv/NvDrvServices/Nx2StubDeviceFile.cs` (“placeholder… replace with real TSG subcontext handling”), registered `INvDrvServices.cs:69` | — | real subcontexts/VEIDs/TSG ioctls missing |
 | GPFIFO/NvDrv submission | PARTIAL (blocked) | `NvHostChannelDeviceFile.cs` (submits counter), `GPFifoProcessor.cs`, probes | observed 8 submits ioctl, frozen | **root blocker:** no draw enqueue; 8-submit stop cause unresolved; USERD/doorbell incomplete; AllocGpfifoEx2/SetUserData stubbed per prior audit |

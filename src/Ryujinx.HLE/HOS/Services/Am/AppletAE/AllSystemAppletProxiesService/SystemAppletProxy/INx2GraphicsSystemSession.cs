@@ -15,6 +15,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     // Minimal nx2:gsv TIPC surface. Commands without a handler are auto-stubbed.
     class INx2GraphicsSystemSession : IpcService
     {
+        private static bool _slotDumped2;
         public INx2GraphicsSystemSession() : base(registerTipc: true) { }
 
         [CommandTipc(4)]
@@ -372,9 +373,38 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // code at word 1 and (width - 1) | (height - 1) << 16 at word 2. Auto-stubbed, the game
         // read the request's leftover words as the frame size and aborted with nn::diag::Abort.
         // Reply: u64 size, u64 alignment.
+        // 911: InitializeDecoderImagePool (movie::VideoDecoder / nn::codec). Returns an
+        // event handle the guest waits on for decode completion. Without it the guest
+        // stores handle 0 and WaitSynchronization fails with ResultSvcInvalidHandle.
+        [CommandTipc(911)]
+        public ResultCode InitializeDecoderImagePool(ServiceCtx context)
+        {
+            KEvent ev = new KEvent(context.Device.System.KernelContext);
+
+            // The reply carries the handle as plain raw data instead of a handle
+            // descriptor, so it has to be a handle in the *client's* table: the guest
+            // waits on the value it reads back, and a handle minted in the service
+            // process is invalid there (ResultSvcInvalidHandle on WaitSynchronization).
+            var client = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetProcessByPid(109) ?? context.Process;
+
+            client.HandleTable.GenerateHandle(ev.ReadableEvent, out int handle);
+
+            // Answer layout (TIPC raw data): [0] = result, [1] = event handle. The guest
+            // reads the result from raw word 0 and the handle from raw word 1; a handle
+            // descriptor would shift both by a word and read back as result 2.
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(handle);
+
+            return ResultCode.Success;
+        }
+
         [CommandTipc(991)]
         public ResultCode CalculateDecoderImagePoolBuffer(ServiceCtx context)
         {
+            // Request words: [0] = 0 (unused), [1] = output layout code, [2] = packed
+            // (width - 1) | (height - 1) << 16. Reading the code from word 0 made the size
+            // 8 KiB for 1920x1080, and the AV1 decoder then failed to open its session.
+            _ = context.RequestData.ReadUInt32();
             uint code = context.RequestData.ReadUInt32();
             uint packed = context.RequestData.ReadUInt32();
 
@@ -418,7 +448,26 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         [CommandTipc(1002)]
         public ResultCode OpenVideoSession(ServiceCtx context)
         {
-            MakeSessionObject(context, new DummyService("nx2:vdec"));
+            if (!_slotDumped2)
+            {
+                _slotDumped2 = true;
+                try
+                {
+                    var gp = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetProcessByPid(109);
+                    ulong v = gp.CpuMemory.Read<ulong>(0xD481A58);
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceAm,
+                        $"NX2 movieplt slot0xd481a58={v:X}");
+                }
+                catch (System.Exception ex)
+                {
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceAm,
+                        $"NX2 movieplt dump failed: {ex.GetType().Name}");
+                }
+            }
+
+            // The returned session is the decoder service: its command 1 opens the session
+            // the movie's VideoDecoderEventManager sends decode requests on.
+            MakeSessionObject(context, new INx2VideoDecSession());
 
             return ResultCode.Success;
         }

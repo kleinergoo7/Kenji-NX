@@ -214,25 +214,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                             }
 
                             request.Pending = false;
+                            // Slot reuse clears this event under the same lock.
+                            evt.ReadableEvent.Signal();
                         }
 
-                        evt.ReadableEvent.Signal();
                         if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
                         {
                             Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.SlotSignalled(slot, hostSp.ReadSyncpointValue(syncpoint));
                         }
                     });
-
-                if (request.Handle == null)
-                {
-                    // Already past the threshold; the callback was never registered.
-                    request.Pending = false;
-                    evt.ReadableEvent.Signal();
-                    if (Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.Enabled)
-                    {
-                        Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.Nx2SyncptTrace.SlotSignalled(slot, context.Device.System.HostSyncpoint.ReadSyncpointValue(syncpoint));
-                    }
-                }
             }
 
             return ResultCode.Success;

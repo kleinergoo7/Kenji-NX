@@ -1435,11 +1435,14 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             int npadId = context.RequestData.ReadInt32();
             long appletResourceUserId = context.RequestData.ReadInt64();
 
-            Logger.Stub?.PrintStub(LogClass.ServiceHid, new { npadId, appletResourceUserId });
-
             // One-shot steady-loop snapshot: NX2_HID_DUMP=<call number>. Triggered from a
             // 60 Hz poll so the dump lands while a frame should be submitted, not at present.
             int n = System.Threading.Interlocked.Increment(ref _npad214Count);
+
+            if (n == 1)
+            {
+                Logger.Stub?.PrintStub(LogClass.ServiceHid, new { npadId, appletResourceUserId });
+            }
 
             Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2Diagnostics.WatchState(context);
 

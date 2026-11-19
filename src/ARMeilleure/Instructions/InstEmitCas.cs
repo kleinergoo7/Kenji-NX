@@ -25,6 +25,22 @@ namespace ARMeilleure.Instructions
             {
                 expected = context.ConvertI64ToI32(expected);
                 desired = context.ConvertI64ToI32(desired);
+
+                // CASB/CASH compare only the low 8/16 bits of Rs with memory, and the
+                // old value written back to Rs is zero-extended. Mask the operands so a
+                // caller that sign-extended the expected value (sxth after a failed
+                // CAS, as the guest refcount loop does) still matches, and so no
+                // backend can leak the expected value's high bits into the result.
+                if (op.Size == 0)
+                {
+                    expected = context.ZeroExtend8(OperandType.I32, expected);
+                    desired = context.ZeroExtend8(OperandType.I32, desired);
+                }
+                else if (op.Size == 1)
+                {
+                    expected = context.ZeroExtend16(OperandType.I32, expected);
+                    desired = context.ZeroExtend16(OperandType.I32, desired);
+                }
             }
 
             Operand old = op.Size switch
@@ -34,7 +50,21 @@ namespace ARMeilleure.Instructions
                 _ => context.CompareAndSwap(physAddr, expected, desired),
             };
 
-            SetIntOrZR(context, op.Rs, is64 ? old : context.ZeroExtend32(OperandType.I64, old));
+            if (is64)
+            {
+                SetIntOrZR(context, op.Rs, old);
+            }
+            else
+            {
+                old = op.Size switch
+                {
+                    0 => context.ZeroExtend8(OperandType.I32, old),
+                    1 => context.ZeroExtend16(OperandType.I32, old),
+                    _ => old,
+                };
+
+                SetIntOrZR(context, op.Rs, context.ZeroExtend32(OperandType.I64, old));
+            }
         }
     }
 }

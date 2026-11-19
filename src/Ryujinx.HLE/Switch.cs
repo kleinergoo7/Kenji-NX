@@ -4,6 +4,7 @@ using Ryujinx.Audio.Backends.CompatLayer;
 using Ryujinx.Audio.Integration;
 using Ryujinx.Common;
 using Ryujinx.Common.Configuration;
+using Ryujinx.Common.Logging;
 using Ryujinx.Cpu;
 using Ryujinx.Graphics.Gpu;
 using Ryujinx.HLE.FileSystem;
@@ -14,6 +15,8 @@ using Ryujinx.HLE.Loaders.Processes;
 using Ryujinx.HLE.UI;
 using Ryujinx.Memory;
 using System;
+using System.IO;
+using System.Text;
 
 namespace Ryujinx.HLE
 {
@@ -169,6 +172,37 @@ namespace Ryujinx.HLE
             TickScalar = TurboMode ? Configuration.TickScalar : ITickSource.RealityTickScalar;
         }
 
+        private NupArchive _nupArchive;
+
+        public bool LoadNup(string path)
+        {
+            if (_nupArchive != null)
+            {
+                Logger.Error?.Print(LogClass.Loader, $"Cannot load NUP '{path}' while another NUP is mounted.");
+                return false;
+            }
+
+            try
+            {
+                _nupArchive = NupArchive.Open(path);
+                string package = _nupArchive.IsStandaloneUpdate ? "standalone update" : "base package";
+                Logger.Info?.Print(LogClass.Loader, $"Mounted NUP {package} directly from '{path}'.");
+
+                if (!Processes.LoadNup(_nupArchive))
+                {
+                    Logger.Error?.Print(LogClass.Loader, $"Could not start the selected package from NUP '{path}'.");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or DecoderFallbackException or HorizonResultException or ZstdSharp.ZstdException)
+            {
+                Logger.Error?.Print(LogClass.Loader, $"Cannot load NUP '{path}': {ex.Message}");
+                return false;
+            }
+        }
+
         public bool LoadCart(string exeFsDir, string romFsFile = null) => Processes.LoadUnpackedNca(exeFsDir, romFsFile);
         public bool LoadXci(string xciFile, ulong applicationId = 0) => Processes.LoadXci(xciFile, applicationId);
         public bool LoadNca(string ncaFile, BlitStruct<ApplicationControlProperty>? customNacpData = null) => Processes.LoadNca(ncaFile, customNacpData);
@@ -200,6 +234,8 @@ namespace Ryujinx.HLE
                 System.Dispose();
                 AudioDeviceDriver.Dispose();
                 FileSystem.Dispose();
+                _nupArchive?.Dispose();
+                _nupArchive = null;
                 Memory.Dispose();
                 Debugger?.Dispose();
 
