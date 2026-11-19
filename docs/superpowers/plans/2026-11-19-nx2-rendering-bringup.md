@@ -292,6 +292,48 @@ git commit -m "docs: compare NX2 graphics path with Eglantine title 4"
 
 **Gate:** stop for a human decision on which divergence to fix first.
 
+### Task 1g: Cover all PCAS/QMD compute methods
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs:62-70` (callback table), `:139-278` (`SendSignalingPcasB`)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/Nx2PcasTrace.cs` (per-method counters)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/QmdDescriptor.cs` (per-method action)
+- Test: `src/Ryujinx.Tests/Graphics/Nx2PcasCoverageTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `PCAS_COVERAGE=`)
+
+**Interfaces:**
+- Consumes: Eglantine `kepler_compute.cpp:355-365` (methods 0xAE/0xAF/0xB0 all read `native_registers[0xad] << 8` as the QMD address; dispatch is skipped for `0xAE`, for `0xAF` when `!(argument & 2)`, and for `0xB0` when `(argument & 15)` is 0 or 1); our `ComputeClass.cs:67` registers only `SendSignalingPcasB`, and `Nx2PcasTrace.cs` counts only its invocations.
+- Produces: `Nx2PcasTrace.Enter(uint qmdAddress, bool usesMme64, int method, int argument)` with counters/format including `mAE=`, `mAF=`, `mB0=`, `act=`; existing `Summary` gains per-method counts. Each of 0xAE/0xAF/0xB0 writes is observed (counted + logged) regardless of whether it dispatches.
+
+- [ ] **Step 1: Write the failing test**
+
+In `Nx2PcasCoverageTests.cs`, assert: (a) `Enter` with method 0xAE, 0xAF and 0xB0 increments distinct counters rendered as `mAE=1 mAF=1 mB0=1`; (b) a dispatch-eligible argument (0xAF with `argument & 2` set, 0xB0 with low nibble 2) contributes to `act=`, while the skip cases do not; (c) the QMD address from `ComputeClassState` is read identically for all three methods.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2PcasCoverageTests" -v q`
+Expected: FAIL — new signature/counters do not exist.
+
+- [ ] **Step 3: Wire the three methods**
+
+Register callbacks for the compute methods 0xAE, 0xAF and 0xB0 in `ComputeClass.cs` (using the same field/offset mechanism as the existing `SendSignalingPcasB`). All three call `Nx2PcasTrace.Enter` with the method id and argument before any early return. Keep the existing direct dispatch behaviour for the currently wired method unchanged; do not add QMD ring/release logic in this task. Gate any NX2-specific dispatch with the existing generation flag so Maxwell titles are unaffected.
+
+- [ ] **Step 4: Re-run the PCAS capture**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_PCAS_TRACE=1 NX2_QMD_TRACE=1 NX2_METHOD_LOG=1`. In `docs/nx2/CONTINUE_HERE.md`, record `PCAS_COVERAGE=` with per-method counts, `act=` total, and one of: `AE_AF_B0_ACTIVE` (all three methods written), `ONLY_PREVIOUSLY_WIRED` (only the existing method appears), or `NONE` (no PCAS writes at all). Also record whether `NX2QMD` lines now appear and whether `draws` changed.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2PcasCoverageTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/Compute src/Ryujinx.Tests/Graphics/Nx2PcasCoverageTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: observe all PCAS QMD compute methods"
+```
+
+**Gate:** stop for a human decision on the recorded `PCAS_COVERAGE=` result before further QMD work.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
