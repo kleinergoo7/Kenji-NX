@@ -500,6 +500,47 @@ git commit -m "nx2: trace compute macro code upload"
 
 **Gate:** stop for a human decision on `COMPUTE_UPLOAD=` — `GUEST_SENT_CODE` means fix routing; `NO_CODE_SENT` means the guest never uploads compute macro code (look upstream in guest/cengine).
 
+### Task 1l: Route compute macros to the shared macro code bank
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/GPFifoClass.cs:540,548,557` (compute execution reads shared bank)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/MME/Macro.cs:69` (memo key uses shared generation for compute)
+- Create: `src/Ryujinx.Tests/Graphics/Nx2SharedMacroBankTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `MME_BANK_FIX=`)
+
+**Interfaces:**
+- Consumes: confirmed recon — every method 0x45-0x48 write lands in `GPFifoClass._macroCode`/`_macros` (`GPFifoProcessor.cs:745-748`, `GPFifoClassState.cs:226-229`), while compute execution reads the never-written `_computeMacroCode`/`_computeMacros` (`GPFifoClass.cs:540,548,557`); Eglantine points compute at the shared 3D bank by default (`channel_state.cpp:84-88`, `kepler_compute.h:81-89`, `kepler_compute.cpp:155-160`).
+- Produces: compute macro execution using the same `_macros`/`_macroCode` bank as 3D, and the memo key for compute macros keyed on `processor.MmeCodeGeneration` (the bank that actually changes). This is a real behaviour change (not observe-only) — the first root-cause fix.
+
+- [ ] **Step 1: Write the failing regression test**
+
+In `Nx2SharedMacroBankTests.cs`, add a test that drives the compute execution bank-selection path and asserts it resolves to the SAME code bank reference and macro-slot array as 3D execution (e.g. an internal `ResolveComputeExecutionBank()` seam returning `(Macro[] slots, int[] code)` compared by reference to the 3D bank), plus a test that a compute macro's memo generation key equals `MmeCodeGeneration`, not `ComputeMmeCodeGeneration`. Reset any counters in `[SetUp]`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2SharedMacroBankTests" -v q`
+Expected: FAIL — compute bank resolves to a different reference / wrong generation key.
+
+- [ ] **Step 3: Implement the fix**
+
+In `GPFifoClass.cs`, make `ComputeMmePushArgument`/`ComputeMmeStart`/`ComputeCallMme` operate on `_macros[index]` and `_macroCode` instead of `_computeMacros`/`_computeMacroCode`. In `Macro.cs:69`, use `processor.MmeCodeGeneration` for compute macros too. Keep the now-unused `_computeMacros`/`_computeMacroCode` and their upload delegates harmlessly in place (no deletion — minimal diff). NX2/Ampere-only path; confirm Maxwell 3D macros still use `_macros`/`_macroCode` via `MmeStart`/`CallMme`.
+
+- [ ] **Step 4: Verify with the existing diagnostics**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_MME_ENGINE=1 NX2_MME_UPLOAD=1 NX2_MACRO_LOG=1 NX2_METHOD_LOG=1 NX2_PCAS_TRACE=1`. In `docs/nx2/CONTINUE_HERE.md`, record `MME_BANK_FIX=` with: `mme3d=`/`mmec=` counts, the compute macros' `cen...`/`emits` (must now be non-zero if the fix worked), whether `NX2PCAS`/`pcas=[mAE/mAF/mB0]` still zero, and `draws` from `NX2 progress`. Expected success signal: compute macros now emit registers (`cemitted` non-empty); stronger: PCAS methods appear and `draws > 0`. If compute code is still all-zero, record the actual result honestly and stop.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2SharedMacroBankTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/GPFifo/GPFifoClass.cs src/Ryujinx.Graphics.Gpu/Engine/MME/Macro.cs src/Ryujinx.Tests/Graphics/Nx2SharedMacroBankTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: route compute macros to the shared MME code bank"
+```
+
+**Gate:** stop for a human decision on `MME_BANK_FIX=` before further work.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
