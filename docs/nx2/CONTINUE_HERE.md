@@ -394,6 +394,32 @@ chain breaks before PCAS (macro emission / compute-class routing), so the blocke
 is upstream. Per the brief's gate, stop for a human decision before further QMD
 work; do not port QMD ring/release logic on this evidence.
 
+## Phase 1h — NUP package completeness (Task 1h)
+
+Ran `tools/nx2/Nx2DumpToc` on
+`/home/reng/Downloads/Fast_Fusion_Update_1.4.nup` to rule out the hypothesis that
+the black screen is caused by booting an update-only NUP with no base content.
+The tool reuses `NupTocInspector.DescribePackages` (package decision) and
+`NupArchive`'s `OpenExeFs`/`OpenRomFs` (entry views); no ROM bytes were extracted.
+
+- TOC: `packages=2; base=1; standalone=0; selected=base; selectedStandalone=False`;
+  `isStandaloneUpdate=False`. Package 0 is a base (`kind=0`, ExeFS dir 1, RomFS dir 2);
+  package 1 is a **non-standalone** update (`kind=1`, standalone flag 0, version 262144).
+  `SelectProgramPackage` picks the base because a base package wins over any update.
+- ExeFS modules (6): `main` 4,462,830 B; `main.npdm` 1,828 B; `rtld` 10,477 B;
+  `sdk` 7,317,157 B; `subsdk0` 6,353,347 B; `subsdk1` 40,921,256 B.
+- RomFS: 3,063 files, 3,542,187,320 bytes (~3.30 GiB) in the selected base package.
+
+NUP_COMPLETE=YES
+
+Meaning: the NUP is a complete base package with a full RomFS asset set — not an
+update-only/stub package. This is consistent with the run log's `Mounted NUP base
+package` line (a base package was found and selected). The observed
+`fs=[bytes=0MiB reads=0 opens=5]` / only `/save.bin` opened is therefore **not** a
+packaging problem: the guest simply never reads the assets. The missing-base
+hypothesis is ruled out, so per the brief's gate the next step is NOT to obtain a
+different NUP — continue with the guest-side blocker (Phases 1a–1g).
+
 ## TL;DR from a fresh clone
 
 ```bash
