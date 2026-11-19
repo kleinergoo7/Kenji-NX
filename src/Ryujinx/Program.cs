@@ -8,6 +8,7 @@ using Ryujinx.Common.GraphicsDriver;
 using Ryujinx.Common.Logging;
 using Ryujinx.Common.SystemInterop;
 using Ryujinx.Common.Utilities;
+using Ryujinx.HLE;
 using Ryujinx.Graphics.RenderDocApi;
 using Ryujinx.Graphics.Vulkan.MoltenVK;
 using Ryujinx.Headless;
@@ -258,6 +259,35 @@ namespace Ryujinx.Ava
             if (CommandLineState.OverrideHardwareAcceleration != null)
             {
                 UseHardwareAcceleration = CommandLineState.OverrideHardwareAcceleration.Value;
+            }
+
+            // Switch 2 flags: parsed so they are not mistaken for the launch path (RYU-0004).
+            if (CommandLineState.OverrideMemoryManagerMode is not null &&
+                Enum.TryParse(CommandLineState.OverrideMemoryManagerMode, true, out MemoryManagerMode memoryManagerMode))
+            {
+                ConfigurationState.Instance.System.MemoryManagerMode.Value = memoryManagerMode;
+            }
+
+            if (CommandLineState.OverrideDramSize is not null)
+            {
+                MemoryConfiguration dramSize = ConfigurationState.Instance.System.DramSize.Value;
+
+                if (Enum.TryParse(CommandLineState.OverrideDramSize, true, out MemoryConfiguration dramByName))
+                {
+                    dramSize = dramByName;
+                }
+                else if (int.TryParse(CommandLineState.OverrideDramSize, out int dramNumber) &&
+                         Enum.IsDefined(typeof(MemoryConfiguration), dramNumber))
+                {
+                    dramSize = (MemoryConfiguration)dramNumber;
+                }
+
+                ConfigurationState.Instance.System.DramSize.Value = dramSize;
+            }
+
+            if (CommandLineState.OverrideIgnoreMissingServices is not null)
+            {
+                ConfigurationState.Instance.System.IgnoreMissingServices.Value = CommandLineState.OverrideIgnoreMissingServices.Value;
             }
         }
 

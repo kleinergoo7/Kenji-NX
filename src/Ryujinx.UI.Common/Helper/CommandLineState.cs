@@ -14,6 +14,9 @@ namespace Ryujinx.UI.Common.Helper
         public static string OverrideGraphicsBackend { get; private set; }
         public static string OverrideBackendThreading { get; private set; }
         public static string OverrideHideCursor { get; private set; }
+        public static string OverrideMemoryManagerMode { get; private set; }
+        public static string OverrideDramSize { get; private set; }
+        public static bool? OverrideIgnoreMissingServices { get; private set; }
         public static string BaseDirPathArg { get; private set; }
 
         public static string RenderDocCaptureTitleFormat { get; private set; } =
@@ -141,6 +144,30 @@ namespace Ryujinx.UI.Common.Helper
                         break;
                     case "--hide-updates":
                         HideAvailableUpdates = true;
+                        break;
+                    case "-m":
+                    case "--memory-manager-mode":
+                        if (i + 1 >= args.Length)
+                        {
+                            Logger.Error?.Print(LogClass.Application, $"Invalid option '{arg}'");
+
+                            continue;
+                        }
+
+                        OverrideMemoryManagerMode = args[++i];
+                        break;
+                    case "--dram-size":
+                        if (i + 1 >= args.Length)
+                        {
+                            Logger.Error?.Print(LogClass.Application, $"Invalid option '{arg}'");
+
+                            continue;
+                        }
+
+                        OverrideDramSize = args[++i];
+                        break;
+                    case "--ignore-missing-services":
+                        OverrideIgnoreMissingServices = true;
                         break;
                     case "--software-gui":
                         OverrideHardwareAcceleration = false;
