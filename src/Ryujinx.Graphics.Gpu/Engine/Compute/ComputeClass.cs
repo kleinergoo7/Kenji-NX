@@ -138,6 +138,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
         /// <param name="argument">Method call argument</param>
         private void SendSignalingPcasB(int argument)
         {
+            // Observe-only PCAS entry trace: count every call before any early return.
+            Nx2PcasTrace.Enter(_state.State.SendPcasA, UsesMme64);
+
             MemoryManager memoryManager = _channel.MemoryManager;
 
             // Since we're going to change the state, make sure any pending instanced draws are done.

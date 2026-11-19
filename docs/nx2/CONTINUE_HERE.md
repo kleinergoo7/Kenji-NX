@@ -132,6 +132,38 @@ QMD dispatch — firing QMD releases / setting `UsesMme64` (Task 2) cannot fix i
 Per the plan gate, Task 2 must not start; report to the human partner with this
 finding instead of writing GPU code against an unconfirmed blocker.
 
+## Phase 1c — macro → PCAS → QMD link (Task 1c)
+
+Re-ran the 90 s direct Fast Fusion capture with the new entry-of-PCAS trace on
+(`NX2_PATCH="" NX2_PCAS_TRACE=1 NX2_MACRO_LOG=1 NX2_QMD_TRACE=1 NX2_METHOD_LOG=1`,
+Fast Fusion profile) into the git-ignored scratch dir
+`.nx2-logs/run-20261119-175653-confirm1c/ocarina.log` (rc=124 expected timeout,
+684 lines). New binary confirmed live: UTF-16 string `NX2PCAS qmd=0x` present in
+`Ryujinx.Graphics.Gpu.dll` (built 17:56).
+
+- `NX2 progress t=60s ... mme=73/4159/0+73 pcas=[calls=0 zero=0 nonzero=0 mme64=0] ... draws=0`.
+- `NX2PCAS` lines: **0** (entry of `SendSignalingPcasB` never reached — not even a
+  qmd=0 Resume). `NX2QMD` lines: **0**.
+- `NX2 mme exec` lines: **73** (`MacrosRun=73`); `emitted=4159` macro methods;
+  all 73 lines show `dram27=0x00000000`.
+- Top macro positions from `NX2 mme exec`: `pos=92` (×28), `pos=611` (×14),
+  `pos=0` (×14), `pos=620` (×4), `pos=604` (×4), `pos=445` (×2), `pos=385` (×2),
+  then singletons (`905, 808, 799, 453, 338, …`).
+- `NX2 emit` lines: 30 (the `emitIndex <= 30` cap). Their addresses are
+  `0xD00/0xD01/0xD02, 0x8C4, 0x44, 0x8E0–0x8E3, 0x376, …`.
+  **No `NX2 emit` targets the compute-class PCAS register**: `SendPcasA`,
+  `SendPcasB` and `SendSignalingPcasB` are method indices `0xAD/0xAE/0xAF`
+  (byte offsets `0x2B4/0x2B8/0x2BC`, verified with `Marshal.OffsetOf`), and none
+  of those indices appear in the `emitted=[…]` or `compute=[…]` histograms either
+  (`compute=[0xEA7=8 0xE68=5 0xE69=5 0xE67=5 0xEA6=4 0xE89=4 …]`).
+
+MACRO_QMD=MACROS_RUN_NO_PCAS
+
+Meaning: MME macros run (73) but `SendSignalingPcasB` is never entered, so the
+guest never emits the PCAS/QMD-launch method — the chain breaks before PCAS, at
+macro emission. Per the plan gate the next task would be to fix macro emission;
+do **not** begin it without a human decision on this recorded result.
+
 ## TL;DR from a fresh clone
 
 ```bash
