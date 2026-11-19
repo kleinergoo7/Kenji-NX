@@ -219,6 +219,46 @@ git commit -m "nx2: extract and disassemble the stalled guest loop"
 
 **Gate:** record `GUEST_LOOP=` and stop for a human decision before acting on what it names — disassembly findings can be misattributed without symbols.
 
+### Task 1e: Watch the guest completion flag
+
+**Files:**
+- Modify: `src/Ryujinx.HLE/HOS/Services/Am/AppletAE/AllSystemAppletProxiesService/SystemAppletProxy/Nx2ThreadDump.cs` (targeted PC watch timer + register/memory dump)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `FLAG_WATCH=`)
+- Test: `src/Ryujinx.Tests/HLE/Nx2PcWatchTests.cs` (new)
+
+**Interfaces:**
+- Consumes: `GUEST_LOOP=` from Task 1d (`cengine.nss:0xeb87c`, VA `0x860B87C`, call site of `blr [vtable+0x110]`, loop target `0x860B75C`); existing `FormatRegisterMemory`/`KThread.Context` accessors in `Nx2ThreadDump.cs`.
+- Produces: `internal static class Nx2PcWatch { public static bool Enabled { get; } public static string Format(ulong pc, KThread thread); }` — env `NX2_PC_WATCH=0x860B87C,0x860B884` (comma-separated hex PCs), capped 200 lines; and a 10 ms timer that checks running app-thread PCs while enabled.
+
+- [ ] **Step 1: Write the failing test**
+
+In `Nx2PcWatchTests.cs`, assert that `NX2_PC_WATCH=0x860B87C` makes `Enabled` true, that a different PC does not match, and that `Format` for a synthetic thread context renders `regs=` plus `mem x0@0x...=` from a pointer register. Use reflection to set env state if needed; reset it in `[TearDown]`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2PcWatchTests" -v q`
+Expected: FAIL — type does not exist.
+
+- [ ] **Step 3: Add the targeted watch**
+
+When `NX2_PC_WATCH` is set, start a 10 ms timer that iterates running threads of the active application and logs at most one line per thread per watch PC: `NX2PCW uid=... pc=0x... regs=[...] mem=[...]`. Reuse `FormatRegisterMemory` to dump 64 bytes at pointer-like registers (`x0` holds the object in the disassembled call). At the instruction after the `blr`, also log `w0`. Cap at 200 lines total. Do not change guest execution.
+
+- [ ] **Step 4: Capture and interpret**
+
+Run Fast Fusion 60 s with `NX2_PATCH="" NX2_PC_WATCH=0x860B87C,0x860B884 NX2_PC_SAMPLE=1 NX2_THREAD_DUMP=1`. In `docs/nx2/CONTINUE_HERE.md`, record `FLAG_WATCH=` with: the object pointer in `x0`, the vtable pointer `mem[x0]`, the 64-byte object dump, the value of `w0` on each hit, and whether any byte in the object changes across hits. Conclude one of: `FLAG_NEVER_SET` (no byte ever toggles to 1), `FLAG_SET_LATE` (it toggles but the game still stalls), or `FLAG_SET_BUT_IGNORED`.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2PcWatchTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.HLE/HOS/Services/Am/AppletAE/AllSystemAppletProxiesService/SystemAppletProxy/Nx2ThreadDump.cs src/Ryujinx.Tests/HLE/Nx2PcWatchTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: watch the guest completion flag at its poll site"
+```
+
+**Gate:** record `FLAG_WATCH=` and stop for a human decision before writing any fix based on it.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
