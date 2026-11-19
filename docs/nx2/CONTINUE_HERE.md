@@ -541,6 +541,10 @@ be invisible here and the bank would still read empty. Ruling that out needs a
 separate trace of `LoadMmeInstructionRam` / subchannel→class mapping; this task did
 not measure it.
 
+## Reverted: Task 1l shared-bank fix
+
+Task 1l shared-bank fix reverted: wired correctly but `NO_COMPUTE_EMIT`, and risks 3D/compute Macro slot cross-talk; not a valid foundation.
+
 ## TL;DR from a fresh clone
 
 ```bash
