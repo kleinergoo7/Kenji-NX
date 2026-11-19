@@ -133,6 +133,52 @@ git commit -m "nx2: trace QMD releases and semaphore words for confirmation"
 
 **Gate:** Task 2 may start only if `CONFIRM=QMD_RELEASE_MISSING`. If `UPSTREAM_OF_QMD` or `NO_BLOCKER_FOUND`, stop and report to the human partner rather than writing GPU code against an unconfirmed blocker.
 
+### Task 1c: Trace the macro → PCAS → QMD link
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs` (`SendSignalingPcasB`, :139-162)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/QmdDescriptor.cs` (counter only)
+- Create: `src/Ryujinx.Graphics.Gpu/Engine/Compute/Nx2PcasTrace.cs`
+- Test: `src/Ryujinx.Tests/Graphics/Nx2PcasTraceTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `MACRO_QMD=`)
+
+**Interfaces:**
+- Consumes: existing `NX2_MACRO_LOG=1` output (`Macro.cs:119` emits `NX2 mme exec pos=... dram27=...`; `MacroTuring.cs:740` emits `NX2 emit addr=... value=...`), `NX2_QMD_TRACE=1` from Task 1b, `QmdScheduler`/`QmdDescriptor`.
+- Produces: `internal static class Nx2PcasTrace { public static void Enter(uint qmdAddress, bool usesMme64); public static string Summary { get; } }` — env-gated (`NX2_PCAS_TRACE=1`), capped at 200 lines, observe-only.
+
+- [ ] **Step 1: Write the failing test**
+
+In `Nx2PcasTraceTests.cs`, assert that three calls to `Nx2PcasTrace.Enter` with qmdAddress `0`, `0`, `0x1234` produce `Summary` containing `calls=3 zero=2 nonzero=1`, and that a call with `usesMme64: true` adds `mme64=1`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2PcasTraceTests" -v q`
+Expected: FAIL — `Nx2PcasTrace` does not exist.
+
+- [ ] **Step 3: Add the observe-only PCAS trace**
+
+Add the counter/log at the *entry* of `SendSignalingPcasB`, before any early return or QMD read, so all invocations are counted — including `qmdAddress == 0` (Resume) and any path that currently returns without dispatch. Log `NX2PCAS qmd=0x{address:X8} action={Launch|Resume} mme64={UsesMme64}` capped at 200 lines. Add `pcas=` from `Nx2PcasTrace.Summary` to the existing `NX2 progress` line. Do not change dispatch behaviour.
+
+- [ ] **Step 4: Re-run the macro-path capture**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_PCAS_TRACE=1 NX2_MACRO_LOG=1 NX2_QMD_TRACE=1 NX2_METHOD_LOG=1`. In `docs/nx2/CONTINUE_HERE.md`, record `MACRO_QMD=` as exactly one of:
+  - `MACROS_RUN_NO_PCAS` — `mme` macros run but `pcas calls=0`: the macros never emit the PCAS/QMD-launch method.
+  - `PCAS_ONLY_ZERO_QMD` — PCAS calls exist but all with `qmd=0` (Resume), no launch address.
+  - `PCAS_LAUNCH_NO_QMD_TRACE` — a nonzero QMD launch address is written but no `NX2QMD` line follows (dispatch not reached).
+Also record the top macro positions from `NX2 mme exec` and whether any `NX2 emit` targets the compute-class PCAS register.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2PcasTraceTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/Compute src/Ryujinx.Tests/Graphics/Nx2PcasTraceTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: trace macro to PCAS to QMD dispatch link"
+```
+
+**Gate:** the `MACRO_QMD=` value selects the next task — `MACROS_RUN_NO_PCAS` means fix macro emission; `PCAS_ONLY_ZERO_QMD` means find where the guest programs the PCAS QMD address; `PCAS_LAUNCH_NO_QMD_TRACE` means fix the dispatch path. Do not begin any of them without a human decision on the recorded result.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
