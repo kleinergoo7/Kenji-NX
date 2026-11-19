@@ -9,6 +9,12 @@ namespace Ryujinx.Graphics.Shader
     public interface IGpuAccessor : ILogger
     {
         /// <summary>
+        /// True when the bound shader code is a native Ampere (SM86) program.
+        /// Upstream stack has no Ampere concept; defaults to false.
+        /// </summary>
+        bool IsNx2Ampere => false;
+
+        /// <summary>
         /// Reads data from the constant buffer 1.
         /// </summary>
         /// <param name="offset">Offset in bytes to read from</param>

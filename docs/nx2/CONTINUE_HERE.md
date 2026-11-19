@@ -811,3 +811,11 @@ Verification: `bash tools/nx2/oracle-ab.sh 60` (Fast Fusion profile, `NX2_PATCH=
 - `NX2 progress t=10s/20s ... mme=71/4214/0+71 mme3d=59 mmec=12 cemitted=[0x1D1=5 0xE4=5 0xEC=5 0xF4=5 0xFC=5 0x60=5 0x61=5 0x62=5 0x63=5 0x6C=5 0x6D=5] ... draws=0`.
 - Compute macro count `mmec=12` (was 14 with an empty bank). `cemitted` is now **non-empty**: 11 distinct registers, 5 emits each. The prior all-zero compute code bank is fixed at the macro-execution level.
 - Still `draws=0` and no presented image, so the guest render gate is a separate, still-open problem. Per the brief, the success signal (`cemitted` non-empty) is met; no further bank variant was attempted.
+
+## Phase 1m — Ampere SM86 lowering re-introduced (Task 2)
+
+AMPERE_LOWER=0
+
+`bash tools/nx2/oracle-ab.sh 60` (2026-11-20): Oracle mean brightness `0.825229`, 30 shaders lowered, 15 pipelines, rc=124; Ours mean brightness `0`, shaders lowered `0`, pipelines `0`, rc=124. The expected `shaders-lowered > 0` was **not** observed — stopping here per the brief.
+
+Honesty note: `oracle-ab.sh` hardcodes `ours_shaders=0` / `ours_pipelines=0` ("our fork has no equivalent logging (0)"), so the harness's ours column is not a real measurement. Independent evidence from `.nx2-logs/run-20261120-001125/ocarina.log` shows the bind still is not reaching the cache: `Gpu LoadShaders: Loading 0 shaders from the cache...`, every present reports `draws=[total=0 ...]`, all frame dumps have `nonzero=0,000000`, and there are zero `Ampere shader lowering failed` warnings (i.e. `LowerAmpere` was never exercised). The lowering itself is restored and unit-verified (`Nx2AmpereLoweringTests`: synthetic SM86 lowering + `AmpereLoweringSelfTest.Run()` both pass; `dotnet build Ryujinx.slnx -c Debug` 0 errors), but the runtime gate that would feed it native shader binds remains open — same open problem as Phase 1l.
