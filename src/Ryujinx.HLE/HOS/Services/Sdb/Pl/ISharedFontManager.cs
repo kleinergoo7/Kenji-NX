@@ -146,5 +146,22 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
             return true;
         }
+
+        [CommandCmif(2000)]
+        // Switch 2 built-in font shared memory: handle plus total shared memory size.
+        public ResultCode GetBuiltInFontSharedMemory(ServiceCtx context)
+        {
+            context.Device.System.SharedFontManager.EnsureBuiltInFonts(context.Device.System.ContentManager);
+
+            if (_fontSharedMemHandle == 0 && context.Process.HandleTable.GenerateHandle(context.Device.System.FontSharedMem, out _fontSharedMemHandle) != Result.Success)
+            {
+                throw new InvalidOperationException("Out of handles!");
+            }
+
+            context.ResponseData.Write(Horizon.FontSize);
+            context.Response.HandleDesc = IpcHandleDesc.MakeCopy(_fontSharedMemHandle);
+
+            return ResultCode.Success;
+        }
     }
 }
