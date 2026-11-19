@@ -117,6 +117,57 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             return ResultCode.Success;
         }
 
+        // TIPC type 0xD9. Pool/transfer-memory registration: first request word is a guest
+        // address (0x0496B000 in OoT). Probe its contents to see if it holds AV1 data.
+        [CommandTipc(201)]
+        public ResultCode RegisterPool201(ServiceCtx context)
+        {
+            if (System.Environment.GetEnvironmentVariable("NX2_DEC_MEM_DUMP") == "1")
+            {
+                try
+                {
+                    long saved = context.RequestData.BaseStream.Position;
+                    context.RequestData.BaseStream.Seek(0, System.IO.SeekOrigin.Begin);
+                    ulong guestAddr = context.RequestData.ReadUInt32();
+                    context.RequestData.BaseStream.Position = saved;
+
+                    ulong pid = context.Device?.Processes?.ActiveApplication?.ProcessId ?? 0;
+                    Ryujinx.HLE.HOS.Kernel.Process.KProcess appProc = null;
+                    if (pid != 0 && context.Device.System.KernelContext.Processes.TryGetValue(pid, out appProc) == false)
+                    {
+                        appProc = null;
+                    }
+
+                    if (appProc == null)
+                    {
+                        Logger.Warning?.Print(LogClass.ServiceAm, $"NX2 DEC_MEM 0x{guestAddr:X}: no app process (pid={pid})");
+                    }
+                    else
+                    {
+                        byte[] mem = new byte[128];
+                        appProc.CpuMemory.Read(guestAddr, mem);
+                        string hex = System.Convert.ToHexString(mem);
+                        ulong nonzero = 0;
+                        foreach (byte b in mem) if (b != 0) nonzero++;
+                        Logger.Warning?.Print(LogClass.ServiceAm,
+                            $"NX2 DEC_MEM 0x{guestAddr:X} pid={pid} nonzero={nonzero}/128 bytes={hex}");
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceAm, $"NX2 DEC_MEM failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            // Mirror cmd101: mint the completion event handle in the client table.
+            int handle = MintClientEvent(context, out KEvent ev);
+            StartFramePump(ev);
+            context.ResponseData.BaseStream.Seek(4, System.IO.SeekOrigin.Begin);
+            context.ResponseData.Write(handle);
+
+            return ResultCode.Success;
+        }
+
         // TIPC type 0x147 (327). CommandTipc ids are the raw type minus the 0x10 TIPC base
         // (the same way type 0xE5 registers as 213), so the attribute id is 311.
         //
