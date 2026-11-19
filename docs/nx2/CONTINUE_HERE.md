@@ -208,13 +208,19 @@ interpretations of the raw bytes/disassembly recorded above, not symbol-level pr
 Added an observe-only 10 ms PC sampler (`NX2_PC_WATCH=<hex,hex,...>`) in
 `Nx2ThreadDump.cs`. It logs `NX2PCW uid=… pc=0x… regs=[…] mem=[…]` for running
 application threads at the configured PCs, reusing the 64-byte pointer-register
-memory dump, appends `w0=` at the post-call PC `0x860B87C`, and caps output at 200
-lines (one line per uid/PC per second so hits span the capture). No guest
-execution or GPU dispatch change.
+memory dump, and caps output at 200 lines (one line per uid/PC per second so
+hits span the capture). The `x0` object dump happens only at `0x860B884`–`0x860B888`,
+after `ldr x0,[x22]` at `0x860B87C` has executed and before `blr x8` at `0x860B888`
+can clobber `x0`; the completion bool is logged as `w0=` at `0x860B88C`
+(`tbz w0,#0`, the first instruction after the call). No guest execution or GPU
+dispatch change.
 
 Capture runs (Fast Fusion, `--dram-size MemoryConfiguration12GiB
 --memory-manager-mode SoftwarePageTable --ignore-missing-services`, all with
-`NX2_PATCH="" NX2_PC_WATCH=0x860B87C,0x860B884 NX2_PC_SAMPLE=1 NX2_THREAD_DUMP=1`):
+`NX2_PATCH="" NX2_PC_SAMPLE=1 NX2_THREAD_DUMP=1` and the then-current watch
+`NX2_PC_WATCH=0x860B87C,0x860B884`; after review the corrected watch is
+`NX2_PC_WATCH=0x860B884,0x860B88C`. It was not re-captured because every run
+below had zero hits, so no captured data is invalidated):
 
 - `run-20261119-183301-1e-brief` (60 s, brief flags only): 1 `NX2PCW` line — the
   `enabled pcs=[…]` header, **0 hits**. `NX2_PC_SAMPLE` shows translation-block

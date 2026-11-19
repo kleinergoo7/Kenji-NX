@@ -541,8 +541,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     internal static class Nx2PcWatch
     {
         private const int MaxLines = 200;
-        // The blr at 0x860B878 returns here; w0 holds the bool the poll tests with tbz.
-        private const ulong PostCallPc = 0x860B87C;
+        // Poll sequence: 0x860B87C ldr x0,[x22] (x0 not the object yet); 0x860B880 ldr x8,[x0];
+        // 0x860B884 ldr x8,[x8,#272]; 0x860B888 blr x8; 0x860B88C tbz w0,#0 (bool in w0).
+        private const ulong ObjectDumpFirstPc = 0x860B884;
+        private const ulong ObjectDumpLastPc = 0x860B888;
+        private const ulong PostCallPc = 0x860B88C;
 
         private static ulong[] GetWatchPcs()
         {
@@ -592,7 +595,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 sb.Append($" w0=0x{(uint)getX(0):X8}");
             }
 
-            sb.Append(Nx2ThreadDump.FormatRegisterMemory(getX, read32, force: true));
+            // x0 is the object only after ldr x0,[x22] at 0x860B87C has retired, and the
+            // blr may clobber it; dumping at the entry PC would describe the wrong memory.
+            if (pc >= ObjectDumpFirstPc && pc <= ObjectDumpLastPc)
+            {
+                sb.Append(Nx2ThreadDump.FormatRegisterMemory(getX, read32, force: true));
+            }
+
             return sb.ToString();
         }
 
