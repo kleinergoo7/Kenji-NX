@@ -157,14 +157,8 @@ namespace Ryujinx.Ava
             // Enable OGL multithreading on the driver, and some other flags.
             DriverUtilities.InitDriverConfig(ConfigurationState.Instance.Graphics.BackendThreading == BackendThreading.Off);
 
-            // Check if keys exists.
-            if (!File.Exists(Path.Combine(AppDataManager.KeysDirPath, "prod.keys")))
-            {
-                if (!(AppDataManager.Mode == AppDataManager.LaunchMode.UserProfile && File.Exists(Path.Combine(AppDataManager.KeysDirPathUser, "prod.keys"))))
-                {
-                    MainWindow.ShowKeyErrorOnLoad = true;
-                }
-            }
+            // Key requirements are decided when a title is loaded: Switch 2 (.nup) titles need
+            // no keys, and the GUI load path already reports MissingKeyException for Switch 1.
 
             if (CommandLineState.LaunchPathArg != null)
             {
