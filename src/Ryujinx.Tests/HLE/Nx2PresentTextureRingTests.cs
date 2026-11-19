@@ -477,7 +477,7 @@ namespace Ryujinx.Tests.HLE
             Assert.IsEmpty(released);
 
             ITexture resized = ring.Rent(renderer, CreateInfo(1920, 1080));
-            CollectionAssert.AreEqual(initial, released);
+            Assert.AreEqual(initial, released);
             Assert.AreEqual(4, created.Count);
             Assert.AreSame(created[3], resized);
         }

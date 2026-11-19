@@ -68,7 +68,7 @@ namespace Ryujinx.Tests.HLE.Nv
             NvInternalResult result = NvHostChannelDeviceFile.SubmitGpfifoEntries(ref header, inlineData, (ref SubmitGpfifoArguments _, Span<ulong> entries) =>
             {
                 Assert.AreEqual(entryCount, entries.Length);
-                CollectionAssert.AreEqual(new ulong[] { 0x1000, 0x2000 }[..entryCount], entries.ToArray());
+                Assert.AreEqual(new ulong[] { 0x1000, 0x2000 }[..entryCount], entries.ToArray());
 
                 return NvInternalResult.Success;
             });
