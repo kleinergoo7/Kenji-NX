@@ -277,6 +277,7 @@ namespace Ryujinx.HLE.HOS.Services
             if (TipcDumpEnabled &&
                 (tipcType == "INx2Vi2Session" ||
                  tipcType == "INx2GraphicsSystemSession" ||
+                 tipcType == "INx2VideoDecoderSession" ||
                  tipcType == "DummyService") &&
                 System.Threading.Interlocked.Increment(ref _tipcDumpCount) <= 6000)
             {
