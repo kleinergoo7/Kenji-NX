@@ -334,6 +334,46 @@ git commit -m "nx2: observe all PCAS QMD compute methods"
 
 **Gate:** stop for a human decision on the recorded `PCAS_COVERAGE=` result before further QMD work.
 
+### Task 1h: Verify NUP package completeness
+
+**Files:**
+- Create: `tools/nx2/Nx2DumpToc/Nx2DumpToc.csproj` + `Program.cs` (helper printing package/entry summary)
+- Create: `src/Ryujinx.Tests/HLE/Nx2TocTests.cs` (new; validates package selection helpers with a synthetic TOC)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record `NUP_COMPLETE=`)
+
+**Interfaces:**
+- Consumes: NUP at `/home/reng/Downloads/Fast_Fusion_Update_1.4.nup`; `NupArchive.cs` (`ReadProgramTree`, `SelectProgramPackage`, `IsStandaloneUpdate`, `OpenExeFs`, `OpenRomFs`).
+- Produces: a report of package type (base / standalone update / update with base), ExeFS and RomFS file counts and total bytes, key ExeFS module names, and whether a base package is present; plus `NUP_COMPLETE=YES|NO|UNKNOWN` in the doc.
+
+- [ ] **Step 1: Write the failing test**
+
+In `Nx2TocTests.cs`, build a synthetic NUP TOC in memory with one base package containing `main` and `romfs`, and assert a helper `DescribePackages(byte[] toc)` returns `packages=1; base=1; standalone=0` (or equivalent), and that a two-package TOC (base + update, update marked standalone) is reported distinctly. Test the decision logic only, not the real ROM bytes.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2TocTests" -v q`
+Expected: FAIL — helper type does not exist.
+
+- [ ] **Step 3: Implement the TOC helper**
+
+Reuse `NupArchive`'s parsing logic (reflection or a small shared internal extractor) in `tools/nx2/Nx2DumpToc` to print, for the real NUP: package count and types, selected package, `IsStandaloneUpdate`, ExeFS file list with sizes, RomFS file count and total bytes, and whether any base package exists alongside the update. Do not change `NupArchive` behaviour.
+
+- [ ] **Step 4: Run the helper and record the verdict**
+
+Run the helper on `/home/reng/Downloads/Fast_Fusion_Update_1.4.nup`. In `docs/nx2/CONTINUE_HERE.md`, record `NUP_COMPLETE=` with: package count, selected package type, ExeFS modules, RomFS file count/bytes, and one conclusion — `YES` (base + assets present), `NO` (update-only / missing base or romfs), or `UNKNOWN`. Cross-check against the run log's `Mounted NUP base package` line.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2TocTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add tools/nx2/Nx2DumpToc src/Ryujinx.Tests/HLE/Nx2TocTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: verify NUP package completeness"
+```
+
+**Gate:** stop for a human decision; if `NUP_COMPLETE=NO`, the next step is obtaining the base NUP rather than any emulator change.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
