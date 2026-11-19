@@ -3,11 +3,61 @@ using ARMeilleure.IntermediateRepresentation;
 using ARMeilleure.Translation;
 
 using static ARMeilleure.Instructions.InstEmitHelper;
+using static ARMeilleure.IntermediateRepresentation.Operand.Factory;
 
 namespace ARMeilleure.Instructions
 {
     static partial class InstEmit
     {
+        // SHA3/SHA512 three-source operations (FEAT_SHA3), soft-fallback.
+        public static void Eor3_V(ArmEmitterContext context)
+        {
+            OpCodeSimdReg op = (OpCodeSimdReg)context.CurrOp;
+
+            Operand res = context.Call(
+                typeof(SoftFallback).GetMethod(nameof(SoftFallback.Eor3)),
+                GetVec(op.Rn), GetVec(op.Rm), GetVec(op.Ra));
+
+            context.Copy(GetVec(op.Rd), res);
+        }
+
+        public static void Bcax_V(ArmEmitterContext context)
+        {
+            OpCodeSimdReg op = (OpCodeSimdReg)context.CurrOp;
+
+            Operand res = context.Call(
+                typeof(SoftFallback).GetMethod(nameof(SoftFallback.Bcax)),
+                GetVec(op.Rn), GetVec(op.Rm), GetVec(op.Ra));
+
+            context.Copy(GetVec(op.Rd), res);
+        }
+
+        public static void Rax1_V(ArmEmitterContext context)
+        {
+            OpCodeSimdReg op = (OpCodeSimdReg)context.CurrOp;
+
+            Operand res = context.Call(
+                typeof(SoftFallback).GetMethod(nameof(SoftFallback.Rax1)),
+                GetVec(op.Rn), GetVec(op.Rm));
+
+            context.Copy(GetVec(op.Rd), res);
+        }
+
+        public static void Xar_V(ArmEmitterContext context)
+        {
+            OpCodeSimdReg op = (OpCodeSimdReg)context.CurrOp;
+
+            // XAR keeps the 6-bit rotate amount in bits [15:10]; OpCodeSimdReg.Ra
+            // only covers five of those bits.
+            int shift = (op.RawOpCode >> 10) & 0x3F;
+
+            Operand res = context.Call(
+                typeof(SoftFallback).GetMethod(nameof(SoftFallback.Xar)),
+                GetVec(op.Rn), GetVec(op.Rm), Const(shift));
+
+            context.Copy(GetVec(op.Rd), res);
+        }
+
         public static void Aesd_V(ArmEmitterContext context)
         {
             OpCodeSimd op = (OpCodeSimd)context.CurrOp;
