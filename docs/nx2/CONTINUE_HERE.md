@@ -70,12 +70,13 @@ path). There is therefore no stubbed reply, shared-memory flag or **unsignalled
 event** at the INx2 service boundary, and no external (input/asset) blocker — the
 guest is starved on the GPU-completion side of its render dispatch.
 
-GATE=GPU_QMD3_RELEASE_NEVER_FIRED — the guest reaches `Present` but NVN2's
-compute→3D queue sync is never released: QMD3 release payloads (Eglantine rows
-53/60/61/62: words/slots 24/28/52, bit-19 = max release) are defined in
-`ComputeQmd` but never fired and `UsesMme64` is never set. The frame fence never
-enables the next render dispatch, so the main thread stays in `Present`, the task
-queue stays idle and `draws` stays 0.
+GATE=GPU_QMD3_RELEASE_NEVER_FIRED (HYPOTHESIS — not confirmed) — the captured
+evidence establishes only that the guest is blocked on GPU completion (main thread
+in `Present`, task queue idle, no new submits, `draws=0`). The specific attribution
+to unfired QMD3 releases is inferred from the design spec / Eglantine rows
+53/60/61/62 (words/slots 24/28/52, bit-19 = max release, `UsesMme64`) and has NOT
+been verified at word level. This gate must be confirmed with `NX2_SYNCPT_TRACE`
++ `NX2_FIFO_TRACE` before any Task 2 GPU code is written.
 
 evidence: run-20261119-162552-gate100/ocarina.log L595–612 MainThread frozen at
 `nn::wsi::ounce::native::NativeWindow::Present:0x0038` / `nnSdk:0x563c38` plus
@@ -89,13 +90,16 @@ evidence: both logs `NX2_SVC_THREAD t=60s` — queue-core uids 34–39 issue at 
 `WaitProcessWideKeyAtomic`/lock primitives; `NX2 missing` only
 `INx2GraphicsSystemSession:1501/1502` at boot.
 
-Smallest candidate fix: fire QMD3 release payloads (slots 24/28/52, bit 19 = max)
-on dispatch (including rejected QMDs) and set `UsesMme64`, in
-`src/Ryujinx.Graphics.Gpu/…/ComputeClass.cs` + the GPFIFO processor — **not** an
-`INx2*Session` file, so no in-session fix or test applies in this task. Already
-scheduled as Task 2. Next action: proceed to Task 2; if `draws` still does not
-move, add a steady-state `NX2_SYNCPT_TRACE=1 NX2_FIFO_TRACE=1` capture to name the
-exact semaphore word the 3D queue waits on.
+Smallest candidate fix (if the hypothesis is confirmed): fire QMD3 release payloads
+(slots 24/28/52, bit 19 = max) on dispatch (including rejected QMDs) and set
+`UsesMme64`, in `src/Ryujinx.Graphics.Gpu/…/ComputeClass.cs` + the GPFIFO processor
+— **not** an `INx2*Session` file, so no in-session fix or test applies in this task.
+Next action (confirmation first, before any Task 2 GPU code): re-run the same
+steady-state capture with `NX2_SYNCPT_TRACE=1 NX2_FIFO_TRACE=1` and name the exact
+semaphore word / fence that the 3D queue waits on. Only if that trace confirms the
+QMD-release hypothesis should Task 2 GPU changes begin; otherwise revisit the
+finding with the human partner rather than starting GPU work against an
+unconfirmed blocker.
 
 ## TL;DR from a fresh clone
 
