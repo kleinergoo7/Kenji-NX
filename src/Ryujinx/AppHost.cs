@@ -1010,6 +1010,11 @@ namespace Ryujinx.Ava
                                                      ConfigurationState.Instance.Debug.DebuggerSuspendOnStart,
                                                      ConfigurationState.Instance.Graphics.CustomVSyncInterval.Value);
 
+            // Switch 2 titles need no keys and use the T239 profile; Switch 1 otherwise.
+            configuration.CompatibilityProfile = Path.GetExtension(ApplicationPath).Equals(".nup", StringComparison.OrdinalIgnoreCase) || Directory.Exists(ApplicationPath)
+                ? CompatibilityProfile.Switch2
+                : CompatibilityProfile.Switch1;
+
             Device = new Switch(configuration);
         }
 
