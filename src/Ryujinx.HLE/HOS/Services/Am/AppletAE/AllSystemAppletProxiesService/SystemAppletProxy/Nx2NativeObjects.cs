@@ -142,5 +142,36 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 }
             }
         }
+
+        // Inverse of Unswizzle: linear RGBA8 in source, block-linear in destination.
+        // Used to place decoded frames where Composite expects them.
+        public static void Swizzle(byte[] source, byte[] destination, int width, int height, ulong pitch, int blockHeightLog2)
+        {
+            int gobsInX = (int)(pitch / 64);
+            int blockHeight = Math.Max(blockHeightLog2 - 3, 0);
+            int blockHeightMask = (1 << blockHeight) - 1;
+            int blockSize = gobsInX << (9 + blockHeight);
+
+            for (int y = 0; y < height; y++)
+            {
+                int blockY = y >> 3;
+                int rowBase = ((blockY >> blockHeight) * blockSize) + ((blockY & blockHeightMask) << 9);
+                int sourceRow = y * width * 4;
+
+                for (int x = 0; x < width; x++)
+                {
+                    uint byteX = (uint)x * 4;
+                    int offset = rowBase + (int)((byteX >> 6) << (9 + blockHeight)) + (int)SwizzleOffset(byteX, (uint)y);
+
+                    int sourceIndex = sourceRow + x * 4;
+                    int destinationIndex = offset;
+
+                    destination[destinationIndex + 0] = source[sourceIndex + 0];
+                    destination[destinationIndex + 1] = source[sourceIndex + 1];
+                    destination[destinationIndex + 2] = source[sourceIndex + 2];
+                    destination[destinationIndex + 3] = source[sourceIndex + 3];
+                }
+            }
+        }
     }
 }
