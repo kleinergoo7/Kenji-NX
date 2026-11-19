@@ -26,6 +26,33 @@ namespace Ryujinx.HLE.HOS.Services.Nv
     [Service("nvdrv:t")]
     class INvDrvServices : IpcService
     {
+        [ThreadStatic]
+        internal static Ryujinx.HLE.HOS.Kernel.Threading.KThread IoctlClientThread;
+        [ThreadStatic]
+        internal static string IoctlVariant;
+        // Diagnostic: per-ioctl counts, printed with the NX2 progress line.
+        public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> IoctlCounts = [];
+
+        // Gated per-call ioctl trace for the Switch 2 differential (NX2_IOCTL_LOG=1).
+        private static readonly bool IoctlLogEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_IOCTL_LOG") == "1";
+
+        private static void LogIoctl(string what, int fd, NvDeviceFile deviceFile, NvIoctl cmd, Span<byte> args)
+        {
+            if (!IoctlLogEnabled)
+            {
+                return;
+            }
+
+            ulong arg0 = args.Length >= 4 ? (uint)(args[0] | (args[1] << 8) | (args[2] << 16) | (args[3] << 24)) : 0;
+
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceNv,
+                $"NX2I {what} fd={fd} dev={deviceFile.GetType().Name} grp={cmd.Type:X2} cmd={cmd.Number:X2} size=0x{cmd.Size:X} dir={(int)cmd.DirectionValue} ioctl=0x{(uint)((int)cmd.DirectionValue | (cmd.Size << 16) | (cmd.Type << 8) | cmd.Number):X8} arg0=0x{arg0:X}");
+        }
+
+        // Unknown Switch 2 ioctls answered with success and an echoed input, like the oracle.
+        internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> Nx2IoctlStubs = new();
+
         private static readonly List<string> _deviceFileDebugRegistry =
         [
             "/dev/nvhost-dbg-gpu",
@@ -39,6 +66,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             { "/dev/nvhost-ctrl-gpu", typeof(NvHostCtrlGpuDeviceFile) },
             { "/dev/nvhost-as-gpu",   typeof(NvHostAsGpuDeviceFile)   },
             { "/dev/nvhost-gpu",      typeof(NvHostGpuDeviceFile)     },
+            { "/dev/nvhost-tsg-gpu",  typeof(Nx2TsgDeviceFile)       },
             //{ "/dev/nvhost-msenc",    typeof(NvHostChannelDeviceFile) },
             { "/dev/nvhost-nvdec",    typeof(NvHostChannelDeviceFile) },
             //{ "/dev/nvhost-nvjpg",    typeof(NvHostChannelDeviceFile) },
@@ -47,7 +75,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             { "/dev/nvhost-dbg-gpu",  typeof(NvHostDbgGpuDeviceFile)  },
             { "/dev/nvhost-prof-gpu", typeof(NvHostProfGpuDeviceFile) },
         };
-        
+
         private static readonly ArrayPool<byte> _byteArrayPool = ArrayPool<byte>.Create();
 
         public static IdDictionary DeviceFileIdRegistry = new();
@@ -59,14 +87,31 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
         // TODO: This should call set:sys::GetDebugModeFlag
         private readonly bool _debugModeEnabled = false;
-        
+
         private byte[] _ioctl2Buffer = [];
         private byte[] _ioctlArgumentBuffer = [];
         private byte[] _ioctl3Buffer = [];
 
-        public INvDrvServices(ServiceCtx context) : base(context.Device.System.NvDrvServer)
+        public INvDrvServices(ServiceCtx context) : this(context, nvsrv: false) { }
+
+        public INvDrvServices(ServiceCtx context, bool nvsrv = false) : base(context.Device.System.NvDrvServer)
         {
-            _owner = 0;
+            _owner = nvsrv ? context.Process.Pid : 0;
+
+            if (nvsrv)
+            {
+                _clientMemory = context.Memory;
+                _transferMemInitialized = true;
+
+                Ryujinx.HLE.Loaders.Processes.ProcessResult application = context.Device.Processes.ActiveApplication;
+
+                if (application != null &&
+                    context.Device.System.KernelContext.Processes.TryGetValue(application.ProcessId, out Ryujinx.HLE.HOS.Kernel.Process.KProcess process))
+                {
+                    _owner = application.ProcessId;
+                    _clientMemory = process.CpuMemory;
+                }
+            }
         }
 
         private NvResult Open(ServiceCtx context, string path, out int fd)
@@ -83,9 +128,9 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 ConstructorInfo constructor = deviceFileClass.GetConstructor([typeof(ServiceCtx), typeof(IVirtualMemoryManager), typeof(ulong)
                 ]);
 
-                NvDeviceFile deviceFile = (NvDeviceFile)constructor?.Invoke([context, _clientMemory, _owner]);
+                NvDeviceFile deviceFile = (NvDeviceFile)constructor.Invoke([context, _clientMemory, _owner]);
 
-                deviceFile?.Path = path;
+                deviceFile.Path = path;
 
                 fd = DeviceFileIdRegistry.Add(deviceFile);
 
@@ -136,7 +181,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     {
                         Array.Resize(ref _ioctlArgumentBuffer, (int)inputDataSize);
                     }
-                    
+
                     arguments = _ioctlArgumentBuffer.AsSpan(0, (int)inputDataSize);
 
                     context.Memory.Read(inputDataPosition, arguments);
@@ -148,7 +193,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 {
                     Array.Resize(ref _ioctlArgumentBuffer, (int)outputDataSize);
                 }
-                    
+
                 arguments = _ioctlArgumentBuffer.AsSpan(0, (int)outputDataSize);
             }
             else
@@ -159,7 +204,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     {
                         Array.Resize(ref _ioctlArgumentBuffer, (int)inputDataSize);
                     }
-                    
+
                     arguments = _ioctlArgumentBuffer.AsSpan(0, (int)inputDataSize);
 
                     context.Memory.Read(inputDataPosition, arguments);
@@ -246,7 +291,20 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                 string path = MemoryHelper.ReadAsciiString(context.Memory, pathPtr, (long)pathSize);
 
+                if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+                {
+                    var nvCaller = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+                    Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv, $"NX2 nvopen caller={nvCaller?.Owner.Pid} tid={nvCaller?.ThreadUid} owner={_owner} path={path}");
+                }
+
                 errorCode = Open(context, path, out fd);
+            }
+
+            if (System.Environment.GetEnvironmentVariable("NX2_WAIT_LOG") == "1")
+            {
+                var oc = Ryujinx.HLE.HOS.Kernel.KernelStatic.GetCurrentThread();
+                Ryujinx.Common.Logging.Logger.Warning?.Print(LogClass.ServiceNv,
+                    $"NX2 nvopen result caller={oc?.Owner.Pid} fd={fd} err={errorCode}");
             }
 
             context.ResponseData.Write(fd);
@@ -266,6 +324,9 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 int fd = context.RequestData.ReadInt32();
                 NvIoctl ioctlCommand = context.RequestData.ReadStruct<NvIoctl>();
 
+                IoctlCounts.AddOrUpdate($"{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}", 1, (_, v) => v + 1);
+
+
                 errorCode = GetIoctlArgument(context, ioctlCommand, out Span<byte> arguments);
 
                 if (errorCode == NvResult.Success)
@@ -274,14 +335,50 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                     if (errorCode == NvResult.Success)
                     {
-                        NvInternalResult internalResult = deviceFile.Ioctl(ioctlCommand, arguments);
+                        LogIoctl("Ioctl", fd, deviceFile, ioctlCommand, arguments);
+                        try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.IncrementIoctl((int)(context.Thread?.ThreadUid??0), deviceFile?.GetType().Name??"nv", IoctlVariant??"Ioctl", ioctlCommand.Type, ioctlCommand.Number); } catch {}
+
+                        Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
+                        string prevVariant = IoctlVariant;
+                        IoctlClientThread = context.Thread;
+                        IoctlVariant = "Ioctl";
+                        NvInternalResult internalResult;
+                        try
+                        {
+                            internalResult = deviceFile.Ioctl(ioctlCommand, arguments);
+                        }
+                        finally
+                        {
+                            IoctlClientThread = prevClient;
+                            IoctlVariant = prevVariant;
+                        }
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
-                            throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            // Eglantine (the working Switch 2 oracle) answers unknown Switch 2
+                            // nvhost ioctls with success, echoing the input back, and renders.
+                            // Rejecting them makes the guest treat the node as unsupported and
+                            // skip later work: it calls 0x48/0x16 and 0x48/0x17, which this tree
+                            // does not implement. Switch 1 titles keep failing loudly.
+                            if (NvHostCtrlGpuDeviceFile.Nx2Driver)
+                            {
+                                string stubKey = $"{deviceFile.GetType().Name}:{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}";
+
+                                if (Nx2IoctlStubs.AddOrUpdate(stubKey, 1, (_, v) => v + 1) == 1)
+                                {
+                                    Logger.Warning?.Print(LogClass.ServiceNv,
+                                        $"nx2: stubbed unknown ioctl {stubKey} size=0x{ioctlCommand.Size:X} (input echoed back)");
+                                }
+                            }
+                            else
+                            {
+                                throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            }
                         }
 
                         errorCode = ConvertInternalErrorCode(internalResult);
+
+                        Logger.Debug?.Print(LogClass.ServiceNv, $"Ioctl fd={fd} type={ioctlCommand.Type} nr=0x{ioctlCommand.Number:X2} size=0x{ioctlCommand.Size:X} -> {errorCode}");
 
                         if ((ioctlCommand.DirectionValue & NvIoctl.Direction.Write) != 0)
                         {
@@ -485,6 +582,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 int fd = context.RequestData.ReadInt32();
                 NvIoctl ioctlCommand = context.RequestData.ReadStruct<NvIoctl>();
 
+                IoctlCounts.AddOrUpdate($"{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}", 1, (_, v) => v + 1);
+
                 (ulong inlineInBufferPosition, ulong inlineInBufferSize) = context.Request.GetBufferType0x21(1);
 
                 errorCode = GetIoctlArgument(context, ioctlCommand, out Span<byte> arguments);
@@ -495,7 +594,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                     {
                         Array.Resize(ref _ioctl2Buffer, (int)inlineInBufferSize);
                     }
-                    
+
                     inlineInBufferSpan = _ioctl2Buffer.AsSpan(0, (int)inlineInBufferSize);
                     context.Memory.Read(inlineInBufferPosition, inlineInBufferSpan);
                 }
@@ -506,14 +605,50 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                     if (errorCode == NvResult.Success)
                     {
-                        NvInternalResult internalResult = deviceFile.Ioctl2(ioctlCommand, arguments, inlineInBufferSpan);
+                        LogIoctl("Ioctl2", fd, deviceFile, ioctlCommand, arguments);
+                        try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.IncrementIoctl((int)(context.Thread?.ThreadUid??0), deviceFile?.GetType().Name??"nv", IoctlVariant??"Ioctl2", ioctlCommand.Type, ioctlCommand.Number); } catch {}
+
+                        Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
+                        string prevVariant = IoctlVariant;
+                        IoctlClientThread = context.Thread;
+                        IoctlVariant = "Ioctl2";
+                        NvInternalResult internalResult;
+                        try
+                        {
+                            internalResult = deviceFile.Ioctl2(ioctlCommand, arguments, inlineInBufferSpan);
+                        }
+                        finally
+                        {
+                            IoctlClientThread = prevClient;
+                            IoctlVariant = prevVariant;
+                        }
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
-                            throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            // Eglantine (the working Switch 2 oracle) answers unknown Switch 2
+                            // nvhost ioctls with success, echoing the input back, and renders.
+                            // Rejecting them makes the guest treat the node as unsupported and
+                            // skip later work: it calls 0x48/0x16 and 0x48/0x17, which this tree
+                            // does not implement. Switch 1 titles keep failing loudly.
+                            if (NvHostCtrlGpuDeviceFile.Nx2Driver)
+                            {
+                                string stubKey = $"{deviceFile.GetType().Name}:{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}";
+
+                                if (Nx2IoctlStubs.AddOrUpdate(stubKey, 1, (_, v) => v + 1) == 1)
+                                {
+                                    Logger.Warning?.Print(LogClass.ServiceNv,
+                                        $"nx2: stubbed unknown ioctl {stubKey} size=0x{ioctlCommand.Size:X} (input echoed back)");
+                                }
+                            }
+                            else
+                            {
+                                throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            }
                         }
 
                         errorCode = ConvertInternalErrorCode(internalResult);
+
+                        Logger.Debug?.Print(LogClass.ServiceNv, $"Ioctl2 fd={fd} type={ioctlCommand.Type} nr=0x{ioctlCommand.Number:X2} size=0x{ioctlCommand.Size:X} -> {errorCode}");
 
                         if ((ioctlCommand.DirectionValue & NvIoctl.Direction.Write) != 0)
                         {
@@ -534,10 +669,16 @@ namespace Ryujinx.HLE.HOS.Services.Nv
         {
             NvResult errorCode = EnsureInitialized();
 
+            Logger.Info?.Print(LogClass.ServiceNv, "Ioctl3 entry");
+
             if (errorCode == NvResult.Success)
             {
                 int fd = context.RequestData.ReadInt32();
                 NvIoctl ioctlCommand = context.RequestData.ReadStruct<NvIoctl>();
+
+                IoctlCounts.AddOrUpdate($"{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}", 1, (_, v) => v + 1);
+
+                Logger.Info?.Print(LogClass.ServiceNv, $"nv ioctl fd={fd} type=0x{ioctlCommand.Type:X2} nr=0x{ioctlCommand.Number:X2} size=0x{ioctlCommand.Size:X}");
 
                 (ulong inlineOutBufferPosition, ulong inlineOutBufferSize) = context.Request.GetBufferType0x22(1);
 
@@ -560,14 +701,50 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                     if (errorCode == NvResult.Success)
                     {
-                        NvInternalResult internalResult = deviceFile.Ioctl3(ioctlCommand, arguments, inlineOutBufferSpan);
+                        LogIoctl("Ioctl3", fd, deviceFile, ioctlCommand, arguments);
+                        try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.IncrementIoctl((int)(context.Thread?.ThreadUid??0), deviceFile?.GetType().Name??"nv", IoctlVariant??"Ioctl3", ioctlCommand.Type, ioctlCommand.Number); } catch {}
+
+                        Ryujinx.HLE.HOS.Kernel.Threading.KThread prevClient = IoctlClientThread;
+                        string prevVariant = IoctlVariant;
+                        IoctlClientThread = context.Thread;
+                        IoctlVariant = "Ioctl3";
+                        NvInternalResult internalResult;
+                        try
+                        {
+                            internalResult = deviceFile.Ioctl3(ioctlCommand, arguments, inlineOutBufferSpan);
+                        }
+                        finally
+                        {
+                            IoctlClientThread = prevClient;
+                            IoctlVariant = prevVariant;
+                        }
 
                         if (internalResult == NvInternalResult.NotImplemented)
                         {
-                            throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            // Eglantine (the working Switch 2 oracle) answers unknown Switch 2
+                            // nvhost ioctls with success, echoing the input back, and renders.
+                            // Rejecting them makes the guest treat the node as unsupported and
+                            // skip later work: it calls 0x48/0x16 and 0x48/0x17, which this tree
+                            // does not implement. Switch 1 titles keep failing loudly.
+                            if (NvHostCtrlGpuDeviceFile.Nx2Driver)
+                            {
+                                string stubKey = $"{deviceFile.GetType().Name}:{ioctlCommand.Type:X2}/{ioctlCommand.Number:X2}";
+
+                                if (Nx2IoctlStubs.AddOrUpdate(stubKey, 1, (_, v) => v + 1) == 1)
+                                {
+                                    Logger.Warning?.Print(LogClass.ServiceNv,
+                                        $"nx2: stubbed unknown ioctl {stubKey} size=0x{ioctlCommand.Size:X} (input echoed back)");
+                                }
+                            }
+                            else
+                            {
+                                throw new NvIoctlNotImplementedException(context, deviceFile, ioctlCommand);
+                            }
                         }
 
                         errorCode = ConvertInternalErrorCode(internalResult);
+
+                        Logger.Debug?.Print(LogClass.ServiceNv, $"Ioctl3 fd={fd} type={ioctlCommand.Type} nr=0x{ioctlCommand.Number:X2} size=0x{ioctlCommand.Size:X} -> {errorCode}");
 
                         if ((ioctlCommand.DirectionValue & NvIoctl.Direction.Write) != 0)
                         {

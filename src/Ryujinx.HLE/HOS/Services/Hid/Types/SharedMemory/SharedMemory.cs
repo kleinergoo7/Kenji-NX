@@ -1,5 +1,6 @@
 using Ryujinx.Common.Memory;
 using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Common;
+using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.DebugMouse;
 using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.DebugPad;
 using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Keyboard;
 using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Mouse;
@@ -47,6 +48,12 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory
         public Array10<NpadState> Npads;
 
         /// <summary>
+        /// Debug mouse.
+        /// </summary>
+        [FieldOffset(0x3DC00)]
+        public RingLifo<DebugMouseState> DebugMouse;
+
+        /// <summary>
         /// Pad Condition.
         /// </summary>
         [FieldOffset(0x3e200)]
@@ -62,7 +69,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory
                 Keyboard = RingLifo<KeyboardState>.Create(),
                 Condition = NpadCondition.Create(),
             };
-            
+
             Span<NpadState> npadsSpan = result.Npads.AsSpan();
 
             for (int i = 0; i < npadsSpan.Length; i++)
