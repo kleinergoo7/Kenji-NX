@@ -98,15 +98,19 @@ namespace Ryujinx.Graphics.Gpu.Engine.Compute
             switch (offset)
             {
                 case KeepMmeCodeMethodOffset:
+                    Nx2MacroUploadTrace.Log($"NX2MMEUP m=0x45 arg=0x{data:X8}");
                     _fifoClass.KeepComputeMmeCode(data);
                     break;
                 case AddMmeCodeMethodOffset:
+                    Nx2MacroUploadTrace.Log($"NX2MMEUP m=0x46 arg=0x{data:X8}");
                     _fifoClass.AddComputeMmeCode(data);
                     break;
                 case SetMmeBindPointerMethodOffset:
+                    Nx2MacroUploadTrace.Log($"NX2MMEUP m=0x47 arg=0x{data:X8}");
                     _fifoClass.SetComputeMmeBindPointer(data);
                     break;
                 case BindMmeStartMethodOffset:
+                    Nx2MacroUploadTrace.Log($"NX2MMEUP m=0x48 arg=0x{data:X8}");
                     _fifoClass.BindComputeMmeStart(data);
                     break;
             }

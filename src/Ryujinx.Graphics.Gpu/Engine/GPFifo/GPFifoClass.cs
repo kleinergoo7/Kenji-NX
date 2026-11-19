@@ -489,6 +489,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             _computeCodeWriteOffset = Math.Min(argument, _computeMacroCode.Length / 3) * 3;
             _computeCodeGeneration++;
+            Nx2MacroUploadTrace.Log($"NX2MMEUP keep idx={argument} off={_computeCodeWriteOffset} gen={_computeCodeGeneration}");
         }
 
         /// <summary>
@@ -499,8 +500,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             if (_computeCodeWriteOffset < _computeMacroCode.Length)
             {
+                int offset = _computeCodeWriteOffset;
                 _computeMacroCode[_computeCodeWriteOffset++] = argument;
                 _computeCodeGeneration++;
+                Nx2MacroUploadTrace.RecordWord(argument);
+                Nx2MacroUploadTrace.Log($"NX2MMEUP add off={offset} word=0x{argument:X8} first=0x{Nx2MacroUploadTrace.FirstWord:X8} last=0x{Nx2MacroUploadTrace.LastWord:X8} nonzero={Nx2MacroUploadTrace.NonZero}");
             }
         }
 
@@ -511,6 +515,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public void SetComputeMmeBindPointer(int argument)
         {
             _computeStartPointer = argument;
+            Nx2MacroUploadTrace.Log($"NX2MMEUP bindptr idx={argument}");
         }
 
         /// <summary>
@@ -521,7 +526,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         {
             if ((uint)_computeStartPointer < MacrosCount)
             {
-                _computeMacros[_computeStartPointer++] = new Macro(argument);
+                int slot = _computeStartPointer++;
+                _computeMacros[slot] = new Macro(argument);
+                Nx2MacroUploadTrace.Log($"NX2MMEUP bindstart slot={slot} pos={argument}");
             }
         }
 
@@ -546,6 +553,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// </summary>
         public void ComputeCallMme(int index, IDeviceState state)
         {
+            Nx2MacroUploadTrace.LogSummaryOnce();
             _computeMacros[index].Execute(_computeMacroCode, state);
         }
     }

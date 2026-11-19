@@ -494,6 +494,53 @@ may mean the guest genuinely uploaded no compute code, **or** that our compute
 code-buffer selection sends the upload elsewhere (Phase 1f point #3); this
 observe-only task does not distinguish the two.
 
+## Phase 1k — trace compute macro code upload (Task 1k)
+
+Added an observe-only `Nx2MacroUploadTrace` (`NX2_MME_UPLOAD=1`, capped 200 lines)
+that counts and FNV-1a-hashes every word written into `_computeMacroCode`, logs each
+compute upload method (`KeepComputeMmeCode`/`AddComputeMmeCode`/`SetComputeMmeBindPointer`/
+`BindComputeMmeStart` plus the 0x45–0x48 compute-class writes), and emits a one-line
+bank summary at the first compute macro execution (bypasses the cap so it is always
+seen). No upload/decode behaviour changed. TDD: 2 new `Nx2MacroUploadTraceTests`
+RED then GREEN.
+
+Ran the 90 s direct Fast Fusion capture with
+`NX2_PATCH="" NX2_MME_UPLOAD=1 NX2_MME_ENGINE=1 NX2_MACRO_LOG=1` (Fast Fusion
+profile: `--dram-size MemoryConfiguration12GiB --memory-manager-mode SoftwarePageTable
+--ignore-missing-services`) under `xvfb-run` into
+`.nx2-logs/run-20261119-213519-1k-upload/ocarina.log` (rc=124 expected timeout).
+The `NX2MMEUP bank` summary line printed, confirming the `NX2_MME_UPLOAD` gate was
+active (so the per-method log lines would have printed had any method been called).
+
+- Per-method call counts, both at the compute-class write boundary (`m=0x45`..`m=0x48`)
+  and inside the four FIFO upload methods (`keep`/`add`/`bindptr`/`bindstart`): **all 0**.
+- Total `NX2MMEUP` lines: **1** — only the summary; no upload-method lines at all.
+- Bank summary at first compute macro execution (t=00:00:37.462):
+  `NX2MMEUP bank nonzero=0 hash=0x14650FB0739D0383 words=65536`. The hash is exactly
+  the FNV-1a offset basis (i.e. zero words recorded) — **no non-zero code word was ever
+  written to the compute code bank**.
+- `NX2MMEC` compute-macro lines: **14** (unchanged from 1j), still all executing the
+  same all-zero bank (FNV-1a of 65536 zeros `0xFE72814514A90383`) with `emits=0`.
+- General/3D MME code *is* present (e.g. `hash=0x30729130DD0BDC8F words=63724`), so
+  the guest does upload MME code through the general path — just never through the
+  compute-class 0x45–0x48 path this trace observes.
+
+COMPUTE_UPLOAD=NO_CODE_SENT
+
+Meaning: through the exact compute upload path defined in the brief (compute-class
+methods 0x45–0x48 → `_computeMacroCode`), the guest sent **no** code words — zero
+method calls and zero non-zero bank words — yet 14 compute macros still execute an
+all-zero bank. This satisfies the brief's `NO_CODE_SENT` criterion ("no non-zero
+words ever written"); `GUEST_SENT_CODE` is ruled out for this path because no
+non-zero words were observed written to the bank. Per the gate, stop for a human
+decision: the guest never uploads compute macro code through this path, so look
+upstream in guest/cengine. **Caveat / concern:** this trace cannot exclude the
+Phase 1f point #3 misrouting hypothesis — if the guest's compute code upload lands
+on a subchannel our class table maps to 3D (going to `_macroCode` instead), it would
+be invisible here and the bank would still read empty. Ruling that out needs a
+separate trace of `LoadMmeInstructionRam` / subchannel→class mapping; this task did
+not measure it.
+
 ## TL;DR from a fresh clone
 
 ```bash
