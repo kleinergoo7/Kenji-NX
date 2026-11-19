@@ -27,7 +27,7 @@ namespace Ryujinx.HLE.Loaders.Processes.Extensions
             }
             else
             {
-                metaLoader.LoadFromFile(fileSystem);
+                metaLoader.LoadFromFileCompat(fileSystem);
             }
 
             return metaLoader;
