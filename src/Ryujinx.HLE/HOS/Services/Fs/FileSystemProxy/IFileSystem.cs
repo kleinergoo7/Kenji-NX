@@ -135,7 +135,13 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
 
             if (System.Environment.GetEnvironmentVariable("NX2_FS_LOG") == "1")
             {
-                Logger.Warning?.Print(LogClass.ServiceFs, $"NX2 fsopen path=\"{fsPath}\" mode={mode}");
+                // Path.ToString() prints the struct name; decode the request buffer itself.
+                var pathBuff = context.Request.PtrBuff[0];
+                System.ReadOnlySpan<byte> rawPath = context.Memory.GetSpan(pathBuff.Position, (int)pathBuff.Size);
+                string utf8 = System.Text.Encoding.UTF8.GetString(rawPath).Trim('\0');
+                string utf16 = System.Text.Encoding.Unicode.GetString(rawPath).Trim('\0');
+                fsPath = utf8.Length > 1 && utf8[1] == '/' ? utf8.Trim('\0', (char)0) : utf16;
+                Logger.Warning?.Print(LogClass.ServiceFs, $"NX2 fsopen path=\"{fsPath}\" utf8=\"{utf8}\" utf16=\"{utf16}\" mode={mode}");
             }
 
             FsLoaderProgress.OnOpen(fsPath);

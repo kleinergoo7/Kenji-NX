@@ -16,6 +16,8 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         {
             KThread currentThread = KernelStatic.GetCurrentThread();
 
+            Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2SvcCounters.Increment((int)currentThread.ThreadUid, id);
+
             if (currentThread.Owner != null &&
                 currentThread.GetUserDisableCount() != 0 &&
                 currentThread.Owner.PinnedThreads[currentThread.CurrentCore] == null)
