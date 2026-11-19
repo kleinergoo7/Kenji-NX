@@ -25,6 +25,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public static int MacroMemoHits => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoHits;
         public static int MacroMemoMisses => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.MacroMemoMisses;
         public static int EmittedMethods => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.EmittedMethods;
+        public static int DrawEmitHits => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.DrawEmitHits;
+        public static int DrawHashes => Ryujinx.Graphics.Gpu.Engine.MME.MacroTuring.DrawHashes;
+        public static string DescribeDrawMacro() =>
+            $"macros={MacrosRun} drawEmitHits={DrawEmitHits} drawHashes={DrawHashes}";
         public static int Draws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.DrawCount;
         public static int DirectDraws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.DirectDrawCount;
         public static int IndirectDraws => Ryujinx.Graphics.Gpu.Engine.Threed.ThreedClass.IndirectDrawCount;

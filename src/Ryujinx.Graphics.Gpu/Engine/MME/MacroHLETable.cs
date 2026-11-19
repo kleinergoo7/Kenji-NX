@@ -112,5 +112,34 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             name = MacroHLEFunctionName.None;
             return false;
         }
+
+        /// <summary>
+        /// Observe-only: true when the macro code matches any draw HLE hash, ignoring
+        /// host capabilities. Used to count draw macros independently of HLE dispatch.
+        /// </summary>
+        public static bool IsDrawHash(ReadOnlySpan<int> code)
+        {
+            ReadOnlySpan<byte> mc = MemoryMarshal.Cast<int, byte>(code);
+
+            for (int i = 0; i < _table.Length; i++)
+            {
+                ref TableEntry entry = ref _table[i];
+
+                if (entry.Name is MacroHLEFunctionName.DrawArraysInstanced or
+                                  MacroHLEFunctionName.DrawElements or
+                                  MacroHLEFunctionName.DrawElementsInstanced or
+                                  MacroHLEFunctionName.DrawElementsIndirect or
+                                  MacroHLEFunctionName.MultiDrawElementsIndirectCount)
+                {
+                    if ((uint)entry.Length <= (uint)mc.Length &&
+                        XXHash128.ComputeHash(mc[..entry.Length]) == entry.Hash)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
     }
 }

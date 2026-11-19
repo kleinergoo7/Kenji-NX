@@ -576,6 +576,44 @@ trace adds counters and log lines but does not change any Fs result.
 never attempted to open any of the 3,063 content files confirmed on disk. This value is
 input to Task 3.
 
+## Phase 2 — is there a draw macro? (Task 2, `DRAW_MACRO=`)
+
+Added an observe-only raw draw-emit counter, independent of HLE hash recognition:
+`MacroTuring.DrawEmitHits` increments whenever a macro emits a draw-class register
+(the authoritative draw-set word offsets `0x42B/0x43E/0x485/0x486/0x585/0x586/
+0x5F9–0x5FE`, mirrored from `Nx2MethodProbe`), plus `DrawHashes` when macro code
+matches a `MacroHLETable` draw hash (`NX2_DRAW_MACRO_SUMMARY=1` gate). Exposed via
+`Nx2GpuStall.DescribeDrawMacro()` and a one-shot `NX2DRAWMACRO` log at present #1
+(or the first progress tick under `NX2_DRAW_MACRO_SUMMARY=1`). No emit or dispatch
+behaviour changed. TDD: 3 new `Nx2DrawMacroSummaryTests` RED then GREEN.
+
+Ran the 90 s direct Fast Fusion capture (`NX2_PATCH="" NX2_DRAW_MACRO_SUMMARY=1
+NX2_MME_ENGINE=1 NX2_MACRO_LOG=1`, Fast Fusion profile) under `xvfb-run` into
+`.nx2-logs/run-20261119-224121-task2-drawmacro-DECISIVE/ocarina.log` (rc=124 expected
+timeout, 656 lines). New binary confirmed live: the progress line carries the new
+`drawmacro=[...]` token.
+
+- One-shot: `NX2DRAWMACRO macros=73 drawEmitHits=0 drawHashes=0` (t=39.975 s);
+  final `NX2 progress t=60s ... drawmacro=[macros=73 drawEmitHits=0 drawHashes=0]`.
+- Per-engine macro counts: `mme=73/4159/0+73 mme3d=59 mmec=14 draws=0`
+  (59 + 14 = 73 = MacrosRun; consistent with Phase 1j).
+- `drawEmitHits=0` across all macros: no draw-class register
+  (`0x42B/0x43E/0x485/0x486/0x585/0x586/0x5F9–0x5FE`) appears in the `emitted=[...]`
+  histogram, the 30 `NX2 emit` lines (only `0x44, 0xD00–0xD02, 0x8C4, 0x8E0–0x8E3,
+  0x376`), or any of the 73 per-macro `NX2 macro hash=... emits=[...]` lines.
+- `drawHashes=0`: no macro code matches a `MacroHLETable` draw hash (expected —
+  Switch 2 Turing macros never take the Maxwell HLE path).
+- Top emitted registers: `0x6D=3328` (LoadInlineData), `0x8E4=572`
+  (UniformBufferUpdateData), then `0x44/0xD00/0xD01/0xD02/0x8C4=28` each.
+- Dominant 3D macro hash `0x4A012A5F492A9B76` (words=65260) emits only
+  `[44=0 D00=0 D01=1 D02=1 8C4=0x418800]`; compute macros execute the all-zero bank
+  hash `0xFE72814514A90383` with `emits=0`. No macro emits a draw register.
+
+**`DRAW_MACRO=NO_DRAW_MACRO`** — `drawEmitHits == 0` across all 3D (59) and compute
+(14) macros; `drawHashes == 0`. With `FS_VIEW=NO_CONTENT_ATTEMPT` (Phase 1m), the
+plan gate is met: no concrete emulator-side blocker from this angle — stop the plan
+and pivot to OoT.
+
 ## TL;DR from a fresh clone
 
 ```bash

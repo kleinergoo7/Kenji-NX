@@ -88,6 +88,23 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         internal static readonly System.Collections.Generic.Dictionary<uint, int> ComputeEmittedHistogram = new();
         private const int MaxComputeEmittedEntries = 512;
 
+        // NX2 observe-only: count raw emitted draw-class registers independently of HLE
+        // hash recognition, so a draw macro whose hash is absent from MacroHLETable is
+        // not misclassified as "no draw macro". Mirrors Nx2MethodProbe's authoritative
+        // draw set (DeviceState byte offset / 4).
+        public static int DrawEmitHits;
+        public static int DrawHashes;
+        private static readonly System.Collections.Generic.HashSet<uint> DrawClassMethods = new()
+        {
+            0x42B, 0x43E,
+            0x485, 0x486,
+            0x585, 0x586,
+            0x5F9, 0x5FA, 0x5FB,
+            0x5FC, 0x5FD, 0x5FE,
+        };
+        private static readonly bool DrawMacroSummaryEnabled =
+            System.Environment.GetEnvironmentVariable("NX2_DRAW_MACRO_SUMMARY") == "1";
+
         private static readonly bool MmeEngineLogEnabled =
             System.Environment.GetEnvironmentVariable("NX2_MME_ENGINE") == "1";
         private static int _computeEngineLogs;
@@ -98,9 +115,20 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         {
             MacrosCompute = 0;
             Macros3D = 0;
+            MacrosRun = 0;
+            DrawEmitHits = 0;
+            DrawHashes = 0;
             lock (ComputeEmittedHistogram)
             {
                 ComputeEmittedHistogram.Clear();
+            }
+        }
+
+        internal static void RecordDrawEmit(uint address)
+        {
+            if (DrawClassMethods.Contains(address))
+            {
+                System.Threading.Interlocked.Increment(ref DrawEmitHits);
             }
         }
 
@@ -204,6 +232,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         public void Execute(ReadOnlySpan<int> code, IDeviceState state, int arg0, bool compute)
         {
             System.Threading.Interlocked.Increment(ref MacrosRun);
+
+            // A macro whose code matches a draw HLE function is a draw macro even before
+            // any register is emitted (the HLE path dispatches the draw directly).
+            if (DrawMacroSummaryEnabled && MacroHLETable.IsDrawHash(code))
+            {
+                System.Threading.Interlocked.Increment(ref DrawHashes);
+                System.Threading.Interlocked.Increment(ref DrawEmitHits);
+            }
 
             _currentCompute = compute;
 
@@ -808,6 +844,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
             {
                 _currentEmits.Add((address, value));
             }
+
+            RecordDrawEmit(address);
 
             if (_currentCompute)
             {
