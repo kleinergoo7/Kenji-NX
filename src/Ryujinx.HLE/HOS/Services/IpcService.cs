@@ -334,7 +334,19 @@ namespace Ryujinx.HLE.HOS.Services
             try { Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2ThreadDump.CaptureKernel(context.Device?.System?.KernelContext); Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.SystemAppletProxy.Nx2IpcCounters.Increment(
                 (int)(context.Thread?.ThreadUid ?? 0), GetType().Name, commandId); } catch { }
 
-            bool serviceExists = TipcCommands.TryGetValue(commandId, out MethodInfo processRequest);
+            // A TIPC request can reach a service created without registerTipc (common during
+            // Switch 2 bring-up); treat it as unimplemented instead of crashing the server.
+            bool serviceExists = false;
+            MethodInfo processRequest = null;
+
+            if (TipcCommands != null)
+            {
+                serviceExists = TipcCommands.TryGetValue(commandId, out processRequest);
+            }
+            else
+            {
+                Logger.Warning?.Print(LogClass.KernelIpc, $"NX2 TIPC cmd{commandId} on non-TIPC service {GetType().Name}, answering as unimplemented");
+            }
 
             if (context.Device.Configuration.IgnoreMissingServices || serviceExists)
             {
