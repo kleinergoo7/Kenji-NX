@@ -43,13 +43,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
         }
 
         /// <summary>
-        /// Selects the generation counter that keys the memoized macro replay.
-        /// All macro code is uploaded to the shared bank, so compute replay keys on it too.
-        /// </summary>
-        internal static Func<long> GetMemoGeneration(bool compute, Func<long> shared, Func<long> computeBank)
-            => shared;
-
-        /// <summary>
         /// Sets the first argument for the macro call.
         /// </summary>
         /// <param name="context">GPU context where the macro code is being executed</param>
@@ -73,7 +66,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.MME
                     _executionEngine = new MacroTuring(
                         processor.MemoryManager,
                         processor.MmeDataRam,
-                        GetMemoGeneration(compute, () => processor.MmeCodeGeneration, () => processor.ComputeMmeCodeGeneration));
+                        compute ? () => processor.ComputeMmeCodeGeneration : () => processor.MmeCodeGeneration);
                     _turing = true;
                 }
                 else if (GraphicsConfig.EnableMacroHLE && MacroHLETable.TryGetMacroHLEFunction(code[Position..], context.Capabilities, out _hleFunction))

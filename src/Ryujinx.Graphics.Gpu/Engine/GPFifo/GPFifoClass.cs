@@ -533,21 +533,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         }
 
         /// <summary>
-        /// Resolves the macro-slot/code bank used by 3D macro execution.
-        /// </summary>
-        internal (Macro[] Slots, int[] Code) Resolve3DExecutionBank() => (_macros, _macroCode);
-
-        /// <summary>
-        /// Resolves the macro-slot/code bank used by compute macro execution.
-        /// </summary>
-        internal (Macro[] Slots, int[] Code) ResolveComputeExecutionBank() => (_macros, _macroCode);
-
-        /// <summary>
         /// Pushes an argument to a compute macro.
         /// </summary>
         public void ComputeMmePushArgument(int index, ulong gpuVa, int argument)
         {
-            ResolveComputeExecutionBank().Slots[index].PushArgument(gpuVa, argument);
+            _computeMacros[index].PushArgument(gpuVa, argument);
         }
 
         /// <summary>
@@ -555,8 +545,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         /// </summary>
         public void ComputeMmeStart(int index, int argument)
         {
-            (Macro[] slots, int[] code) = ResolveComputeExecutionBank();
-            slots[index].StartExecution(_context, _parent, code, argument, true);
+            _computeMacros[index].StartExecution(_context, _parent, _computeMacroCode, argument, true);
         }
 
         /// <summary>
@@ -565,8 +554,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
         public void ComputeCallMme(int index, IDeviceState state)
         {
             Nx2MacroUploadTrace.LogSummaryOnce();
-            (Macro[] slots, int[] code) = ResolveComputeExecutionBank();
-            slots[index].Execute(code, state);
+            _computeMacros[index].Execute(_computeMacroCode, state);
         }
     }
 }

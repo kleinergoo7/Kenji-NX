@@ -541,45 +541,6 @@ be invisible here and the bank would still read empty. Ruling that out needs a
 separate trace of `LoadMmeInstructionRam` / subchannel→class mapping; this task did
 not measure it.
 
-## Phase 1l — route compute macros to the shared macro code bank (Task 1l)
-
-Changed compute macro execution to read the same shared `_macros`/`_macroCode` bank as 3D (it previously read the never-written `_computeMacros`/`_computeMacroCode`, so all compute macros executed an all-zero bank). Compute macro memo generation now keys on `MmeCodeGeneration` — the counter that actually changes on macro-code upload — instead of `ComputeMmeCodeGeneration`. The unused `_computeMacros`/`_computeMacroCode` fields and their upload delegates remain harmlessly in place (no deletion). NX2/Ampere-only; the Maxwell 3D path (`MmeStart`/`CallMme`/`MmePushArgument`/`LoadMmeStartAddressRam`) is unchanged. TDD: 2 new `Nx2SharedMacroBankTests` RED then GREEN (bank reference identity + memo generation key).
-
-Ran the 90 s direct Fast Fusion capture with
-`NX2_PATCH="" NX2_MME_ENGINE=1 NX2_MME_UPLOAD=1 NX2_MACRO_LOG=1 NX2_METHOD_LOG=1 NX2_PCAS_TRACE=1`
-(Fast Fusion profile: `--dram-size MemoryConfiguration12GiB --memory-manager-mode SoftwarePageTable
---ignore-missing-services`) under `xvfb-run` into
-`.nx2-logs/run-20261119-215244-1l-bankfix/ocarina.log` (rc=124 expected timeout, 691 lines).
-New binary confirmed live: Gpu DLL built 21:51:50, run started 21:52:44, and the compute-macro
-count changed from the prior 14 to 12.
-
-- `NX2MMEC` lines: **12**, every one `compute emits=0:[]` — compute macros still emit **zero
-  registers**, unchanged from 1j/1k (prior captures had 14 such lines).
-- `NX2 3dmethods`: `macros=71 emitted=4159 draws=0`. No `NX2 progress` line fired in this run
-  (that logger emits only every 3600 ticks), so `mme3d=`/`mmec=`/`cemitted=`/`pcas=[mAE/mAF/mB0]`
-  are not printed directly. Derived: 71 total macros = 59 3D + 12 compute
-  (`mme3d=59`, `mmec=12`; 1j measured 59/14). `cemitted` is empty — every compute macro logged
-  `emits=0`, so `ComputeEmittedHistogram` has no entries. The `compute=[0xEA7=8 …]` histogram on
-  the `3dmethods` line is `GPFifoProcessor.ComputeHistogram` (methods routed to the compute class),
-  **not** `cemitted`, and does not indicate success.
-- `NX2MMEUP bank nonzero=0 hash=0x14650FB0739D0383 words=65536` — still zero; note this trace
-  observes the now-unused `_computeMacroCode`, so it is no longer the decisive bank.
-- `NX2PCAS` lines: **0**; `NX2QMD` lines: **0**; `draws=0`. No `NX2 mfail` / `Turing macro failed`;
-  game healthy (presents climbing).
-
-MME_BANK_FIX=NO_COMPUTE_EMIT
-
-Meaning: the bank reference and memo key are now wired exactly as the brief specifies (unit tests
-pass, build clean, Maxwell 3D path unchanged), but the decisive capture signal did **not** appear:
-compute macros still emit zero registers, no PCAS/QMD, no draws. The expected success signal
-(`cemitted` non-empty, stronger: PCAS methods and `draws > 0`) is not met, so this fix is
-**not validated** by the capture. Two observations for the human decision: (1) compute-macro count
-dropped 14→12 and total macros 73→71 — consistent with sharing the `_macros[index]` slot array
-letting 3D and compute macros overwrite each other's pending-execution/engine state; (2) the guest
-sends no compute-class 0x45–0x48 uploads (1k), so the shared bank may also lack valid code at the
-compute macros' slot/position. Per the brief's gate, stop for a human decision; no further GPU code
-was written.
-
 ## TL;DR from a fresh clone
 
 ```bash
