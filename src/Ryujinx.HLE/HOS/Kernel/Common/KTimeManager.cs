@@ -8,7 +8,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Common
 {
     class KTimeManager : IDisposable
     {
-        public static readonly long DefaultTimeIncrementNanoseconds = ConvertGuestTicksToNanoseconds(2);
+        /// <summary>
+        /// Two guest ticks expressed in nanoseconds at the active guest counter frequency.
+        /// </summary>
+        public long DefaultTimeIncrementNanoseconds => ConvertGuestTicksToNanoseconds(2, _context.TickSource.Frequency);
 
         private class WaitingObject
         {
@@ -180,14 +183,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Common
             return (nsDiv * tickDiv) * NanosecondsPerSecond + nsDiv * tickMod + nsMod * tickDiv + baseTicks;
         }
 
-        public static long ConvertGuestTicksToNanoseconds(long ticks)
+        public static long ConvertGuestTicksToNanoseconds(long ticks, ulong frequency)
         {
-            return (long)Math.Ceiling(ticks * (1000000000.0 / 19200000.0));
+            return (long)Math.Ceiling(ticks * (1_000_000_000.0 / frequency));
         }
 
-        public static long ConvertHostTicksToTicks(long time)
+        public static long ConvertHostTicksToTicks(long time, ulong frequency)
         {
-            return (long)((time / (double)PerformanceCounter.TicksPerSecond) * 19200000.0);
+            return (long)((time / (double)PerformanceCounter.TicksPerSecond) * frequency);
         }
 
         public void Dispose()

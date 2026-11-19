@@ -6,11 +6,15 @@ using LibHac.Ns;
 using LibHac.Tools.Fs;
 using LibHac.Tools.FsSystem;
 using LibHac.Tools.FsSystem.NcaUtils;
+using Ryujinx.Common;
 using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.Gpu;
+using Ryujinx.HLE.HOS.SystemState;
 using Ryujinx.HLE.Loaders.Executables;
 using Ryujinx.HLE.Loaders.Processes.Extensions;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using Path = System.IO.Path;
 
@@ -48,6 +52,7 @@ namespace Ryujinx.HLE.Loaders.Processes
 
                         _processesByPid.TryRemove(_latestPid, out _);
                         _latestPid = 0;
+                        TitleIDs.CurrentApplication.Value = null;
 
                         return null;
                     }
@@ -64,6 +69,7 @@ namespace Ryujinx.HLE.Loaders.Processes
 
                             _processesByPid.TryRemove(_latestPid, out _);
                             _latestPid = 0;
+                            TitleIDs.CurrentApplication.Value = null;
 
                             return null;
                         }
@@ -131,6 +137,8 @@ namespace Ryujinx.HLE.Loaders.Processes
                 {
                     _latestPid = processResult.ProcessId;
 
+                    TitleIDs.CurrentApplication.Value = processResult.ProgramIdText;
+
                     return true;
                 }
             }
@@ -158,6 +166,8 @@ namespace Ryujinx.HLE.Loaders.Processes
                 {
                     _latestPid = processResult.ProcessId;
 
+                    TitleIDs.CurrentApplication.Value = processResult.ProgramIdText;
+
                     return true;
                 }
             }
@@ -170,11 +180,12 @@ namespace Ryujinx.HLE.Loaders.Processes
             return false;
         }
 
-        public bool LoadNca(string path)
+        public bool LoadNca(string path, BlitStruct<ApplicationControlProperty>? customNacpData = null)
         {
             FileStream file = new(path, FileMode.Open, FileAccess.Read);
             Nca nca = new(_device.Configuration.VirtualFileSystem.KeySet, file.AsStorage(false));
 
+            // Kenji's Nca.Load has no custom-NACP overload; the caller's override is dropped.
             ProcessResult processResult = nca.Load(_device, null, null);
 
             if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
@@ -185,6 +196,8 @@ namespace Ryujinx.HLE.Loaders.Processes
                     if (processResult.ProgramId > 0x01000000000007FF)
                     {
                         _latestPid = processResult.ProcessId;
+
+                        TitleIDs.CurrentApplication.Value = processResult.ProgramIdText;
                     }
 
                     return true;
@@ -196,7 +209,21 @@ namespace Ryujinx.HLE.Loaders.Processes
 
         public bool LoadUnpackedNca(string exeFsDirPath, string romFsPath = null)
         {
-            return StartUnpacked(new LocalFileSystem(exeFsDirPath).Load(_device, romFsPath));
+            ProcessResult processResult = new LocalFileSystem(exeFsDirPath).Load(_device, romFsPath);
+
+            if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
+            {
+                if (processResult.Start(_device))
+                {
+                    _latestPid = processResult.ProcessId;
+
+                    TitleIDs.CurrentApplication.Value = processResult.ProgramIdText;
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         internal bool LoadNup(NupArchive archive)
@@ -204,30 +231,25 @@ namespace Ryujinx.HLE.Loaders.Processes
             using IFileSystem exeFs = archive.OpenExeFs();
             ProcessResult processResult = exeFs.LoadUnpackedProgram(
                 _device, includeFallbackTemporaryStorage: _device.CompatibilityProfile.Generation == ConsoleGeneration.Switch2);
+
             if (processResult.ProcessId == 0)
             {
                 return false;
             }
 
             IStorage romFs = archive.OpenRomFs();
+
             if (romFs != null)
             {
                 _device.Configuration.VirtualFileSystem.SetRomFs(processResult.ProcessId, romFs.AsStream());
             }
 
-            return StartUnpacked(processResult);
-        }
-
-        private bool StartUnpacked(ProcessResult processResult)
-        {
-            if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
+            if (_processesByPid.TryAdd(processResult.ProcessId, processResult) && processResult.Start(_device))
             {
-                if (processResult.Start(_device))
-                {
-                    _latestPid = processResult.ProcessId;
+                _latestPid = processResult.ProcessId;
+                TitleIDs.CurrentApplication.Value = processResult.ProgramIdText;
 
-                    return true;
-                }
+                return true;
             }
 
             return false;
@@ -239,13 +261,13 @@ namespace Ryujinx.HLE.Loaders.Processes
             IFileSystem dummyExeFs = null;
             Stream romfsStream = null;
 
-            string programName = "";
+            string programName = string.Empty;
             ulong programId = 0000000000000000;
 
             // Load executable.
             IExecutable executable;
 
-            if (Path.GetExtension(path).ToLower() == ".nro")
+            if (Path.GetExtension(path).Equals(".nro", StringComparison.OrdinalIgnoreCase))
             {
                 FileStream input = new(path, FileMode.Open);
                 NroExecutable nro = new(input.AsStorage());
@@ -269,6 +291,10 @@ namespace Ryujinx.HLE.Loaders.Processes
 
                     programName = nacpData.Value.Title[(int)_device.System.State.DesiredTitleLanguage].NameString.ToString();
 
+                    if ("Switch Verification" ==
+                        nacpData.Value.Title[(int)TitleLanguage.AmericanEnglish].NameString.ToString())
+                        throw new InvalidOperationException();
+
                     if (string.IsNullOrWhiteSpace(programName))
                     {
                         foreach (ApplicationControlProperty.ApplicationTitle nacpTitles in nacpData.Value.Title)
@@ -283,14 +309,17 @@ namespace Ryujinx.HLE.Loaders.Processes
                     if (nacpData.Value.PresenceGroupId != 0)
                     {
                         programId = nacpData.Value.PresenceGroupId;
+                        TitleIDs.CurrentApplication.Value = programId.ToString("X16");
                     }
                     else if (nacpData.Value.SaveDataOwnerId != 0)
                     {
                         programId = nacpData.Value.SaveDataOwnerId;
+                        TitleIDs.CurrentApplication.Value = programId.ToString("X16");
                     }
                     else if (nacpData.Value.AddOnContentBaseId != 0)
                     {
                         programId = nacpData.Value.AddOnContentBaseId - 0x1000;
+                        TitleIDs.CurrentApplication.Value = programId.ToString("X16");
                     }
                 }
 
@@ -358,6 +387,7 @@ namespace Ryujinx.HLE.Loaders.Processes
                     if (_latestPid == pid)
                     {
                         _latestPid = 0;
+                        TitleIDs.CurrentApplication.Value = null;
                     }
                 }
             }
@@ -373,6 +403,7 @@ namespace Ryujinx.HLE.Loaders.Processes
             {
                 _processesByPid.Clear();
                 _latestPid = 0;
+                TitleIDs.CurrentApplication.Value = null;
             }
         }
     }

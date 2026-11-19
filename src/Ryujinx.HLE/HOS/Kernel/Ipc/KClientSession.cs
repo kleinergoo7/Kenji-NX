@@ -1,3 +1,4 @@
+using Ryujinx.Common;
 using Ryujinx.HLE.HOS.Kernel.Common;
 using Ryujinx.HLE.HOS.Kernel.Process;
 using Ryujinx.HLE.HOS.Kernel.Threading;
@@ -10,6 +11,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
         public KProcess CreatorProcess { get; }
 
         private readonly KSession _parent;
+
+        internal KSession ParentSession => _parent;
 
         public ChannelState State { get; set; }
 

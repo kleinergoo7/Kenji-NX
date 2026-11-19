@@ -18,6 +18,10 @@ namespace Ryujinx.HLE
     /// </summary>
     public class HLEConfiguration
     {
+        // Ported from Ryubing: required by the NX2 Switch 2 bring-up code.
+        public CompatibilityProfile CompatibilityProfile { get; set; }
+
+        public EnabledDirtyHack[] Hacks { internal get; set; } = [];
         /// <summary>
         /// The virtual file system used by the FS service.
         /// </summary>
