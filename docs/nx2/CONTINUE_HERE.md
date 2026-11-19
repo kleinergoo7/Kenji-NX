@@ -3,10 +3,41 @@
 **Status: the game boots to the movie sequence without aborting, but the window is black.**
 No 3D draws are submitted (`draws=0`), presented frames are all-zero, and the movie
 decoder is still a fake. The goal is a visible, non-black frame (title screen).
+Phase 0 triage routes this to **`ROUTE=GUEST_GATE`** (see below): the emulator's
+GPFIFO/fence/characteristics paths are healthy and the guest produces no render
+command buffers.
 
-Last verified state: branch `kenji-nx2-oot-bringup` @ `c56672f52` (2026-11-19).
+Last verified state: branch `kenji-nx2-oot-bringup` @ `cd73b65fb` (2026-11-19), run
+`.nx2-logs/run-20261119-160446/ocarina.log`.
 Older status tables in `NX2_IMPLEMENTATION_STATUS.md` are historical (2026-11-10) and
 describe a different branch; use this file for current work.
+
+## Phase 0 triage — run `run-20261119-160446`
+
+Measured from `.nx2-logs/run-20261119-160446/ocarina.log` (binary build `cd73b65fb`):
+
+- 4 submits on syncpoints 1 and 2 with `inc=1`/`inc=2`: `sp=1 value=0 inc=0`,
+  `sp=1 value=1 inc=1`, `sp=2 value=0 inc=0`, `sp=2 value=2 inc=2`.
+- Syncpoints advance: `NX2 spincr id=1 now=1 check=1`; `id=2 now=1 check=1`;
+  `id=2 now=2 check=2`.
+- Fence reached: `NX2SPT 201-slot=0 hostAtSig=2` (the `Request201` probe returned
+  `sp=2 target=2 mode=0 signalledNow=False outOfRange=False nullHandle=False`).
+- Each channel's main render buffer (`buffer=1`) was captured fully at entry with an
+  empty method queue: `channel=0x02B1583F words=9038 captured=9038 pendingMethod=0x0`
+  and `channel=0x02D8F83E words=2184 captured=2184 pendingMethod=0x0`. All 16 entry
+  headers have `captured == words` and `pendingWords=0`; the later submits only carry
+  the residual `pendingMethod=0xE` (count 0), so nothing is parked or split.
+- Render counters stay at `draws=0`: `NX2 present #N ... draws=[total=0 direct=0
+  indirect=0 clear=0 texture=0]` and `NX2 3dmethods ... draws=0` (168 3D methods,
+  73 macros). This run emits no `NX2 progress` line — that logger fires every 3600
+  calls — so the present/3dmethods counters carry the evidence.
+- Characteristics tail written: `argument size 0xE0, inline size 0xD0; zero-filling
+  characteristics past 0xA0`; TSG subcontext ids 2 and 3 created. No TSG error.
+
+Conclusion: the emulator's GPFIFO, fence and characteristics paths are healthy;
+**no render command buffers are produced by the guest**. The decision rule therefore
+gives `ROUTE=GUEST_GATE`: localise the guest-side render gate (Task 1) before GPU
+pipeline work is justified.
 
 ## TL;DR from a fresh clone
 
