@@ -39,6 +39,64 @@ Conclusion: the emulator's GPFIFO, fence and characteristics paths are healthy;
 gives `ROUTE=GUEST_GATE`: localise the guest-side render gate (Task 1) before GPU
 pipeline work is justified.
 
+## Phase 1 triage — guest-side render gate (Task 1, ROUTE=GUEST_GATE)
+
+Two 90 s **direct** `dotnet … Ryujinx.dll` captures of
+`/home/reng/Downloads/Fast_Fusion_Update_1.4.nup` (fresh build `7e45918ac`;
+`NX2_PATCH=""`, `--dram-size MemoryConfiguration12GiB --memory-manager-mode
+SoftwarePageTable --ignore-missing-services`, plus `NX2_PRESENT_TRACE=1
+NX2_MISSING_LOG=1 NX2_SVC_COUNT=1`). `NX2_THREAD_DUMP_AT_PRESENT=100` →
+`.nx2-logs/run-20261119-162552-gate100/ocarina.log`;
+`NX2_THREAD_DUMP_AT_PRESENT=5000` →
+`.nx2-logs/run-20261119-162735-gate5000/ocarina.log`. Both boot without abort and
+reach >12 000 presents, so both stack dumps fire.
+
+Stack comparison (`grep -a "NX2 td pid=109\|NX2 main mutex" <log>`): the two
+snapshots are byte-for-byte identical apart from timestamps. `MainThread` (uid 28)
+is caught at the same guest leaf `nnSdk:0x563c38` (pc `0xD790BC4`, wait object
+`appmsg`) under
+`nn::wsi::ounce::native::NativeWindow::Present(unsigned int, nn::gs::NativeSyncHandle const&):0x0038`
+called by `nn::wsi::nv::OnPresentTexture` — it never leaves `Present` between the
+two presents. Every `TaskQueue_Core0..5` (uid 34–39) is caught at
+`nn::os::WaitEvent(nn::os::EventType*):0x0058` from the same `cengine.nss:0x1409d0`
+call site (`Core3` also holds the `gpuid1` event); none leaves `WaitEvent`.
+`NX2_SVC_THREAD` histograms confirm the queue cores issue at most 2
+`SendSyncRequest` calls in 60 s (uid 37), otherwise only
+`WaitProcessWideKeyAtomic`/lock primitives — no new GPU submits resume. `NX2 progress t=60s submits=4 presents=14305 draws=0 … gpuid=[gpuid0=3601
+gpuid1=4824]`: GPU/vsync events are signalled thousands of times, and Task 0
+recorded the 4 submits' fences reached with no unmet acquire. Only two auto-stubbed
+IPC calls occur (`INx2GraphicsSystemSession:1501/1502`, at boot, off the render
+path). There is therefore no stubbed reply, shared-memory flag or **unsignalled
+event** at the INx2 service boundary, and no external (input/asset) blocker — the
+guest is starved on the GPU-completion side of its render dispatch.
+
+GATE=GPU_QMD3_RELEASE_NEVER_FIRED — the guest reaches `Present` but NVN2's
+compute→3D queue sync is never released: QMD3 release payloads (Eglantine rows
+53/60/61/62: words/slots 24/28/52, bit-19 = max release) are defined in
+`ComputeQmd` but never fired and `UsesMme64` is never set. The frame fence never
+enables the next render dispatch, so the main thread stays in `Present`, the task
+queue stays idle and `draws` stays 0.
+
+evidence: run-20261119-162552-gate100/ocarina.log L595–612 MainThread frozen at
+`nn::wsi::ounce::native::NativeWindow::Present:0x0038` / `nnSdk:0x563c38` plus
+identical `NX2 main mutex addr=0x655E9EB3BC requester=0x8000`; L663–708 all
+`TaskQueue_Core*` at `nn::os::WaitEvent` (`nnSdk:0x143f58`, `cengine.nss:0x1409d0`).
+evidence: run-20261119-162735-gate5000/ocarina.log L649–666 MainThread identical
+stack/mutex at present 5000; L717–757 TaskQueue cores identical; L973
+`NX2 progress t=60s submits=4 presents=14305 draws=0 … gpuid0=3601 gpuid1=4824`.
+evidence: both logs `NX2_SVC_THREAD t=60s` — queue-core uids 34–39 issue at most
+2 `SendSyncRequest` (uid 37) and are otherwise only
+`WaitProcessWideKeyAtomic`/lock primitives; `NX2 missing` only
+`INx2GraphicsSystemSession:1501/1502` at boot.
+
+Smallest candidate fix: fire QMD3 release payloads (slots 24/28/52, bit 19 = max)
+on dispatch (including rejected QMDs) and set `UsesMme64`, in
+`src/Ryujinx.Graphics.Gpu/…/ComputeClass.cs` + the GPFIFO processor — **not** an
+`INx2*Session` file, so no in-session fix or test applies in this task. Already
+scheduled as Task 2. Next action: proceed to Task 2; if `draws` still does not
+move, add a steady-state `NX2_SYNCPT_TRACE=1 NX2_FIFO_TRACE=1` capture to name the
+exact semaphore word the 3D queue waits on.
+
 ## TL;DR from a fresh clone
 
 ```bash
