@@ -91,6 +91,48 @@ git add docs/nx2/CONTINUE_HERE.md
 git commit -m "docs: localise Fast Fusion render gate"
 ```
 
+### Task 1b: Decode QMD releases and semaphore words for confirmation
+
+**Files:**
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs` (`SendSignalingPcasB`, near :134-162)
+- Modify: `src/Ryujinx.Graphics.Gpu/Engine/GPFifo/GPFifoClass.cs` (4-byte release path near :235-243)
+- Create: `src/Ryujinx.Graphics.Gpu/Engine/Compute/Nx2QmdTrace.cs`
+- Test: `src/Ryujinx.Tests/Graphics/Nx2QmdTraceTests.cs` (new)
+- Modify: `docs/nx2/CONTINUE_HERE.md` (record the confirmation result)
+
+**Interfaces:**
+- Consumes: `ComputeQmd` bitfield (`ComputeQmd.cs:126-249`), `QmdDescriptor`/`QmdScheduler` (`QmdDescriptor.cs`), existing `NX2_SUBMIT_LOG`/`NX2_SYNCPT_TRACE`/`NX2_FIFO_TRACE` env conventions.
+- Produces: `internal static class Nx2QmdTrace { public static string Describe(ComputeQmd qmd, int dataRam27); }` returning a one-line summary; `public static void WatchSemaphore(ulong address, uint value, string op)` logging 4-byte release writes and acquire reads. No behaviour change — purely env-gated observation.
+
+- [ ] **Step 1: Write the failing decode test**
+
+In `Nx2QmdTraceTests.cs`, build a 256-byte QMD fixture with `SemaphoreReleaseEnable0 = true`, `Release0AddressLower = 0x1234`, `Release0Payload = 7`, and assert `Describe(qmd, 0x27)` contains `rel0=0x1234:7` and `dram27=0x27`; assert a second fixture with both enables false contains `rel0=- rel1=-`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2QmdTraceTests" -v q`
+Expected: FAIL — `Nx2QmdTrace` does not exist.
+
+- [ ] **Step 3: Add the env-gated trace**
+
+In `ComputeClass.SendSignalingPcasB`, when `NX2_QMD_TRACE=1`, read the raw 256-byte QMD once, call `Nx2QmdTrace.Describe(qmd, dataRam27)` and log one `NX2QMD qmd=0x{address:X} {summary}` line per dispatch (capped at 200 lines). Include release enables, addresses, payloads, the third slot at raw word 52, QMD version and `UsesMme64`. In the `GPFifoClass` 4-byte release path, when `NX2_SEM_WATCH=1`, log `NX2SEM w addr=0x{address:X} value=0x{value:X}` / `r` for acquire reads (capped at 200 lines). No functional change to dispatch or release writes.
+
+- [ ] **Step 4: Re-run the confirmation capture**
+
+Run Fast Fusion 90 s with `NX2_PATCH="" NX2_QMD_TRACE=1 NX2_SEM_WATCH=1 NX2_SYNCPT_TRACE=1 NX2_FIFO_TRACE=1`. Write the result into `docs/nx2/CONTINUE_HERE.md` as `CONFIRM=` with one of three values: `QMD_RELEASE_MISSING` (QMD dispatches with release enables set, but matching semaphore writes never appear), `UPSTREAM_OF_QMD` (no QMD dispatch at all), or `NO_BLOCKER_FOUND`. Name the exact QMD address, release address/payload and semaphore word observed.
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `dotnet test src/Ryujinx.Tests/Ryujinx.Tests.csproj --filter "FullyQualifiedName~Nx2QmdTraceTests|FullyQualifiedName~Nx2SwizzleTests" -v q && dotnet build Ryujinx.slnx -c Debug -v q`
+Expected: all PASS, 0 errors.
+
+```bash
+git add src/Ryujinx.Graphics.Gpu/Engine/Compute src/Ryujinx.Graphics.Gpu/Engine/GPFifo/Nx2QmdTrace.cs src/Ryujinx.Tests/Graphics/Nx2QmdTraceTests.cs docs/nx2/CONTINUE_HERE.md
+git commit -m "nx2: trace QMD releases and semaphore words for confirmation"
+```
+
+**Gate:** Task 2 may start only if `CONFIRM=QMD_RELEASE_MISSING`. If `UPSTREAM_OF_QMD` or `NO_BLOCKER_FOUND`, stop and report to the human partner rather than writing GPU code against an unconfirmed blocker.
+
 ### Task 2: Fire QMD release payloads and set `UsesMme64`
 
 **Files:**
