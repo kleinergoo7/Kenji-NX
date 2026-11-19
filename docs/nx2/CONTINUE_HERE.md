@@ -253,6 +253,101 @@ brief's gate, stop for a human decision; a follow-up would have to read the
 object through the poll frame's callee-saved slot (`ldr x0,[x22]` at 0x860B87C)
 from the blocked thread's saved context, which is outside this watch's scope.
 
+## Phase 1f — comparison with Eglantine's working title 4 (Task 1f)
+
+Compared the reference tree at `/tmp/opencode/eglantine` (branch `nx2`, `NX2_NOTES.md` rows
+45-57, 81-84, 115 and source) against this tree's macro / GPFIFO / nx2-service code. The
+symptom to explain is **"no macro emits PCAS / no dispatch / no draws"**: Phase 1c measured
+73 MME macros, 4159 emitted methods, `NX2PCAS`=0, `NX2QMD`=0, draws=0, and every macro logged
+`dram27=0x00000000`. No fix code was written.
+
+EG_COMPARE=
+1. **PCAS/QMD dispatch is wired to a single method and a passive counter.** Here:
+   `src/Ryujinx.Graphics.Gpu/Engine/Compute/ComputeClass.cs:67` registers only
+   `SendSignalingPcasB` (compute method 0xAF); `:139-278` reads one QMD and calls
+   `DispatchCompute` directly — no dependency accounting, no release slots, no ring;
+   `src/Ryujinx.Graphics.Gpu/Engine/Compute/QmdDescriptor.cs:45-59` `QmdScheduler.Track`
+   merely stores `_last` and increments `_dispatchCount`. Eglantine:
+   `src/video_core/engines/kepler_compute.cpp:355-365` routes methods **0xAE/0xAF/0xB0** into
+   `native_qmd.Signal`; `:378-450` loads the QMD, fires release slots 24/28/52 plus the
+   bit-19 max release, then dispatches; `src/video_core/native_qmd.h:39-160` is the full
+   scheduler (dependency counts, deferred actions, dependent-QMD chain, one process-global
+   state table at `:158`). Consequence: the PCAS 3/7 increment/decrement actions emitted by
+   macro 0xda (Eglantine `NX2_NOTES.md` row 84, line 142) arrive on 0xAE/0xB0, which this tree
+   has no callback for, so they are dropped and the `NX2PCAS` trace (0xAF only) stays 0; and
+   even a 0xAF launch fires no release, so the semaphore/fence the guest waits on is never
+   written. **NEEDS_REFERENCE_PORT.** Candidate fix #1 if a human picks this: port the
+   `NativeQmdScheduler` state machine and wire all three compute methods to it — do not start
+   without the human gate decision.
+2. **MME data-RAM word 0x27 (QMD ring base) is read only for logging; nothing schedules
+   QMDs from it.** Here: `src/Ryujinx.Graphics.Gpu/Engine/MME/Macro.cs:121-126` and
+   `MacroTuring.cs:100-102` expose `DataRamWord(0x27)` for the `NX2 mme exec` log only, and
+   `ComputeClass.cs:174` passes it to `Nx2QmdTrace.Describe` as a trace string; every captured
+   macro shows `dram27=0x00000000` (Phase 1c). Eglantine: the per-channel data RAM is wired as
+   the compute macro's active RAM and word 0x27 is read/observed there
+   (`kepler_compute.cpp:199-200, 280-283`), and macro 0xda reads the QMD ring base from that
+   word and drives the ring (`NX2_NOTES.md` row 84, line 142: each channel sets its own base,
+   0x21098d39 / 0x213e8ff8 / 0x213ea168). Consequence: the macro that should schedule the QMD
+   chain has no ring base and
+   cannot emit the launch PCAS — the most direct explanation for "no macro emits PCAS".
+   **NEEDS_REFERENCE_PORT.** Caveat: whether this title's macro actually consumes word 0x27
+   is inferred from Eglantine's title-1 notes, not verified at word level here (could not
+   determine); the capability gap itself is certain.
+3. **Compute macro code bank is per-channel and selected by subchannel.** Here:
+   `GPFifoProcessor.cs:804-838` picks the compute macro bank purely from
+   `SubChannelEngine(subChannel)`, and the bank is created per channel at
+   `GPFifoProcessor.cs:489` (`_fifoClass = new GPFifoClass(...)`; see `GPFifoClass.cs:32-38,
+   485-549`). Eglantine: `kepler_compute.cpp:157-159` switches to the compute engine/positions
+   only when methods 0x45/0x47 were uploaded on the compute class, and all channels of the
+   process share **one** macro context (`control/channel_state.cpp:33-42, 79-89`;
+   `macro.h:277-281`; `NX2_NOTES.md` row 53, line 111). Consequence: a compute macro uploaded
+   on one channel is not visible to another here, and a method on a subchannel our class table
+   maps to 3D runs the 3D bank/state instead — either yields an empty/wrong compute macro and
+   no PCAS emission. Unverified whether upload and invocation span channels in this title.
+   **FIXABLE_HERE** (local bank/context change).
+4. **`UsesMme64` is never set.** Here: `ComputeClass.cs:48` declares it with no assignment
+   anywhere in the tree (grep confirms reads only at `:142`, `:156`), so every dispatch is
+   tagged `QmdDispatchKind.Compute`. Eglantine enables the Turing/MME64 path on the Ampere flag
+   (`control/channel_state.cpp:79-89`, `engines/maxwell_3d.cpp:85`, `kepler_compute.cpp:156`).
+   Consequence: the MME64/QMD-3.0
+   descriptor is always wrong; low directness because dispatch itself is not gated on the flag.
+   **FIXABLE_HERE** (set at Ampere class bind).
+5. **No submit-time pushbuffer snapshot / `EDEN_NX2_PB_CHECK` equivalent.** Here: command words
+   are fetched at parse time (`GPFifoProcessor.cs:523-533`) and a stalled channel re-reads its
+   own captured tail (`:545-550`); there is no per-submit word hash or resnapshot. Eglantine:
+   submit-time copy + resnapshot on resume (`src/video_core/dma_pusher.cpp:95-112`) and the
+   changed-entry check (`dma_pusher.cpp:211-213, 935-945`). Consequence: guest-rewritten command
+   words could be missed; Phase 0 measured `captured == words`, `pendingWords=0` and no
+   `PB_CHECK` difference, so this is **not currently causal**. **NEEDS_REFERENCE_PORT.**
+6. **No parked split methods keyed by resume address.** Here: `GPFifoProcessor.cs:536-579`
+   runs a buffer linearly; a method split across GP entries or a called buffer has no
+   park/resume machinery. Eglantine: `dma_pusher.cpp:185-213, 592-628` parks the unfinished
+   method and resumes it at the next entry's address (`NX2_NOTES.md` rows 51, 56, 73).
+   Consequence: split compute-dispatch parameters would be lost. Phase 0 shows no split in
+   this run, so low directness. **NEEDS_REFERENCE_PORT.**
+7. **Acquire/resume mechanism differs but is observably healthy.** Here: throw-based
+   `StallOnAcquire` + deferred fetch (`GPFifoProcessor.cs:251-274, 523-533`,
+   `GPFifoDevice.cs:238`). Eglantine: `puller.ResumeAcquire` (`dma_pusher.cpp:95-97`).
+   Consequence: equivalent in effect; the 4 submits reached their fences with no unmet
+   acquire (Phase 0), so this does **not** explain the symptom. **NEEDS_REFERENCE_PORT**
+   only for exact parity.
+8. **Window/native-image init: the core layout math matches, so it is not the blocker.**
+   Here: `Nx2NativeObjects.cs:56-85` `Layout` and `INx2GraphicsSystemSession.cs:186-203`
+   (gsv 1510), `:55-64` (111), `:73-80` (423), `:206-232` (429) reproduce Eglantine's
+   `Nx2CalculateImageLayout` / handlers (`nx2_gsv.h:1561-1579, 4029-4043, 4079-4088,
+   4119-4124, 4138-4152`) with identical width/height/pitch/block/size/alignment formulas;
+   presents climb past 50k. Residual divergences: the gsv 428/426 image descriptor word
+   placement here (`INx2GraphicsSystemSession.cs:265-330`) vs Eglantine row 126, and the CPU
+   `Unswizzle`+`PresentSnapshot` composite (`INx2Vi2Session.cs:770-961`) vs Eglantine's GPU
+   composite with native GOB tiling — these are downstream of "no draws" (frames are all zero
+   because nothing renders), so they cannot explain it. Exact descriptor word placement
+   could not be determined from the notes alone. **NEEDS_REFERENCE_PORT** (low priority).
+
+Ranked by directness to "no macro emits PCAS / no dispatch / no draws": #1 and #2 are the
+only candidates that break the chain before PCAS/dispatch; #3-#4 could prevent the macro from
+emitting PCAS at all; #5-#7 are GPFIFO-stability gaps already observed not to fire in this
+title; #8 is healthy. Stop for a human decision on which divergence to fix first.
+
 ## TL;DR from a fresh clone
 
 ```bash
