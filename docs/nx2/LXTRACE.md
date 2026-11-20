@@ -106,3 +106,101 @@ there. Measuring `SubmitRecord` with g++ gives `sizeof=32`, `word_count@16`,
 `deferred@24`, `padding@28`; the recorder writes those raw 32 bytes and the
 replayer starts arrays at `sizeof(SubmitRecord)`. The miner and test now pin
 this 32-byte layout. The C++ struct wins over the previously recorded values.
+
+## Method-stream diff (Task 2)
+
+### Inputs used
+
+- **Oracle:** a full (untruncated) histogram re-mined from the same
+  `/tmp/opencode/oracle-trace/trace-1795130242.lxtrace` with the miner's own
+  `parse_submit`/`decode_method`, saved to `/tmp/opencode/oracle-histogram-full.json`
+  (360 submits, 896,220 words, 1,700 distinct methods / 2,272 distinct raw words).
+  The top-40 `/tmp/opencode/oracle-histogram.json` from Task 1 is **insufficient**:
+  it omits the draw words, inline data 0x6D and UBO 0x8E4 entirely.
+- **Ours:** reused `.nx2-logs/run-20261119-224121-task2-drawmacro-DECISIVE/ocarina.log`
+  (60 s Fast Fusion, `NX2_PATCH="" NX2_DRAW_MACRO_SUMMARY=1 NX2_MME_ENGINE=1
+  NX2_MACRO_LOG=1`, 15165 presents). No more recent log has `NX2_METHOD_PROBE`,
+  and that probe dumps to a separate `/tmp/nx2-methodprobe.log`, not to
+  `ocarina.log`; re-running would not change the `emitted=`/`3d=` histograms
+  consumed here. The last progress line is
+  `mme=73/4159/0+73 mme3d=59 mmec=14 drawmacro=[macros=73 drawEmitHits=0 drawHashes=0] draws=[total=0 ...]`,
+  `3d=total=168 top=...` and `emitted=[0x6D=3328 0x8E4=572 0x44=28 0xD00=28 0xD01=28 0xD02=28 0x8C4=28 ...]`.
+
+### Normalization and its limits
+
+Our fork's method address is `word & 0xFFF` (`CompressedMethod.MethodAddress`,
+12-bit), **not** the classic Maxwell `(word >> 2) & 0x7FF`. The oracle's exact
+`raw_words[].word` therefore maps directly with `word & 0xFFF`; the comparison
+uses that and ignores the lossy `methods[].index = word >> 2` view for presence
+decisions. Three limits are reported, not hidden:
+
+1. `word >> 2` drops the low 2 bits: `0x2001c00d` decodes to offset 0xD exactly
+   but to 0xC in the index view; draw offsets 0x585/0x586 collapse to 0x584.
+   The draw rows below use the exact raw words.
+2. The oracle histogram counts **all** command words (methods, inline arguments,
+   macro markers); ours counts only method addresses actually dispatched by the
+   engine. `oracle_count` and `ours_count` are **not comparable frequencies** —
+   only presence/absence is compared.
+3. The oracle's macro-emitted methods are generated from macro RAM and are not
+   literal words in the stream; their presence is inferred from macro-start
+   words (0xE00+) in the oracle and from our `emitted=` histogram.
+
+### Divergence table
+
+`python3 tools/nx2/compare_nx2_methods.py <full-oracle-hist.json> <ours-log>`:
+
+```
+method                                         oracle     ours  verdict
+draw 0x585 (DrawBegin)                              1        0  ORACLE-ONLY  <-- DRAW
+draw 0x586 (DrawEnd)                                1        0  ORACLE-ONLY  <-- DRAW
+draw-family 0x584 (word&0xFFF)                      1        0  ORACLE-ONLY  <-- DRAW
+shader/pipeline reserved 0xD00                   3780       28  BOTH (counts not comparable)  <-- SHADER
+shader/pipeline reserved 0xD01                      0       28  OURS-ONLY  <-- SHADER
+shader/pipeline reserved 0xD02                      0       28  OURS-ONLY  <-- SHADER
+inline-data 0x6D                                    1     3328  BOTH (counts not comparable)
+UBO 0x8E4                                           0      572  OURS-ONLY
+```
+
+- **Draw methods are present in the oracle's command stream (exact words
+  `0x585`, `0x586`, one each, plus the collapsed `0x584` family) and entirely
+  absent from ours** — `drawEmitHits=0`, `draws=0`, and neither the emitted nor
+  the 3D histogram contains 0x584/0x585/0x586. This is the first highlighted
+  family with a presence gap.
+- Inline data 0x6D and UBO 0x8E4 are present on both sides (macro-emitted in
+  ours), confirming our macros *do* execute and emit methods — the gap is
+  specific to draws, not a general failure to execute macro code.
+- The shader/pipeline reserved registers 0xD00-0xD02 are emitted by ours (28
+  each), so the shader-bind *methods* are not absent from our stream; the gap
+  there is in what our engine does with them, downstream of the draw gap.
+  **Assumption:** the recon says Lichii reads native shader addresses from
+  pipeline reserved registers but does not name them; mapping them to
+  0xD00-0xD02 comes from the Task 2 brief's list of our emitted registers and
+  was not independently verified against Lichii source.
+
+### Top 5 oracle-only methods (offset + example argument)
+
+| offset | oracle_count | example argument word | note |
+|--------|--------------|-----------------------|------|
+| 0x0    | 181081 | `0x0`                     | mostly inline argument data, not a standalone method |
+| 0x40   | 58861  | `0x3A400040` (count 48600) | high-bit macro-marked word; collapse of index `0xe900010` |
+| 0x1    | 29521  | `0x1`                     | inline argument data |
+| 0xE3A  | 27361  | `0x80000E3A`              | macro-start/dispatched register (0xE00+ family) |
+| 0x22   | 23401  | `0x22`                    | inline argument data |
+
+The low offsets (0x0, 0x1, 0x22) dominate because the oracle histogram counts
+argument words; they are not evidence of missing method handling. 0xE3A is the
+most frequent macro-start word and is the meaningful oracle-only method family
+among the top five.
+
+### Result
+
+**`DIVERGENCE=MISSING_DRAW_METHOD`** — the oracle's GPU method stream contains
+draw methods (0x585/0x586) that our fork's stream never contains: our engine
+runs 73 macros and emits 4,159 methods but zero draws (`drawEmitHits=0`). This
+selects the single Task 3 fix: make the missing draw method reach our 3D engine.
+
+Consequence noted, not chosen as the divergence: shader binding is also
+non-functional (no shaders lowered), but its reserved-register methods
+(0xD00-0xD02) are present in our emitted stream, so the *method-coverage* gap
+that comes first is the draw method. If a human reviewer judges the shader bind
+to be causally upstream, re-evaluate before applying the Task 3 fix.
