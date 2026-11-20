@@ -108,11 +108,16 @@ mean > 0.1 and shader-lowered count > 0.
 
 The replayer plan uses Lichii's `--replay` output as the golden reference: a trace is
 replayed on the working oracle build and each presented frame's pixels are hashed.
-The hash is XXH3-128 over the raw RGBA buffer, formatted `{high64:016x}{low64:016x}`
+The hash is XXH3-128 over the post-swap RGBA buffer, formatted `{high64:016x}{low64:016x}`
 as the `hash` field in `frames.json` (source: `video_core/gpu_trace/replay.cpp`,
 `HashString(HashBytes(pixels))`). The PNG bytes are **not** hashed — the PNG is only
 for visual and mean-brightness checks. The C# replayer's job is to reproduce these
 hashes without a GPU.
+
+- Pixel-format caveat: the oracle swaps the R and B channels of each 4-byte pixel
+  before PNG encoding and computes the frame hash **after that swap**
+  (`replay.cpp:543-545`). A downstream C# replayer MUST match this post-swap channel
+  order (not native-order RGBA) to reproduce the hashes below.
 
 Binary: `/tmp/opencode/lichii/build/bin/eden-cli` (`DISPLAY=:0.0` is required for the
 Vulkan present path; RADV / AMD RX 580, Vulkan 1.4.354). Replay CLI:
@@ -149,7 +154,8 @@ reproduce these four hashes from the sample trace.
 - Trace: `/tmp/opencode/oracle-trace/trace-1795130242.lxtrace` (704,469,931 bytes).
 - Expected replay: `/tmp/opencode/oracle-replay/frames.json` — 5 frames, 1280x720,
   `program_id` `040041E0212AE000`, `renderer` `RADV`, mean ~0.826.
-- Replay uses the same CLI: `eden-cli --replay <trace> --out <dir> [--frames N]`.
+- Expected/inferred replay CLI (the original invocation was not recorded):
+  `eden-cli --replay <trace> --out <dir> [--frames N]`.
 
 | Frame | XXH3-128 hash (`frames.json`) | `identify` mean |
 |---|---|---|
