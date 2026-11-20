@@ -135,3 +135,31 @@ def test_cli_histogram_is_json(tmp_path, capsys):
     assert data["word_count_total"] == 5
     assert data["methods"][0]["count"] == 1
     assert data["raw_words"][0]["word"].startswith("0x")
+
+
+def test_cli_histogram_full_disables_top40_truncation(tmp_path, capsys):
+    # 45 distinct words exceed TOP_N=40, so the flag's effect is observable.
+    words = [0x1000 + i * 4 for i in range(45)]
+    submit = dict(SUBMIT, words=words)
+    header = bytearray(HEADER_SIZE)
+    header[:len(MAGIC)] = MAGIC
+    struct.pack_into("<II", header, 8, VERSION, HEADER_SIZE)
+    trace = tmp_path / "wide.lxtrace"
+    trace.write_bytes(bytes(header) + zstandard.ZstdCompressor().compress(b"".join([
+        make_record(1, json.dumps(CONFIG).encode()),
+        make_record(12, make_submit_payload(submit)),
+        make_record(15, b""),
+    ])))
+
+    miner.main([str(trace), "--histogram"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["full"] is False
+    assert len(data["methods"]) == 40
+    assert len(data["raw_words"]) == 40
+
+    miner.main([str(trace), "--histogram", "--full"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["full"] is True
+    assert len(data["methods"]) == 45
+    assert len(data["raw_words"]) == 45
+    assert data["word_count_total"] == 45

@@ -101,8 +101,9 @@ def state_kind(payload):
     return struct.unpack_from("<I", payload, 0)[0] if len(payload) >= 4 else 0
 
 
-def _top(counter):
-    return sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))[:TOP_N]
+def _top(counter, full=False):
+    items = sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    return items if full else items[:TOP_N]
 
 
 def main(argv=None):
@@ -114,6 +115,8 @@ def main(argv=None):
                         help="print a JSON histogram of methods and raw words")
     parser.add_argument("--states", action="store_true",
                         help="list State record kinds and their counts")
+    parser.add_argument("--full", action="store_true",
+                        help="emit complete histograms instead of top-40 (for method diffing)")
     args = parser.parse_args(argv)
 
     methods = Counter()
@@ -153,9 +156,11 @@ def main(argv=None):
             "trace": args.trace,
             "submit_count": submit_index,
             "word_count_total": sum(raw_words.values()),
+            "full": bool(args.full),
             "methods": [{"method": hex(m), "index": m, "count": n}
-                        for m, n in _top(methods)],
-            "raw_words": [{"word": hex(w), "count": n} for w, n in _top(raw_words)],
+                        for m, n in _top(methods, args.full)],
+            "raw_words": [{"word": hex(w), "count": n}
+                          for w, n in _top(raw_words, args.full)],
         }
         print(json.dumps(histogram, indent=2))
 

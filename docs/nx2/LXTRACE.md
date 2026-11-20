@@ -56,6 +56,9 @@ python3 tools/nx2/lxtrace_miner.py <trace> --submit 1
 # JSON histogram of methods and raw words across all Submits (redirect to a file)
 python3 tools/nx2/lxtrace_miner.py <trace> --histogram > /tmp/opencode/oracle-histogram.json
 
+# complete histogram (no top-40 truncation) - required by the method diff tool
+python3 tools/nx2/lxtrace_miner.py <trace> --histogram --full > /tmp/opencode/oracle-histogram-full.json
+
 # State record kinds and counts
 python3 tools/nx2/lxtrace_miner.py <trace> --states
 
@@ -63,11 +66,11 @@ python3 tools/nx2/lxtrace_miner.py <trace> --states
 python3 tools/nx2/lxtrace_miner.py <trace> --submit 1 --histogram --states
 ```
 
-Histograms are top-40 by count for both `methods` (`word >> 2`) and `raw_words`.
-The JSON schema is `{trace, submit_count, word_count_total, methods[], raw_words[]}`
+Histograms are top-40 by count unless `--full` is given, which emits every entry.
+The JSON schema is `{trace, submit_count, word_count_total, full, methods[], raw_words[]}`
 with each method entry `{method, index, count}` and each raw entry `{word, count}`.
-This is the artifact Task 2 consumes to diff the oracle stream against our
-`NX2_METHOD_PROBE` output.
+Task 2 requires the `--full` artifact (`"full": true`); its comparison tool rejects
+truncated histograms rather than silently producing a wrong verdict.
 
 ## Known-values check
 
@@ -111,39 +114,60 @@ this 32-byte layout. The C++ struct wins over the previously recorded values.
 
 ### Inputs used
 
-- **Oracle:** a full (untruncated) histogram re-mined from the same
-  `/tmp/opencode/oracle-trace/trace-1795130242.lxtrace` with the miner's own
-  `parse_submit`/`decode_method`, saved to `/tmp/opencode/oracle-histogram-full.json`
-  (360 submits, 896,220 words, 1,700 distinct methods / 2,272 distinct raw words).
-  The top-40 `/tmp/opencode/oracle-histogram.json` from Task 1 is **insufficient**:
-  it omits the draw words, inline data 0x6D and UBO 0x8E4 entirely.
+- **Oracle (reproducible from committed code):** the miner's `--full` flag emits
+  the complete histogram; the comparison tool refuses a top-40 one.
+
+  ```bash
+  python3 tools/nx2/lxtrace_miner.py \
+    /tmp/opencode/oracle-trace/trace-1795130242.lxtrace \
+    --histogram --full > /tmp/opencode/oracle-histogram-full.json
+  # {"full": true, submit_count: 360, word_count_total: 896220,
+  #  methods: 1700 entries, raw_words: 2272 entries}
+  ```
+
+  The default `--histogram` output (`"full": false`) omits the draw words,
+  inline data 0x6D and UBO 0x8E4; feeding it to the comparison tool now fails
+  loudly instead of yielding a silent wrong verdict.
 - **Ours:** reused `.nx2-logs/run-20261119-224121-task2-drawmacro-DECISIVE/ocarina.log`
   (60 s Fast Fusion, `NX2_PATCH="" NX2_DRAW_MACRO_SUMMARY=1 NX2_MME_ENGINE=1
-  NX2_MACRO_LOG=1`, 15165 presents). No more recent log has `NX2_METHOD_PROBE`,
-  and that probe dumps to a separate `/tmp/nx2-methodprobe.log`, not to
-  `ocarina.log`; re-running would not change the `emitted=`/`3d=` histograms
-  consumed here. The last progress line is
+  NX2_MACRO_LOG=1`). No more recent log has `NX2_METHOD_PROBE`, and that probe
+  dumps to a separate `/tmp/nx2-methodprobe.log`, not to `ocarina.log`;
+  re-running would not change the `emitted=`/`3d=` histograms consumed here.
+  The last progress line is
   `mme=73/4159/0+73 mme3d=59 mmec=14 drawmacro=[macros=73 drawEmitHits=0 drawHashes=0] draws=[total=0 ...]`,
   `3d=total=168 top=...` and `emitted=[0x6D=3328 0x8E4=572 0x44=28 0xD00=28 0xD01=28 0xD02=28 0x8C4=28 ...]`.
 
-### Normalization and its limits
+### Normalization and its limits (read before using the table)
 
 Our fork's method address is `word & 0xFFF` (`CompressedMethod.MethodAddress`,
 12-bit), **not** the classic Maxwell `(word >> 2) & 0x7FF`. The oracle's exact
-`raw_words[].word` therefore maps directly with `word & 0xFFF`; the comparison
-uses that and ignores the lossy `methods[].index = word >> 2` view for presence
-decisions. Three limits are reported, not hidden:
+`raw_words[].word` therefore maps with `word & 0xFFF`; the lossy
+`methods[].index = word >> 2` view is never used for presence decisions.
 
-1. `word >> 2` drops the low 2 bits: `0x2001c00d` decodes to offset 0xD exactly
-   but to 0xC in the index view; draw offsets 0x585/0x586 collapse to 0x584.
-   The draw rows below use the exact raw words.
-2. The oracle histogram counts **all** command words (methods, inline arguments,
-   macro markers); ours counts only method addresses actually dispatched by the
-   engine. `oracle_count` and `ours_count` are **not comparable frequencies** —
-   only presence/absence is compared.
-3. The oracle's macro-emitted methods are generated from macro RAM and are not
-   literal words in the stream; their presence is inferred from macro-start
-   words (0xE00+) in the oracle and from our `emitted=` histogram.
+1. **Low-bit loss.** `word >> 2` drops the low 2 bits: `0x2001c00d` is offset
+   0xD exactly but 0xC in the index view; 0x585/0x586 collapse to 0x584.
+2. **Mismatched universes (critical).** The oracle histogram counts **every**
+   command word — methods, inline arguments, macro markers **and macro-code
+   uploads into macro RAM**. Our `emitted=`/`3d=` histograms count only method
+   addresses actually **dispatched** by our engine. A word present only in the
+   oracle is therefore not evidence of a missing dispatched method, and the
+   counts are not frequencies. The table is **evidence only, not presence proof**.
+3. **Macro-code-upload caveat for 0x585/0x586.** These exact words occur **once
+   each** in the oracle stream (e.g. submit 337), at the tail of a submit next
+   to `0xe1def000`/`0x1000f010` — consistent with a macro program being uploaded
+   into macro RAM, not with dispatched draws. Our own tool documents that
+   macro-emitted methods are not literal stream words, so a genuine oracle draw
+   would not appear as a literal `0x585` either. The earlier reading of these
+   single words as "draw methods ours lacks" was a category error and is
+   retracted.
+4. **Time-window caveat.** The oracle trace is 360 submits / 180 presents; this
+   ours log ran 60 s to 15165 presents. Both are steady-state Fast Fusion, so
+   method *families* can be discussed, but absolute counts and per-submit order
+   do not align.
+5. **Shader register assumption.** The recon says Lichii reads native shader
+   addresses from pipeline reserved registers but does not name them; mapping
+   them to 0xD00-0xD02 comes from the Task 2 brief's list of our emitted
+   registers and was not independently verified against Lichii source.
 
 ### Divergence table
 
@@ -151,9 +175,9 @@ decisions. Three limits are reported, not hidden:
 
 ```
 method                                         oracle     ours  verdict
-draw 0x585 (DrawBegin)                              1        0  ORACLE-ONLY  <-- DRAW
-draw 0x586 (DrawEnd)                                1        0  ORACLE-ONLY  <-- DRAW
-draw-family 0x584 (word&0xFFF)                      1        0  ORACLE-ONLY  <-- DRAW
+draw 0x585 (DrawBegin)                              1        0  ORACLE-WORD-ONLY (macro upload?)  <-- DRAW
+draw 0x586 (DrawEnd)                                1        0  ORACLE-WORD-ONLY (macro upload?)  <-- DRAW
+draw-family 0x584 (word&0xFFF)                      1        0  ORACLE-WORD-ONLY (macro upload?)  <-- DRAW
 shader/pipeline reserved 0xD00                   3780       28  BOTH (counts not comparable)  <-- SHADER
 shader/pipeline reserved 0xD01                      0       28  OURS-ONLY  <-- SHADER
 shader/pipeline reserved 0xD02                      0       28  OURS-ONLY  <-- SHADER
@@ -161,21 +185,17 @@ inline-data 0x6D                                    1     3328  BOTH (counts not
 UBO 0x8E4                                           0      572  OURS-ONLY
 ```
 
-- **Draw methods are present in the oracle's command stream (exact words
-  `0x585`, `0x586`, one each, plus the collapsed `0x584` family) and entirely
-  absent from ours** — `drawEmitHits=0`, `draws=0`, and neither the emitted nor
-  the 3D histogram contains 0x584/0x585/0x586. This is the first highlighted
-  family with a presence gap.
-- Inline data 0x6D and UBO 0x8E4 are present on both sides (macro-emitted in
-  ours), confirming our macros *do* execute and emit methods — the gap is
-  specific to draws, not a general failure to execute macro code.
-- The shader/pipeline reserved registers 0xD00-0xD02 are emitted by ours (28
-  each), so the shader-bind *methods* are not absent from our stream; the gap
-  there is in what our engine does with them, downstream of the draw gap.
-  **Assumption:** the recon says Lichii reads native shader addresses from
-  pipeline reserved registers but does not name them; mapping them to
-  0xD00-0xD02 comes from the Task 2 brief's list of our emitted registers and
-  was not independently verified against Lichii source.
+Every row is a raw observation under caveat 2 above, not a method-coverage
+verdict:
+
+- The oracle's `0x585`/`0x586` are single literal words consistent with a
+  macro-code upload (caveat 3), **not** proof of dispatched draw methods ours
+  lacks. Nothing in these histograms establishes a missing draw method.
+- Inline data 0x6D and UBO 0x8E4 appear on both sides (macro-emitted in ours),
+  showing our macros do execute and emit methods.
+- The pipeline reserved registers 0xD00-0xD02 are emitted by ours (28 each);
+  the shader-bind gap is in what our engine does with them, not in receiving
+  the methods — and the register mapping is itself an assumption (caveat 5).
 
 ### Top 5 oracle-only methods (offset + example argument)
 
@@ -189,18 +209,24 @@ UBO 0x8E4                                           0      572  OURS-ONLY
 
 The low offsets (0x0, 0x1, 0x22) dominate because the oracle histogram counts
 argument words; they are not evidence of missing method handling. 0xE3A is the
-most frequent macro-start word and is the meaningful oracle-only method family
-among the top five.
+most frequent macro-start word and is the most meaningful oracle-only family
+among the top five, but under caveat 2 it is still evidence, not a verdict.
 
 ### Result
 
-**`DIVERGENCE=MISSING_DRAW_METHOD`** — the oracle's GPU method stream contains
-draw methods (0x585/0x586) that our fork's stream never contains: our engine
-runs 73 macros and emits 4,159 methods but zero draws (`drawEmitHits=0`). This
-selects the single Task 3 fix: make the missing draw method reach our 3D engine.
+**`DIVERGENCE=NONE`** — this is **not** a method-coverage finding. The two
+histograms are not the same universe (caveat 2), and the oracle's single
+`0x585`/`0x586` words fit macro-code uploads (caveat 3), so the comparison
+cannot establish that our fork is missing any dispatched method. Per the brief,
+stop and report the evidence to a human; Task 3 should not be aimed at a
+"missing draw method" on this evidence.
 
-Consequence noted, not chosen as the divergence: shader binding is also
-non-functional (no shaders lowered), but its reserved-register methods
-(0xD00-0xD02) are present in our emitted stream, so the *method-coverage* gap
-that comes first is the draw method. If a human reviewer judges the shader bind
-to be causally upstream, re-evaluate before applying the Task 3 fix.
+**Evidence handed to a human:** our fork runs 73 macros and emits 4,159 method
+addresses yet `drawEmitHits=0`, `draws=0`, no shaders lowered; the oracle's
+stream has macro-start words (0xE00+ family, e.g. 0xE3A 27,361 occurrences) and
+single 0x585/0x586 words consistent with uploaded macro code. The real question
+is therefore *what our engine does with the macros and reserved registers it
+does receive* (e.g. shader binding from 0xD00-0xD02), or a non-method-coverage
+cause — not absence of draw methods from our method stream. Time windows
+(caveat 4) and the shader-register assumption (caveat 5) also need a human check
+before choosing any Task 3 fix.
