@@ -103,3 +103,60 @@ logging, so its table counts are `0` (no shader lowering is observed).
 Oracle frame used: `nx2-frame-03241.tga` (1280x720); our frame: `frame-early-3-c3-img2-3840x2160.rgba`.
 This is the reference point for the rest of the plan: PASS for our fork is
 mean > 0.1 and shader-lowered count > 0.
+
+## Lxtrace replay oracle (golden reference frames)
+
+The replayer plan uses Lichii's `--replay` output as the golden reference: a trace is
+replayed on the working oracle build and each presented frame's pixels are hashed.
+The hash is XXH3-128 over the raw RGBA buffer, formatted `{high64:016x}{low64:016x}`
+as the `hash` field in `frames.json` (source: `video_core/gpu_trace/replay.cpp`,
+`HashString(HashBytes(pixels))`). The PNG bytes are **not** hashed — the PNG is only
+for visual and mean-brightness checks. The C# replayer's job is to reproduce these
+hashes without a GPU.
+
+Binary: `/tmp/opencode/lichii/build/bin/eden-cli` (`DISPLAY=:0.0` is required for the
+Vulkan present path; RADV / AMD RX 580, Vulkan 1.4.354). Replay CLI:
+`eden-cli --replay <trace> --out <dir> [--frames N]`.
+
+### Synthetic 4-frame sample (milestone 1)
+
+No game ROM and no snapshot state needed. Generated and replayed with:
+
+```bash
+mkdir -p /tmp/opencode/sample-trace /tmp/opencode/sample-replay
+/tmp/opencode/lichii/build/bin/eden-cli --gpu-trace-sample \
+    /tmp/opencode/sample-trace/sample.lxtrace
+DISPLAY=:0.0 /tmp/opencode/lichii/build/bin/eden-cli --replay \
+    /tmp/opencode/sample-trace/sample.lxtrace --out /tmp/opencode/sample-replay --frames 4
+```
+
+- Trace: `/tmp/opencode/sample-trace/sample.lxtrace` (186,922 bytes).
+- Output: `/tmp/opencode/sample-replay/` — `frame-0000.png` … `frame-0003.png` plus `frames.json`.
+- `program_id` `0400000000000001`, `renderer` `RADV`, frames 256x144.
+
+| Frame | XXH3-128 hash (`frames.json`) | `identify` mean |
+|---|---|---|
+| frame-0000.png | `3169c48ce401c01f006b1769b588f387` | 0.624571 |
+| frame-0001.png | `9117f2aef194bdb35c9838954f3b2e84` | 0.500000 |
+| frame-0002.png | `652ddf85570efed087446b67a160398c` | 0.624591 |
+| frame-0003.png | `c2d1b0548d3f50fc71b834e14f980697` | 0.621467 |
+
+All four frames are non-black (means above). Milestone 1 for the C# replayer is to
+reproduce these four hashes from the sample trace.
+
+### Real Fast Fusion trace (final target)
+
+- Trace: `/tmp/opencode/oracle-trace/trace-1795130242.lxtrace` (704,469,931 bytes).
+- Expected replay: `/tmp/opencode/oracle-replay/frames.json` — 5 frames, 1280x720,
+  `program_id` `040041E0212AE000`, `renderer` `RADV`, mean ~0.826.
+- Replay uses the same CLI: `eden-cli --replay <trace> --out <dir> [--frames N]`.
+
+| Frame | XXH3-128 hash (`frames.json`) | `identify` mean |
+|---|---|---|
+| frame-0000.png | `4cdfa6089661779b338328d7fd369012` | 0.825518 |
+| frame-0001.png | `bf97632f20b1524f48d3202d207ea10c` | 0.825642 |
+| frame-0002.png | `b451cc96eef12a31f4994a50b39433f0` | 0.825764 |
+| frame-0003.png | `de821807760516a568f78849de94e671` | 0.825890 |
+| frame-0004.png | `a32d1d27cae7f707e21bc3a3195d543a` | 0.826020 |
+
+All trace, PNG and log artifacts stay under `/tmp/opencode/`; none are committed.
