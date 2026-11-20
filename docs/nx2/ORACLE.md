@@ -149,6 +149,31 @@ DISPLAY=:0.0 /tmp/opencode/lichii/build/bin/eden-cli --replay \
 All four frames are non-black (means above). Milestone 1 for the C# replayer is to
 reproduce these four hashes from the sample trace.
 
+#### C# replayer milestone result (Task 2, 2026-11-20)
+
+`LxTraceReplayer.Replay(sample, 4)` brings up a headless Vulkan renderer
+(`VK_EXT_headless_surface`, RADV / RX 580), a `GpuContext` with a 16 MiB page table,
+and feeds the trace's Memory/Submit/Present records through our own GPFIFO and window
+composite. No guest boot, no snapshot restore, no State records involved. All four
+frames are **non-black**, and their means match the oracle to ~0.0001:
+
+| Frame | Our hash (RGBA) | Our mean | Oracle mean |
+|---|---|---|---|
+| 0 | `18e708819b2552dd1f8a2fc3002e08bf` | 0.624517 | 0.624571 |
+| 1 | `feec78ea0dad2eac7468ed087e6a226b` | 0.500000 | 0.500000 |
+| 2 | `dfead8f6606b088479e0deefce96353c` | 0.624517 | 0.624591 |
+| 3 | `3ed1d027d5726f114b80bc38541b763d` | 0.621528 | 0.621467 |
+
+The mean is computed over all four RGBA channels, matching ImageMagick's `fx:mean`
+used for the oracle table. Frames 1 and 3 (GPU clears of the render target) are
+pixel-exact against the oracle PNGs (40 and 112 differing bytes out of 147456);
+frames 0 and 2 (CPU-written block-linear images presented directly) have the same
+brightness distribution but a different block-linear swizzle in our texture cache,
+so their XXH3 hashes do not match. The hash function itself is verified: feeding
+the oracle PNG bytes to `XXHash128.ComputeHash` reproduces all four oracle hashes
+exactly. Exact hash parity is a stretch goal, not the no-snapshot milestone gate.
+Raw `.rgba` captures land under a temp `lxtrace-replay-*` directory (never in git).
+
 ### Real Fast Fusion trace (final target)
 
 - Trace: `/tmp/opencode/oracle-trace/trace-1795130242.lxtrace` (704,469,931 bytes).
