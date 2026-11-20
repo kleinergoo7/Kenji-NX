@@ -20,7 +20,10 @@ MAGIC = b"LXGTRACE"
 VERSION = 2
 HEADER_SIZE = 64
 RECORD_HEADER = struct.Struct("<IIQ")  # type:u32, reserved:u32, size:u64
-SUBMIT_HEADER = struct.Struct("<iiIIQI")  # channel, ec, pc, oc, word_count, dc (28B)
+# sizeof(SubmitRecord) from trace_file.h is 32 (measured with g++): channel@0,
+# entry@4, prefetch@8, offset@12, word_count@16, deferred@24, padding@28.
+# offset_count already ends on an 8-byte boundary, so no implicit pad is inserted.
+SUBMIT_HEADER = struct.Struct("<iiIIQII")
 
 STATE, SUBMIT, PRESENT, CONFIG, END = 8, 12, 13, 1, 15
 TOP_N = 40
@@ -69,7 +72,7 @@ def iter_records(stream):
 
 def parse_submit(payload):
     """Decode a Submit payload into its fixed fields and five arrays."""
-    channel, ec, pc, oc, word_count, dc = SUBMIT_HEADER.unpack_from(payload, 0)
+    channel, ec, pc, oc, word_count, dc, _padding = SUBMIT_HEADER.unpack_from(payload, 0)
     pos = SUBMIT_HEADER.size
     entries = struct.unpack_from(f"<{ec}Q", payload, pos)
     pos += ec * 8

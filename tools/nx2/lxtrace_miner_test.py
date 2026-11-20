@@ -19,7 +19,10 @@ MAGIC = b"LXGTRACE"
 VERSION = 2
 HEADER_SIZE = 64
 RECORD_HEADER = struct.Struct("<IIQ")
-SUBMIT_HEADER = struct.Struct("<iiIIQI")  # 28-byte header per format brief
+# Matches sizeof(SubmitRecord)==32 measured from trace_file.h with g++:
+# channel@0 entry@4 prefetch@8 offset@12 word_count@16 deferred@24 padding@28.
+# offset_count ends at byte 16 (already 8-aligned) so no implicit pad is inserted.
+SUBMIT_HEADER = struct.Struct("<iiIIQII")
 
 CONFIG = {"program_id": "040041E0212AE000", "switch2": True,
           "width": 1920, "height": 1080, "presents": 180}
@@ -39,7 +42,7 @@ SUBMIT = {
 def make_submit_payload(s):
     payload = bytearray(SUBMIT_HEADER.pack(
         s["channel"], len(s["entries"]), len(s["prefetch"]),
-        len(s["offsets"]), len(s["words"]), len(s["deferred"])))
+        len(s["offsets"]), len(s["words"]), len(s["deferred"]), 0))
     for value in s["entries"]:
         payload += struct.pack("<Q", value)
     for values, fmt in ((s["prefetch"], "<I"), (s["offsets"], "<I"),
