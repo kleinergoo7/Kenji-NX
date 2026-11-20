@@ -7,9 +7,11 @@ Last updated: 2026-11-20. Read this first; it supersedes all earlier status docs
 Goal: get at least one Switch 2 title rendering in this C# Ryujinx fork. Fast Fusion is the current
 test case; OoT is the original objective. We built a **working C++ oracle (Lichii)** that renders the
 same NUP correctly, and are porting its GPU trace replayer into C# to isolate GPU correctness from
-the guest-boot problem. **The GO/NO-GO gate PASSED**: our C# pipeline replayed the synthetic 4-frame
-sample to non-black frames matching the oracle's brightness within 0.0001. HEAD is `98c5d8eb1`
-(committed, NOT yet pushed). Next: review+push Task 2, then Task 3 (snapshot restore).
+the guest-boot problem. The Task 2 gate **passed on brightness fidelity only**: our C# pipeline
+replayed the synthetic 4-frame sample to non-black frames matching the oracle's brightness within
+0.0001, but the tiled-present path does NOT match pixel-for-pixel (see the review verdict below).
+HEAD is `df1d4e6bd` (two commits, NOT yet pushed). The replayer is **PAUSED after Task 2** — do not
+start Task 3 without reading "Plan status" at the end of this document.
 
 ## Non-negotiable rules
 
@@ -31,7 +33,7 @@ sample to non-black frames matching the oracle's brightness within 0.0001. HEAD 
   `kenji-nx2-oot-bringup`, **1 commit ahead of origin** (not pushed). Untracked scratch: `.nx2-logs/`,
   `tools/nx2/__pycache__/`, and this `docs/HANDOFF.md` (commit it if you want it in git).
 - Recent commits (newest first):
-  `98c5d8eb1` headless sample replay (gate PASSED), `0f89ffc6e` reader Config guard,
+  `98c5d8eb1` headless sample replay (gate passed on brightness only), `0f89ffc6e` reader Config guard,
   `0f4288ea0` streaming LxTraceReader, `e695370a5` pixel-order doc,
   `a8a484ec9` sample traces doc, `70be7a223` replayer plan, `3043db794` mining verdict=NONE.
 - Authoritative status docs (read in this order):
@@ -45,20 +47,18 @@ sample to non-black frames matching the oracle's brightness within 0.0001. HEAD 
 
 ## In flight / next action (IMPORTANT)
 
-Task 2 of `2026-11-20-lxtrace-replayer-plan.md` just completed on subagent
-`ses_e0979f762ffeSq53QEOGy0dV4O` and its commit `98c5d8eb1` is **not pushed and not reviewed** yet.
-Next actions on resume:
-1. Review commit `98c5d8eb1` (task-scoped spec+quality reviewer, model `hy4-flash-free`); fix if needed.
-2. Push it to `origin`.
-3. Proceed to Task 3 (global snapshot restore: State kinds 9 syncpoints, 10 semaphore regions,
-   8 QMD states) from the replayer plan.
+Task 2 of `2026-11-20-lxtrace-replayer-plan.md` is **complete and reviewed** (commit `98c5d8eb1`,
+review verdict: Needs fixes — see "Plan status" below). Both `98c5d8eb1` and the handoff commit are
+unpushed. Next actions on resume:
+1. Push both unpushed commits to `origin`.
+2. Do NOT start Task 3. Run the cheap macro-code oracle test described in "Plan status" first.
 
-**Task 2 gate PASSED** — synthetic sample replay produced 4 non-black frames: means
-0.624517 / 0.500000 / 0.624517 / 0.621528 vs oracle 0.624571 / 0.5 / 0.624591 / 0.621467.
-GPU-clear frames are pixel-exact; CPU-tiled presents differ in swizzle (hash mismatch) and there is
-a ~10-pixel boundary difference on clears. Hash function verified against oracle pixels. Caveats:
-sample-specific shortcuts (single map/channel, hardcoded block height), new Gpu→Vulkan project
-reference, raw `.rgba` output (not PNG), and no snapshot restore (by design for this milestone).
+**Task 2 gate: passed on brightness, NOT on pixel fidelity.** Synthetic sample replay produced 4
+non-black frames: means 0.624517 / 0.500000 / 0.624517 / 0.621528 vs oracle 0.624571 / 0.5 /
+0.624591 / 0.621467. Frames 0 and 2 (CPU-tiled presents) differ by ~29% of bytes; frames 1 and 3
+(GPU clears) are near-exact, not exact — 40 and 112 differing bytes of 147456, a ~10px boundary
+region. Hash function verified against oracle pixels. The test asserts only non-black / non-zero
+hash / 256x144, so it cannot detect this divergence — there is no oracle-parity regression signal.
 
 ## The oracle (working reference — the most valuable asset)
 
@@ -139,17 +139,66 @@ justified. The file is `src/Ryujinx.Graphics.Gpu/GpuTrace/LxTraceReplayer.cs` wi
 - `tools/nx2/dump-guest-code.sh` + `tools/nx2/Nx2DumpGuestCode/` — extract guest code at a VA from a NUP.
 - `tools/nx2/Nx2DumpToc/` — NUP completeness check (NUP_COMPLETE=YES).
 - `src/Ryujinx.Graphics.Gpu/GpuTrace/LxTraceReader.cs` — C# streaming reader (Task 1, tests pass).
-- `src/Ryujinx.Graphics.Gpu/GpuTrace/LxTraceReplayer.cs` — headless replayer (Task 2, sample gate PASSED).
+- `src/Ryujinx.Graphics.Gpu/GpuTrace/LxTraceReplayer.cs` — headless replayer (Task 2, sample gate passed on brightness only; plan paused).
 
-## Task 3-5 (remaining — Task 2 gate PASSED, so unblocked)
+## Task 3-5 (deferred — do not start yet)
+
+These are the paused remainder of the replayer plan. They are only worth doing once the cheap
+macro-code diagnosis below has been run, because a faithful restore is the hardest engineering left
+and a black frame after an imperfect restore proves nothing.
 
 Task 3: restore global snapshot state (State kinds 9 syncpoints, 10 semaphore regions, 8 QMD states)
 via narrow internal restore methods. Task 4: per-channel state (kinds 1 Pusher, 2 Maxwell3D,
 3 KeplerCompute, 7 MacroContext 263 KB code, shadow/root tables). Task 5: sparse GMMU/SMMU map
-parity + replay real trace 5 frames vs oracle. Details in the plan doc. If the real-trace replay
-produces a non-black frame from our pipeline, that isolates the GPU as working and proves the
-remaining fault is guest-side (the MME macro → shader-bind chain that no trace method analysis
-could pin down).
+parity + replay real trace 5 frames vs oracle. If the real-trace replay then produces a correct
+frame, that isolates the GPU as working and proves the remaining fault is guest-side.
+
+## Plan status: replayer PAUSED after Task 2 (decided 2026-11-20)
+
+The Task 2 review verdict was **Needs fixes**, and the strategic call is to stop here rather than
+continue to snapshot restore. Reasons, in order:
+
+1. **The real-trace replay is a one-sided test.** A correct frame proves the GPU backend works. A
+   black or wrong frame proves nothing — it could be our GPU bug, imperfect snapshot restore, or
+   trace semantics we failed to reproduce. Three causes, one observation.
+2. **The hard part is untouched.** Tasks 3-4 need bulk restore of 263 KB of Ampere macro RAM, QMD
+   scheduler state, Maxwell3D shadow/root tables and 1171 sparse GMMU maps. Our engine classes
+   expose no restore API for any of it.
+3. **The sample never exercised the failing path.** No shaders, no macros, no snapshot state — 2
+   CPU-written images + 2 3D clears. A clean sample does not predict real-trace behaviour.
+4. **The present path already diverges.** Tiled presents differ ~29% of bytes from the oracle, and
+   snapshot restore inherits that divergence.
+
+### Recorded Task 2 defects (from review; not fixed, plan is paused)
+
+- `LxTraceReplayerTests.cs` asserts only non-black / non-zero hash / 256x144, so it cannot detect
+  the swizzle/boundary divergence — no oracle-parity regression signal.
+- `submit.Words` / `Offsets` / `Deferred` are silently ignored (LxTraceReplayer.cs:241-272) even
+  though `LXTRACE.md` calls `words[]` the command stream the GPU executes. The sample works because
+  entries + Memory writes suffice; multi-submit traces may not.
+- `Ryujinx.Graphics.Gpu.csproj` now references `Ryujinx.Graphics.Vulkan`, pulling Vulkan + Silk.NET
+  into the backend-agnostic core. Architectural debt; relocate to a tool/host project if revived.
+- CPU address space is 2 GiB, not the intended 40-bit; headless path was rebuilt rather than reused.
+
+### Recommended next step (cheap, decisive, no GPU needed)
+
+Test our MME macro engine against the oracle's *real* macro code, extracted from the trace:
+
+1. Extract State kind 7 (macro context: 2 x 0x8000 words + positions) and kind 2's
+   `native_data_ram` from `/tmp/opencode/oracle-trace/trace-1795130242.lxtrace`. The Python miner
+   already parses State records — this is a small script.
+2. Load that code into our `GPFifoClass` macro banks in a unit test; execute at the recorded
+   positions through `MacroTuring`.
+3. Compare the emitted method histogram with what Lichii's engine produces from the same code.
+
+Emits draws / shader addresses -> our interpreter is fine, the bug is upstream (live upload or
+ordering), localised without any GPU work. Emits nothing -> our interpreter is the bug, reproduced
+in a unit test. Either way it is decisive.
+
+Second cheap check (~2h): our live runs emit `0xD00-0xD02` 28 times, which look like pipeline
+reserved registers. Lichii reads the native shader address from `config.reserved[0] << 32 |
+reserved[1]`, while our only bind path is Maxwell-style `baseAddress + offset`. Check whether
+`StateUpdater` / `ShaderCache` consumes those Ampere reserved words at all.
 
 ## Build/test notes
 
