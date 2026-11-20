@@ -74,7 +74,7 @@ namespace Ryujinx.Graphics.Gpu.GpuTrace
 
     /// <summary>
     /// Streams a Lichii .lxtrace: a 64-byte header followed by one zstd stream of length-prefixed records.
-    /// Records are single-pass; <see cref="Config"/> is populated when its record is read.
+    /// Records are single-pass; <see cref="Config"/> is populated when its record is read and throws before then.
     /// </summary>
     internal sealed class LxTraceReader : IDisposable
     {
@@ -92,9 +92,14 @@ namespace Ryujinx.Graphics.Gpu.GpuTrace
         private readonly FileStream _file;
         private readonly DecompressionStream _stream;
 
+        private LxConfig _config;
+        private bool _configParsed;
+
         public uint Version { get; }
         public uint HeaderSize { get; }
-        public LxConfig Config { get; private set; }
+        public LxConfig Config => _configParsed
+            ? _config
+            : throw new InvalidOperationException("Config is available only after ReadRecords() has begun enumerating.");
 
         public LxTraceReader(string path)
         {
@@ -179,8 +184,9 @@ namespace Ryujinx.Graphics.Gpu.GpuTrace
             switch (type)
             {
                 case LxRecordType.Config:
-                    Config = ParseConfig(payload);
-                    return new LxRecord(type, payload, Config: Config);
+                    _config = ParseConfig(payload);
+                    _configParsed = true;
+                    return new LxRecord(type, payload, Config: _config);
                 case LxRecordType.Submit:
                     return new LxRecord(type, payload, Submit: ParseSubmit(payload));
                 case LxRecordType.Present:

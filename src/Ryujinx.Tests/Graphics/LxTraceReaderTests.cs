@@ -59,6 +59,23 @@ namespace Ryujinx.Tests.Graphics
         }
 
         [Test]
+        public void ConfigThrowsUntilEnumerationBegins()
+        {
+            byte[] config = Encoding.UTF8.GetBytes("{\"height\":144,\"program_id\":\"0400000000000001\",\"switch2\":true,\"width\":256}");
+
+            WithTrace(BuildTrace(Record(ConfigType, config), Record(EndType, [])), reader =>
+            {
+                InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => { _ = reader.Config; });
+                Assert.That(exception!.Message, Does.Contain("ReadRecords()"));
+
+                using IEnumerator<LxRecord> enumerator = reader.ReadRecords().GetEnumerator();
+                Assert.That(enumerator.MoveNext(), Is.True);
+                Assert.That(reader.Config.Switch2, Is.True);
+                Assert.That(reader.Config.Width, Is.EqualTo(256));
+            });
+        }
+
+        [Test]
         public void UnknownRecordTypeThrowsWithTypeId()
         {
             WithTrace(BuildTrace(Record(0x1234, [])), reader =>
